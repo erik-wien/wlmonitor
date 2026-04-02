@@ -1,454 +1,320 @@
 /**
- * wl-monitor.js
- * 
- * some tools for wl-monitor
- *
- * 
- * PHP version 7.2
- *
- * LICENSE: This source file is subject to version 3.01 of the PHP license
- * that is available through the world-wide-web at the following URI:
- * http://www.php.net/license/3_01.txt.  If you did not receive a copy of
- * the PHP License and are unable to obtain it through the web, please
- * send a note to license@php.net so we can mail you a copy immediately.
- *
- * @category   geo-information
- * @package    wl-monitor
- * @author     Erik R. Huemer <erik.huemer@jardyx.com>
- * @copyright  2019 Erik R. Huemer
- * @license    http://www.php.net/license/3_01.txt  PHP License 3.01
- * @version    SVN: $Id$
- * @link       https://www.jardyx.com/wl-monitor/download/wl-monitor.zip
- * @see        https://www.jardyx.com/wlmonitor/
- * @since      File available since Release 1.2.0
- * @deprecated not depreciated
+ * wl-monitor.js -- ES module
+ * Vanilla JS, fetch() based. No jQuery.
  */
- 
- 
-// When the user scrolls down 20px from the top of the document, show the button
-window.onscroll = function() {scrollFunction()};
 
-function scrollFunction() {
-	if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
-		document.getElementById("topBtn").style.display = "block";
-	} else {
-		document.getElementById("topBtn").style.display = "none";
-	}
+// --- State -------------------------------------------------------------------
+let stationCache = [];
+let monitorTimer = null;
+
+// --- Init --------------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', () => {
+  applyTheme();
+  // Render any PHP session alerts passed via wlConfig
+  if (window.wlConfig?.alerts?.length) {
+    for (const [type, msg] of window.wlConfig.alerts) {
+      sendAlert(msg, type);
+    }
+  }
+  loadFavorites();
+  loadMonitor();
+  startMonitorTimer();
+  wireScrollButton();
+  wireStationSort();
+  wireThemeToggle();
+});
+
+// --- API helpers -------------------------------------------------------------
+async function apiFetch(action, params = {}) {
+  const url = new URL('api.php', location.href);
+  url.searchParams.set('action', action);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('API ' + action + ' failed: ' + res.status);
+  return res.json();
 }
 
-// When the user clicks on the button, scroll to the top of the document
-function topFunction() {
-	document.body.scrollTop = 0; // For Safari
-	document.documentElement.scrollTop = 0; // For Chrome, Firefox, IE and Opera
+async function apiPost(action, body = {}) {
+  const fd = new FormData();
+  fd.append('action', action);
+  const csrfInput = document.querySelector('input[name="csrf_token"]');
+  if (csrfInput) fd.append('csrf_token', csrfInput.value);
+  for (const [k, v] of Object.entries(body)) fd.append(k, v);
+  const res = await fetch('api.php', { method: 'POST', body: fd });
+  if (!res.ok) throw new Error('API POST ' + action + ' failed: ' + res.status);
+  return res.json();
 }
 
-function GetURLParameter(sParam) {
-	
-	var sPageURL = window.location.search.substring(1);
-	var sURLVariables = sPageURL.split('&');
-	
-	for (var i = 0; i < sURLVariables.length; i++) {
-		
-		var sParameterName = sURLVariables[i].split('=');
-		
-		if (sParameterName[0] == sParam) {
-			return sParameterName[1];
-		} 
-	}
+// --- Monitor -----------------------------------------------------------------
+async function loadMonitor(diva) {
+  const params = diva ? { diva } : {};
+  try {
+    const data = await apiFetch('monitor', params);
+    renderMonitor(data);
+  } catch (e) {
+    const container = document.getElementById('monitor');
+    if (container) container.textContent = 'Keine Abfahrtsdaten verfugbar.';
+    console.error(e);
+  }
 }
 
+function renderMonitor(data) {
+  const container = document.getElementById('monitor');
+  if (!container) return;
+  container.replaceChildren();
 
+  const { trains, update_at, api_ping, ...stations } = data;
 
-// Cookies
-function setCookie(cname, cvalue, exdays) {
-	var acceptCookies = getCookie('acceptCookies');
-	var d = new Date();
+  for (const [, s] of Object.entries(stations)) {
+    if (typeof s !== 'object') continue;
 
-	d.setTime(d.getTime());
-	var updated =  d.toUTCString();
+    const card   = document.createElement('div');
+    card.className = 'card mb-2';
 
-	d.setTime(d.getTime() + (exdays*24*60*60*24*10));
-	var expires = "expires="+ d.toUTCString();
+    const header = document.createElement('div');
+    header.className = 'card-header';
+    header.textContent = s.station_name;
+    card.appendChild(header);
 
-	if (acceptCookies == "true" || cname == 'acceptCookies') {
-		document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
-		document.cookie = "updated =" + updated + ";" + expires + ";path=/";
+    const table = document.createElement('table');
+    table.className = 'table table-sm departure-table mb-0';
 
-		if (debug) { console.log("Cookie "+cname+" set to " + cvalue)};
-	} else {
-		console.log("Cookie ["+cname+"] can not set to " + cvalue + ". Status of acceptCookies is '" + acceptCookies + "'");
-	}
+    let i = 0;
+    while (('train_' + i) in s) {
+      const tr    = table.insertRow();
+      const tdLine = tr.insertCell();
+      tdLine.textContent = s['train_' + i];
+      tdLine.className = 'fw-semibold';
+      const tdDep = tr.insertCell();
+      tdDep.textContent = s['departure_' + i];
+      i++;
+    }
+    card.appendChild(table);
 
+    const footer = document.createElement('div');
+    footer.className = 'card-footer text-muted small';
+    footer.textContent = 'Aktualisiert: ' + update_at;
+    card.appendChild(footer);
+
+    container.appendChild(card);
+  }
 }
 
-
-function getCookie(cname) {
-	var name = cname + "=";
-	var decodedCookie = decodeURIComponent(document.cookie);
-	var ca = decodedCookie.split(';');
-	for(var i = 0; i <ca.length; i++) {
-		var c = ca[i];
-		while (c.charAt(0) == ' ') {
-			c = c.substring(1);
-		}
-		if (c.indexOf(name) == 0) {
-			cvalue = c.substring(name.length, c.length);
-			if(debug){console.log("Cookie "+cname+" found to be " + cvalue)};
-			return cvalue;
-		}
-	}
-	return "";
+function startMonitorTimer() {
+  if (monitorTimer) clearInterval(monitorTimer);
+  monitorTimer = setInterval(() => loadMonitor(), 20000);
 }
 
-
-function checkCookie() {
-var rbl = getCookie("rbl");
-
-if (rbl != "") {
-	if(debug){console.log("Welcome back!")};
-	setCookie("rbl", rbl, 3);
-} else {
-	if(debug){console.log("First time you're here?")};
-	rbl=4111;
-	setCookie("rbl", rbl, 3);
+// --- Favorites ---------------------------------------------------------------
+async function loadFavorites() {
+  try {
+    const favs = await apiFetch('favorites');
+    renderFavorites(favs);
+  } catch (e) {
+    console.error('Could not load favorites:', e);
+  }
 }
 
-return rbl;
+function renderFavorites(favs) {
+  const container = document.getElementById('buttons');
+  if (!container) return;
+  container.replaceChildren();
+  for (const fav of favs) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn ' + fav.bclass + ' d-block w-100 mb-1';
+    btn.id = 'btnFav-' + fav.id;
+    btn.dataset.diva = fav.diva;
+    btn.dataset.sort = fav.sort;
+    btn.textContent = fav.title;
+    btn.addEventListener('click', () => {
+      loadMonitor(fav.diva);
+      startMonitorTimer();
+    });
+    btn.addEventListener('dblclick', () => {
+      location.href = 'editFavorite.php?favID=' + fav.id;
+    });
+    container.appendChild(btn);
+  }
 }
 
-function removeCookies() {
-	var aString = '';
-	var res = document.cookie;
-	var multiple = res.split("; ");
-	for(var i = 0; i < multiple.length; i++) {
-		var key = multiple[i].split("=");
-		document.cookie = key[0]+" =; expires = Thu, 01 Jan 1970 00:00:00 UTC" + ";path=/";
-		aString += i + ': ' + key[0] + " deleted?\n";
-	 }
-	 return aString;
+// --- Stations ----------------------------------------------------------------
+async function loadStationsByDistance(position) {
+  const { latitude, longitude } = position.coords;
+  const spinner = document.getElementById('stationSortDist');
+  if (spinner) spinner.classList.remove('d-none');
+  try {
+    await apiPost('position_save', { lat: latitude, lon: longitude });
+    const stations = await apiFetch('stations', { lat: latitude, lon: longitude });
+    stationCache = stations;
+    renderStationList(stations, latitude, longitude);
+  } catch (e) {
+    console.error(e);
+    loadStationsAlpha();
+  } finally {
+    if (spinner) spinner.classList.add('d-none');
+  }
 }
 
-function listCookies() {
-	 var theCookies = document.cookie.split('; ');
-	 var aString = '';
-	 for (var i = 1; i <= theCookies.length; i++) {
-	 	var key = theCookies[i-1].split("=");
-	 	if(key[0] == 'PHPSESSID') {
-	 		aString += i + ': ' + key[0] + " = ********** \n";
-	 	} else {
-	 		aString += i + ': ' + key[0] + ' = ' + key[1] + "\n";
-	 	}
-	 }
-	return aString;
+async function loadStationsAlpha() {
+  const spinner = document.getElementById('stationSortAlpha');
+  if (spinner) spinner.classList.remove('d-none');
+  try {
+    const stations = await apiFetch('stations');
+    stationCache = stations;
+    renderStationList(stations);
+  } catch (e) {
+    console.error('Could not load stations:', e);
+  } finally {
+    if (spinner) spinner.classList.add('d-none');
+  }
 }
 
+function renderStationList(stations, originLat, originLon) {
+  const list = document.getElementById('stationList');
+  if (!list) return;
+  list.replaceChildren();
 
+  for (const s of stations) {
+    const li = document.createElement('li');
+    const p  = document.createElement('p');
+    p.className = 'mb-1';
 
-//  Full Screen 
-function toggleFullScreen() {
-	var doc = window.document;
-	var docEl = doc.documentElement;
-	
-	var requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
-	var cancelFullScreen = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
-	
-	if(!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
-		requestFullScreen.call(docEl);
-	}
-	else {
-		cancelFullScreen.call(doc);
-	}
+    if (originLat !== undefined && s.distance !== undefined) {
+      const dist = s.distance >= 1000
+        ? (s.distance / 1000).toFixed(2) + ' km'
+        : s.distance + ' m';
+
+      const mapsUrl = 'https://www.google.com/maps/dir/?api=1'
+        + '&origin='      + encodeURIComponent(originLat + ',' + originLon)
+        + '&destination=' + encodeURIComponent(s.lat + ',' + s.lon)
+        + '&travelmode=walking';
+
+      const a = document.createElement('a');
+      a.href   = mapsUrl;
+      a.target = 'wlmonitor';
+      const icon = document.createElement('i');
+      icon.className = 'fas fa-location-arrow me-2';
+      a.appendChild(icon);
+      p.appendChild(a);
+
+      const span = document.createElement('span');
+      span.textContent = s.station + ' (' + dist + ')';
+      span.style.cursor = 'pointer';
+      span.addEventListener('click', () => { loadMonitor(s.diva); startMonitorTimer(); });
+      p.appendChild(span);
+    } else {
+      p.textContent = s.station;
+      p.style.cursor = 'pointer';
+      p.addEventListener('click', () => { loadMonitor(s.diva); startMonitorTimer(); });
+    }
+
+    li.appendChild(p);
+    list.appendChild(li);
+  }
 }
 
+// --- Station sort radios + search --------------------------------------------
+function wireStationSort() {
+  const radios      = document.querySelectorAll('input[name="stationSort"]');
+  const searchInput = document.getElementById('s');
 
+  radios.forEach(radio => {
+    radio.addEventListener('change', () => {
+      if (radio.value === 'dist') {
+        if (searchInput) searchInput.classList.add('d-none');
+        navigator.geolocation.getCurrentPosition(
+          loadStationsByDistance,
+          positionError,
+          { timeout: 8000 }
+        );
+      } else if (radio.value === 'alpha') {
+        if (searchInput) searchInput.classList.add('d-none');
+        loadStationsAlpha();
+      } else if (radio.value === 'search') {
+        if (searchInput) {
+          searchInput.classList.remove('d-none');
+          searchInput.focus();
+        }
+        if (stationCache.length === 0) loadStationsAlpha();
+      }
+    });
+  });
 
-function sendAlert(message,color ) {
-	$("#alerts").append('<div class="alert alert-' + color + ' alert-dismissable animated fadeIn"><button type="button" class="close" data-dismiss="alert">&times;</button>' + message + '</div>').delay(5000).animate({opacity:0, height:0},600, function() {$(this).alert('close');});
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      const q        = searchInput.value.toLowerCase();
+      const filtered = stationCache.filter(s => s.station.toLowerCase().includes(q));
+      renderStationList(filtered);
+    });
+  }
 }
 
-
-
-
-		// outdatedBrowsers
-		// ------------------------------------------------------
-		function addLoadEvent(func) {
-			var oldonload = window.onload;
-			if (typeof window.onload != 'function') {
-				window.onload = func;
-			} else {
-				window.onload = function() {
-					if (oldonload) {
-						oldonload();
-					}
-					func();
-				}
-			}
-		}
-		
-		
-		// Function to toggle the Themes
-		function changeTheme() {
-			selectedTheme = $("input[name='themePreference']:checked").val();
-
-			if (selectedTheme == "auto") {
-
-				if (window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches) {
-					console.log("Automatically Switching to Dark Mode.");
-					$('#bootstrapCss').attr("href", "style/bootstrap-darkly.css");
-
-				} else {
-					console.log("Automatically Switching to Light Mode.");
-					$('#bootstrapCss').attr("href", "/bootstrap/dist/css/custom/light.css");
-				}
-
-			} else {
-				console.log("Switching CSS from " + $('#bootstrapCss').attr("href"));
-				
-				if (selectedTheme == "light") {
-					$('#bootstrapCss').attr("href", "/bootstrap/dist/css/custom/light.css");
-				
-				} else {
-					$('#bootstrapCss').attr("href", "style/bootstrap-darkly.css");
-				}
-				console.log("to " + $('#bootstrapCss').attr("href"));
-			}
-			return selectedTheme;
-		}
-		
-			
-		// set new cookie for the station number rbl and reload the monitor
-		function changeMonitor(rbl, id) {
-
-			if (rbl == undefined) {rbl=4111}
-			if (id == undefined) {id=1}
-
-			if(debug){console.log("Change rbl to " + rbl + ' for ' + id)};
-
-			// reset automatic monitor refresh
-			if (document.cookie.indexOf("monitorTimerID=") >= 0) {
-				var monitorTimerID = getCookie("monitorTimerID");
-				clearInterval(monitorTimerID);
-			}
-			// clearing all intervals
-			var interval_id = window.setInterval("", 9999); // Get a reference to the last
-															// interval +1
-			for (var i = 1; i < interval_id; i++)
-				window.clearInterval(i);
-
-			monitorTimerID = setInterval(function(){reloadMonitor();},20000);
-			setCookie("rbl", rbl, 3);
-			setCookie("monitorTimerID", monitorTimerID, 3);
-
-			getMonitor(rbl, id);
-
-		}
-
-
-		function getMonitor(rbl, id) {
-			// you can call index with a rbl parameter; but there are problems getting rid of this parameter afterwards …
-// 			if ((rbl==undefined) && (GetURLParameter('rbl') != ""))	{rbl = GetURLParameter('rbl'); if(debug){console.log("URL: Get Monitor for rbl " + rbl)};}
-			if (rbl == undefined) 										{rbl = getCookie("rbl"); if(debug){console.log("Cookie_: Get Monitor for rbl " + rbl)};}
-			if (rbl == undefined) 										{rbl = 4111; if(debug){console.log("Default: Get Monitor for rbl " + rbl)};}
-
-			if (id == undefined) 										{id = userID}
-			var apiurl = 'monitor.php?rbl='+rbl+'&id='+id;
-
-			// Loading Spinner
-			// $("#monitor").html('<div class="spinner"><span class="spinner-border spinner-border-sm"></span> Abfahrtsdaten werden geladen ...</div>');
-
-			// get readymade html from php script
-			$("#monitor").load(apiurl);
-
-		}
-
-		function reloadMonitor() {
-
-			var apiurl = 'monitor.php?id='+userID;
-
-			// get readymade html from php script
-			$("#monitor").load(apiurl);
-
-		}
-
-
-
-		function addButton(title, rbl, bclass){
-			$("#buttons").append('<button onclick="changeMonitor(\''+rbl+'\');" type="button" class="btn '+bclass+' btn-block">'+title+'</button>');
-		}
-
-
-		function getFavorites() {
-
-			// delete current list of buttons
-			if(debug){console.log("Deleting buttons...")};
-			$("#buttons").html("");
-
-			// Fetch favourite stations from database (readymade html)
-			if(debug){console.log("Fetching buttons from database...")};
-
-			// try to load buttons from database
-
-			$.ajax({
-				async: false,
-				cache: false,
-				url : "getFavorites.php",
-				timeout: 2000,
-				success: function (data) {
-					$("#buttons").html(data);
-				},
-				error: function (xhr,status,error) {
-					if (debug)	{console.log('Error loading Favorites: '+status +': '+ error)};
-					$('#buttons').append('<div class="alarm alarm-danger">Fehler: '+status +': '+ error +'</div>');
-				}
-			});
-
-			// build favourite buttons from local array
-			/* if(debug){console.log("Rendering favourite buttons...")};
-			var i;
-			for (i in jsonButtons) {
-				addButton( jsonButtons[i].title, jsonButtons[i].rbl, jsonButtons[i].bclass);
-			}
-			*/
-			if(debug){console.log("Done favourite buttons.")};
-
-
-			// 	Activate Save Function after re-sorting
-			$("#btnSaveFavorites").click(function(){
-
-				if(debug){console.log('Loading favorites order...')};
-
-				var listItems = $("#buttons button");
-				var i = 0;
-				var sortArray = "[";
-
-				listItems.each(function(idx, button) {
-					i++;
-					var htmlBtnID = $(button).attr('id');
-					var btnID = htmlBtnID.split("-");
-					if (i > 1) sortArray += ", ";
-					sortArray += "('sort':" + i + ",'id':" + btnID[1] + ")";
-				});
-				sortArray += "]";
-
-				// send sql
-				if(debug){console.log("Trying to save Favorites.")};
-				if(debug){console.log(sortArray)};
-
-				$.ajax({
-					type:"POST",
-					cache:false,
-					url:"saveFavorites.php",
-					data:{sortArray: sortArray},	// multiple data sent using ajax
-					timeout: 2000,
-					success: (function (html) {
-						$('#frmSaveFavorites').prepend(html);
-						if(debug){console.log("Favorites saved.")};
-					}),
-					error:( function (xhr,status,error) {
-						if(debug){console.log('Error saving Favorites: '+status +': '+ error)};
-						$('#frmSaveFavorites').prepend('<div class="alarm alarm-danger">Fehler: '+status +': '+ error +'</div>');
-					})
-				})
-			});
-
-
-		}
-
-
-		// if geo location can't be retrieved, fill search filter alpabetically
-		function positionError(error) {
-			console.warn('ERROR (' + error.code + '): ' + error.message);
-
-			switch(error.code) {
-				case error.PERMISSION_DENIED:
-					sendAlert("User denied the request for Geolocation.", "warning");
-					break;
-				case error.POSITION_UNAVAILABLE:
-					sendAlert("Location information is unavailable.", "warning");
-					break;
-				case error.TIMEOUT:
-					sendAlert("The request to get user location timed out.", "warning");
-					break;
-				case error.UNKNOWN_ERROR:
-					sendAlert("An unknown error occurred.", "warning");
-					break;
-			}
-
-			getStationsAlpha();
-		}
-
-
-		function getStationsDist(myPosition) {
-
-			$("#stationSortDist").removeClass("d-none");
-			$("#stationFilter").attr("placeholder", "Stationen in der Nähe suchen");
-
-			console.log("Position acquired: " + myPosition.coords.latitude + ", " + myPosition.coords.longitude);
-			$.post("savePosition.php", {lat:myPosition.coords.latitude, lon:myPosition.coords.longitude});
-
-			sendAlert("Ihre Position: <? echo ($_SESSION['lat'] . ", " . $_SESSION['lon'] ); ?>", "secondary");
-
-			$.getJSON("getStations.php",
-				{ "lat":myPosition.coords.latitude, "lon":myPosition.coords.longitude },
-				function(responseTxt, statusTxt, xhr){
-
-					if (statusTxt == "success") {
-						console.log("Data transferred.");
-
-						$("#stationList").html("");
-
-						$.each(responseTxt, function(i, row){
-							dist = row.distance
-							if (dist > 1000) {
-								dist = parseFloat(dist/1000).toFixed(2) + ' km';
-							} else {
-								dist = parseFloat(dist).toFixed(0) + ' m';
-							}
-							var li = $('<li>');
-							var p = $('<p class="mb-xs-1 mb-md-0">');
-							var mapsUrl = 'https://www.google.com/maps/dir/?api=1&origin=' + encodeURIComponent(myPosition.coords.latitude + ',' + myPosition.coords.longitude) + '&destination=' + encodeURIComponent(row.lat + ',' + row.lon) + '&travelmode=walking';
-							var a = $('<a target="wlmonitor">').attr('href', mapsUrl).append('<i class="fas fa-location-arrow mr-3"></i>');
-							var span = $('<span>').text(row.station).on('click', (function(rbls){ return function(){ changeMonitor(rbls, userID); }; })(row.rbls));
-							p.append(a).append(' ').append(span).append(' (' + dist + ') ');
-							li.append(p);
-							$("#stationList").append(li);
-						});
-					}
-
-					$("#stationSortDist").addClass("d-none");
-					if (statusTxt == "error")
-						console.log("Error: " + xhr.status + ": " + xhr.statusText);
-				}
-
-
-			);
-		}
-
-		function getStationsAlpha() {
-			$("#stationFilter").attr("placeholder", "Stationen A-Z suchen");
-
-			$("#stationSortAlpha").removeClass("d-none");
-
-			$.getJSON("getStations.php",
-				function(responseTxt, statusTxt, xhr){
-
-					if (statusTxt == "success") {
-						console.log("Data transferred.");
-
-						$("#stationList").html("");
-
-						$.each(responseTxt, function(i, row){
-							var li = $('<li>');
-							var p = $('<p class="mb-xs-1 mb-md-0">').text(row.station).on('click', (function(rbls){ return function(){ changeMonitor(rbls, userID); }; })(row.rbls));
-							li.append(p);
-							$("#stationList").append(li);
-						});
-					}
-
-					$("#stationSortAlpha").addClass("d-none");
-
-					if (statusTxt == "error")
-						console.log("Error: " + xhr.status + ": " + xhr.statusText);
-				}
-			);
-		}
+function positionError(error) {
+  console.warn('Geolocation error (' + error.code + '): ' + error.message);
+  loadStationsAlpha();
+}
+
+// --- Theme -------------------------------------------------------------------
+function applyTheme() {
+  const saved = getCookie('theme');
+  if (saved === 'dark' || saved === 'light') {
+    document.documentElement.dataset.theme = saved;
+  }
+  // 'auto' or empty: CSS media query handles it
+}
+
+function wireThemeToggle() {
+  document.querySelectorAll('input[name="themePreference"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      if (radio.value === 'auto') {
+        delete document.documentElement.dataset.theme;
+      } else {
+        document.documentElement.dataset.theme = radio.value;
+      }
+      setCookie('theme', radio.value, 365);
+    });
+  });
+}
+
+// --- Scroll to top -----------------------------------------------------------
+function wireScrollButton() {
+  const btn = document.getElementById('topBtn');
+  if (!btn) return;
+  window.addEventListener('scroll', () => {
+    btn.style.display = document.documentElement.scrollTop > 20 ? 'block' : 'none';
+  });
+  btn.addEventListener('click', () => { document.documentElement.scrollTop = 0; });
+}
+
+// --- Alerts ------------------------------------------------------------------
+export function sendAlert(message, type) {
+  type = type || 'info';
+  const container = document.getElementById('alerts');
+  if (!container) return;
+  const div = document.createElement('div');
+  div.className = 'alert alert-' + type + ' alert-dismissible fade show';
+  div.textContent = message;
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'btn-close';
+  closeBtn.dataset.bsDismiss = 'alert';
+  div.appendChild(closeBtn);
+  container.appendChild(div);
+  setTimeout(() => div.remove(), 6000);
+}
+
+// --- Cookies (theme + sId only) ----------------------------------------------
+function getCookie(name) {
+  for (const part of decodeURIComponent(document.cookie).split(';')) {
+    const [k, v] = part.trim().split('=');
+    if (k === name) return v || '';
+  }
+  return '';
+}
+
+function setCookie(name, value, days) {
+  const d = new Date();
+  d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+  document.cookie = name + '=' + value + ';expires=' + d.toUTCString() + ';path=/;SameSite=Strict';
+}
