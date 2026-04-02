@@ -1,0 +1,376 @@
+/**
+ * CSS tweaks for wl-monitor
+ *
+ *
+ *
+ *
+ * PHP version 7.2
+ *
+ * LICENSE: This source file is subject to version 3.01 of the PHP license
+ * that is available through the world-wide-web at the following URI:
+ * http://www.php.net/license/3_01.txt.  If you did not receive a copy of
+ * the PHP License and are unable to obtain it through the web, please
+ * send a note to license@php.net so we can mail you a copy immediately.
+ *
+ * @category   geo-information
+ * @package    wl-monitor
+ * @author     Erik R. Huemer <erik.huemer@jardyx.com>
+ * @copyright  2019 Erik R. Huemer
+ * @license    http://www.php.net/license/3_01.txt  PHP License 3.01
+ * @version    SVN: $Id$
+ * @link       https://www.jardyx.com/wl-monitor/download/wl-monitor.zip
+ * @see        https://www.jardyx.com/wl-monitor/
+ * @since      File available since Release 1.2.0
+ * @deprecated not depreciated
+ */
+
+
+:root {
+	color-scheme: light dark;
+}
+
+
+/* @group Standard HTML */
+/* bootstrap.css */
+
+/* style.css */
+* {
+	line-height: 1.3;
+}
+html, body {
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+}
+
+body {
+	margin: 0 auto;
+}
+
+
+small, small a , small .fas {
+	font-size: 9pt;
+}
+
+figure {
+	border: 1px solid #aaa;
+	padding: 2px;
+}
+
+figcaption {
+	font: italic 11pt/13pt "Times New Roman", Times, serif;
+	margin-top: 1px;
+}
+
+/* @end */
+
+/* @group Bootstrap tweaks */
+
+.btn-dark {
+	background-color: #222 !important;
+	color: #999 !important;
+}
+
+	.btn-dark.active {
+	background-color: #000 !important;
+	color: #fff !important;
+}
+
+
+#status .alert {
+	margin: 0.2rem 0;
+	padding: 0.25rem 0.5rem !important;
+	line-height: 1.4rem;
+}
+
+.input-group {
+
+
+}
+.input-group-prepend,
+.input-group-append {
+}
+
+:-ms-input-placeholder { 
+		color: grey;     /* Internet Explorer 10-11 */
+	}	  
+	::-ms-input-placeholder { 
+		color: grey;    /* Microsoft Edge */
+	}
+	::placeholder { 
+		color: gray;     /* Firefox, Chrome, Opera */
+	}
+	
+
+.btn-xs {
+	padding: 0.2rem 0.3rem;
+	font-size: 0.5rem !important;
+	line-height: 1.5;
+	border-radius: 0.2rem;
+}
+label.error {
+	font-size: small;
+}
+
+.dropdown-menu {
+	width: 40em;
+	max-width: 95vw;
+	max-height: 80vh;
+	font-size: smaller;
+}
+
+.dropdown-item span {
+	display: inline-block;
+	width: 1.5em;
+}
+
+#menuUserImg {
+	max-height: 2rem !important;
+}
+
+
+#log {
+	max-height: 50vh !important;
+	overflow: scroll;
+}
+
+#log th, #log td {
+
+	font-size: 0.75rem !important;
+}
+
+#stationList  {
+	cursor: default;
+}
+
+#stationList li:hover {
+	background-color: rgba(255,128,0,0.5);
+	cursor: pointer;
+}
+
+
+/* @end */
+
+/* @group General wl-monitor styles */
+
+#topBtn {
+	display: none; /* Hidden by default */
+	position: fixed; /* Fixed/sticky position */
+	bottom: 70px; /* Place the button at the bottom of the page */
+	right: 30px; /* Place the button 30px from the right */
+	z-index: 99; /* Make sure it does not overlap */
+	border: none; /* Remove borders */
+	outline: none; /* Remove outline */
+	cursor: pointer; /* Add a mouse pointer on hover */
+	padding: 15px; /* Some padding */
+	border-radius: 20px; /* Rounded corners */
+	font-size: 18px; /* Increase font size */
+}
+
+#topBtn:hover {
+	background-color: #ee1020; /* Add a red background on hover */
+}
+
+
+div.spinner {
+	margin: auto;
+	text-align: center;
+	color: #aaa;
+}
+
+/* @end */
+
+/* @group Monitor styles */
+
+.departure .list-group {
+	white-space: nowrap;
+	overflow: hidden;
+}
+.departure .list-group-item {
+}
+
+button.direction {
+	font: normal bolder 12pt/11pt 'Roboto Mono', 'Courier New', Courier, monospace !important;
+	display: inline-flex;
+	max-width: 12em;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	align-items: center;
+	justify-content: left;
+}
+
+.platform {
+	font-size: 6pt;
+	line-height: 6pt;
+}
+
+/* a.monitor:after {
+	content: "\279a";
+} */
+
+
+.line {
+	width: 2.8em;
+	height: 2.8em;
+	overflow: hidden;
+
+	font-weight: bolder;
+	font-size: smaller;
+
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+
+	color: black;
+	background-color: #999;
+
+	border: 2px solid black;
+	-webkit-border-radius: 1.5em;
+	-moz-border-radius: 1.5em;
+	border-radius: 1.5em;
+}
+
+	/* @group Vehicles */
+
+	.line-ptBusCity {
+		color: white;
+		background-color: #009;
+		-webkit-border-radius: 0;
+		-moz-border-radius: 0;
+		border-radius: 0;
+		border-color: #009;
+	}
+
+	.line-ptTram {
+		text-align: center;
+		color: white;
+		background-color: #e2001a;
+		border: 1px solid white;
+	}
+
+
+	.line-ptBusNight {
+		color: #dd0;
+		background-color: #009;
+		-webkit-border-radius: 0;
+		-moz-border-radius: 0;
+		border-radius: 0;
+	}
+
+	.line-ptTramWLB {
+		color: #009;
+		background-color: #fffdd6;
+		-webkit-border-radius: 0;
+		-moz-border-radius: 0;
+		border-radius: 0;
+		border: 2px solid #009;
+	}
+
+
+	.line-ptTramVRT {
+		width: 3em;
+		height: 3em;
+		color: #090;
+		background-color: #ffee00;
+		border: 2px solid #0a0;
+	}
+
+
+		/* @group Underground lines */
+
+		.line-ptMetro {
+			color: white;
+			background-color: #666;
+			border-color: #666;
+			-webkit-border-radius: 0;
+			-moz-border-radius: 0;
+			border-radius: 0;
+		}
+
+		/* Sometimes WL don't provide a Line ... whatever :-/ */
+		.line-ptMetro- {
+			color: black;
+			background-color: #666;
+			border-color: #666;
+			-webkit-border-radius: 3px;
+			-moz-border-radius: 3px;
+			border-radius: 3px;
+		}
+
+		.line-ptMetro-U1 {
+			background-color: #d11;
+			border-color: #d11;
+		}
+
+		.line-ptMetro-U2 {
+			background-color: #a762a3;
+			border-color: #a762a3
+		}
+
+		.line-ptMetro-U3 {
+			background-color: #ec6725;
+			border-color: #ec6725
+		}
+
+		.line-ptMetro-U4 {
+			background-color: #009540;
+			border-color: #009540
+		}
+
+		.line-ptMetro-U5 {
+			background-color: #008f95;
+			border-color: #008f95
+		}
+
+		.line-ptMetro-U6 {
+			background-color: #9d6930;
+			border-color: #9d6930
+		}
+
+		/* @end */
+
+	/* @end */
+
+/* @end */
+
+.towards {
+	display:  inline-block !important;
+	max-width: 15rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.badge {
+    min-width: 2rem !important;
+    border-width: 3px !important;
+}
+
+// Small devices (landscape phones, 576px and up)
+@media (min-width: 576px) {
+		max-width: 12em;
+}
+
+// Medium devices (tablets, 768px and up)
+@media (min-width: 768px) {
+	button.direction {
+		max-width: 15em;
+	}
+
+}
+
+// Large devices (desktops, 992px and up)
+@media (min-width: 992px) {
+	button.direction {
+		max-width: 20em;
+	}
+
+}
+
+// Extra large devices (large desktops, 1200px and up)
+@media (min-width: 1200px) {
+	button.direction {
+		max-width: 20em;
+	}
+
+}
