@@ -18,7 +18,6 @@ function createDBConnection() {
     mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
     $con = mysqli_connect(DATABASE_HOST, DATABASE_USER, DATABASE_PASS, DATABASE_NAME);
     mysqli_set_charset($con, 'utf8');
-
     if (mysqli_connect_errno()) {
         die('Failed to connect to MySQL: ' . mysqli_connect_error());
     }
@@ -27,24 +26,35 @@ function createDBConnection() {
 
 // Manage User Session
 function manageUserSession() {
+    // Harden session cookies before session_start
+    ini_set('session.cookie_httponly', 1);
+    ini_set('session.cookie_secure', 1);
+    ini_set('session.cookie_samesite', 'Strict');
+    ini_set('session.use_strict_mode', 1);
+
     session_start(['cookie_lifetime' => 60 * 60 * 24 * 4]);
     $sId = $_SESSION["sId"] ?? "";
 
     if ($sId == "") {
-
         if (isset($_COOKIE['sId']) && preg_match('/^[a-zA-Z0-9,\-]{22,128}$/', $_COOKIE['sId'])) {
             $sId = $_COOKIE['sId'];
-			session_abort();
+            session_abort();
             session_id($sId);
-			session_start(['cookie_lifetime' => 60 * 60 * 24 * 4]);
+            session_start(['cookie_lifetime' => 60 * 60 * 24 * 4]);
             addAlert('warning', 'Session recovered');
         } else {
             $sId = session_id();
             addAlert('warning', 'New Session.');
             setCookie("theme", "auto", time() + 60 * 60 * 24 * 365);
-			$img = $_SESSION['img'] = "img/user-md-grey.svg";
+            $img = $_SESSION['img'] = "img/user-md-grey.svg";
         }
-        setcookie('sId', $sId, time() + 60 * 60 * 24 * 4); // Refresh cookie
+        setcookie('sId', $sId, [
+            'expires'  => time() + 60 * 60 * 24 * 4,
+            'path'     => '/',
+            'httponly' => true,
+            'secure'   => true,
+            'samesite' => 'Strict',
+        ]);
         $_SESSION['sId'] = $sId;
     }
 
@@ -67,11 +77,11 @@ function appendLog($con, $context = "*", $activity = "*", $origin = "web") {
 
 // shortcut for append log entry
 function logDebug($label, $message) {
+    global $con;
     if (($_SESSION["debug"] ?? null)) {
         appendLog($con, $label, $message, 'web');
     }
 }
-
 
 // Get User IP Address
 function getUserIpAddr() {
@@ -84,13 +94,14 @@ function addAlert($messageType, $message) {
     array_push($_SESSION['alerts'], [$messageType, htmlentities($message)]);
 }
 
-function sanitizeRblInput($RblGet) {
-    // Use regular expression to filter out non-digit and non-comma characters
-    $filteredInput = preg_replace('/[^0-9,]/', '', $RblGet);
-    
-    return $filteredInput;
+function sanitizeDivaInput(string $divaGet): string {
+    return preg_replace('/[^0-9,]/', '', $divaGet);
 }
 
+// Alias so existing callers don't break during the transition
+function sanitizeRblInput(string $input): string {
+    return sanitizeDivaInput($input);
+}
 
 
 // Create a Database Connection
@@ -104,7 +115,4 @@ $username = $loggedIn ? $_SESSION['username'] : "";
 $img = $_SESSION['img'] = $_SESSION['img'] ?? "user-md-grey.svg";
 $avatarDir = $loggedIn ? AVATAR_DIR . $_SESSION['img'] : "";
 
-
-
-
-?>
+require_once(__DIR__ . '/csrf.php');
