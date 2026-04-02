@@ -1,0 +1,66 @@
+/* web/css/theme.css
+   CSS custom properties for light/dark theming.
+   Toggle via data-theme="dark"|"light" on <html>.
+   "auto" (no attribute) follows prefers-color-scheme.
+*/
+
+:root {
+  --color-bg:       #ffffff;
+  --color-surface:  #f8f9fa;
+  --color-text:     #212529;
+  --color-muted:    #6c757d;
+  --color-border:   #dee2e6;
+  --color-primary:  #0d6efd;
+  --color-nav-bg:   #000000;
+  --color-nav-text: #ffffff;
+}
+
+[data-theme="dark"] {
+  --color-bg:       #1a1a2e;
+  --color-surface:  #16213e;
+  --color-text:     #e0e0e0;
+  --color-muted:    #adb5bd;
+  --color-border:   #495057;
+  --color-primary:  #4d9fff;
+  --color-nav-bg:   #0d0d0d;
+  --color-nav-text: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg:       #1a1a2e;
+    --color-surface:  #16213e;
+    --color-text:     #e0e0e0;
+    --color-muted:    #adb5bd;
+    --color-border:   #495057;
+    --color-primary:  #4d9fff;
+    --color-nav-bg:   #0d0d0d;
+    --color-nav-text: #ffffff;
+  }
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+.navbar {
+  background-color: var(--color-nav-bg) !important;
+}
+
+.card,
+.list-group-item {
+  background-color: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.departure-table td,
+.departure-table th {
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.text-muted {
+  color: var(--color-muted) !important;
+}
