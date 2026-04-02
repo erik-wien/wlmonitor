@@ -53,14 +53,21 @@ try {
             if (isset($_GET['lat'], $_GET['lon'])) {
                 $lat = (float) $_GET['lat'];
                 $lon = (float) $_GET['lon'];
+                if (!is_finite($lat) || !is_finite($lon) || abs($lat) > 90.0 || abs($lon) > 180.0) {
+                    api_json(['error' => 'Invalid coordinates'], 400);
+                }
                 api_json(stations_by_distance($con, $lat, $lon));
             }
             api_json(stations_alpha($con));
 
         case 'position_save':
+            api_require_login();
             api_require_csrf();
             $lat = (float) ($_POST['lat'] ?? 0);
             $lon = (float) ($_POST['lon'] ?? 0);
+            if (!is_finite($lat) || !is_finite($lon) || abs($lat) > 90.0 || abs($lon) > 180.0) {
+                api_json(['error' => 'Invalid coordinates'], 400);
+            }
             stations_save_position($con, $lat, $lon);
             api_json(['ok' => true]);
 
@@ -110,7 +117,7 @@ try {
         case 'favorites_sort':
             api_require_login();
             api_require_csrf();
-            $body = json_decode(file_get_contents('php://input'), true);
+            $body = json_decode(file_get_contents('php://input', length: 65536), true);
             if (!is_array($body)) {
                 api_json(['error' => 'Invalid JSON body'], 400);
             }
