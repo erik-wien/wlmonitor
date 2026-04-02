@@ -33,16 +33,21 @@ appendLog('edf', 'Edit favourite.', 'web');
 ?>
 <html lang="de">
 <head>
-	<title>Wiener Abfahrtsmonitor</title>
-		<!-- Latest compiled and minified CSS -->
-	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
-	
-	<link rel="stylesheet" href="style/dark/bootstrap.css" id="cssTheme">
-	<link rel="stylesheet" href="style/wl-monitor.css">
-	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.0/css/all.css" integrity="sha384-lZN37f5QGtY3VHgisS14W3ExzMWZxybE1SJSEsQp9S+oqd12jhcu+A56Ebc1zFSJ" crossorigin="anonymous">
-	
-	<link href="https://fonts.googleapis.com/css?family=Roboto|Roboto+Mono|Share+Tech+Mono" rel="stylesheet">
-	
+  <title>Favorit bearbeiten - WL Monitor</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet"
+        href="https://use.fontawesome.com/releases/v5.7.0/css/all.css"
+        integrity="sha384-lZN37f5QGtY3VHgisS14W3ExzMWZxybE1SJSEsQp9S+oqd12jhcu+A56Ebc1zFSJ"
+        crossorigin="anonymous">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+        crossorigin="anonymous">
+  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="style/wl-monitor.css">
+</head>
+
 <body>
 	
 	<!--
@@ -68,7 +73,11 @@ appendLog('edf', 'Edit favourite.', 'web');
 <?php
 
 if (isset( $_POST['favID']) ) {
-	
+    if (!csrf_verify()) {
+        $_SESSION['Error'] = 'Ungultige Anfrage.';
+        header('Location: index.php'); exit;
+    }
+
 	// Let's check if the data was submitted, isset() function will check if the data exists.
 	if (!isset($_POST['title'], $_POST['rbls'], $_POST['bclass'], $_POST['favID'])) {
 		// Could not get the data that should have been sent.
@@ -158,10 +167,11 @@ if (isset( $_POST['favID']) ) {
 				
 				<!--Body-->
 				<form action='editFavourite.php?favID=<? echo $id; ?>' id='changeFavorite' method='post'>
-					
+<?= csrf_input() ?>
+
 						<label id="title-error" for="title" class="error text-danger"></label>
 						<div class="input-group has-warning mb-5 mt-2 has-error has-success">
-							<span class="input-group-prepend p-2 bg-dark text-light"><i class="fas fa-map-marker-alt prefix"></i></span>
+							<span class="input-group-text p-2 bg-dark text-light"><i class="fas fa-map-marker-alt prefix"></i></span>
 							<input type="text" id="title" name="title" class="form-control validate" placeholder="Stationsbezeichnung" autocomplete="on" value="<? echo $title; ?>">
 							<label id="title-success" for="title" class="text-success invisible"> <i class='fas fa-check'></i></label>
 						</div>
@@ -169,14 +179,14 @@ if (isset( $_POST['favID']) ) {
 						
 						<label id="rbls-error" for="rbls" class="error text-danger"></label>
 						<div class="input-group mb-5 has-warning has-error has-success">
-							<span class="input-group-prepend p-2 bg-dark text-light"><i class="fas fa-bookmark prefix"></i></span>
+							<span class="input-group-text p-2 bg-dark text-light"><i class="fas fa-bookmark prefix"></i></span>
 							<input type="text" id="rbls" name="rbls"  class="form-control validate" placeholder="Stationsnummern" autocomplete="on" value="<? echo $rbls; ?>">
 							<label id="rbls-success" for="rbls" class="text-success invisible"> <i class='fas fa-check'></i></label>
 						</div>
 
 						<label id="sort-error" for="sort" class="error text-danger"></label>
 						<div class="input-group mb-5 has-warning has-error has-success">
-							<span class="input-group-prepend p-2 bg-dark text-light"><i class="fas fa-sort-amount-down prefix"></i></span>
+							<span class="input-group-text p-2 bg-dark text-light"><i class="fas fa-sort-amount-down prefix"></i></span>
 							<input type="text" id="sort" name="sort"  class="form-control validate" placeholder="Rang" autocomplete="on" value="<? echo $sort; ?>">
 							<label id="sort-success" for="sort" class="text-success invisible"> <i class='fas fa-check'></i></label>
 						</div>
@@ -184,7 +194,7 @@ if (isset( $_POST['favID']) ) {
 						
 						<label id="bclass-error" for="sort" class="error text-danger"></label>
 						<div class="input-group mb-5 has-warning has-error has-success">
-							<span class="input-group-prepend p-2 bg-dark text-light" ><i class="fas fa-palette"></i></span>
+							<span class="input-group-text p-2 bg-dark text-light" ><i class="fas fa-palette"></i></span>
 							
 							<select id="bclass" name="bclass" class="form-control" placeholder="Farbe">
 								<option class="bg-default"	title="weiss"	<? echo ($bclass == "btn-outline-default"	? "selected" : "") ?> > btn-outline-default </option>
@@ -230,19 +240,9 @@ if (isset( $_POST['favID']) ) {
         </div>
     </div>
 </div>
-	<!-- Bootstrap JS -->
-	<!-- jQuery library -->
-	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
-	
-	<!-- jQuery form validation -->
-	<script src="https://cdn.jsdelivr.net/npm/jquery-validation@1.19.1/dist/jquery.validate.min.js"></script>
-	<script src="https://cdn.jsdelivr.net/npm/jquery-validation@1.19.1/dist/additional-methods.min.js"></script>
-		
-	<!-- Popper JS -->
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
-	
-	<!-- Latest compiled JavaScript -->
-	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc4s9bIOgUxi8T/jzmB6rVQO0ViiINFjyRUNLnCIE3T"
+        crossorigin="anonymous"></script>
 	
 	<script>		
 		
@@ -309,7 +309,7 @@ if (isset( $_POST['favID']) ) {
 		// Check for alerts 
 		// ----------------------------------------------------------------------------------------
 		if (isset($_SESSION['Error'])) {
-			echo('$("#alerts").append(\'<div class="alert alert-danger alert-dismissible fade show">'.$_SESSION['Error'] . ' <button type="button" class="close" data-dismiss="alert">&times;</button></div>\');');
+			echo('$("#alerts").append(\'<div class="alert alert-danger alert-dismissible fade show">'.$_SESSION['Error'] . ' <button type="button" class="close" data-bs-dismiss="alert">&times;</button></div>\');');
 			unset($_SESSION['Error']);
 		}
 		?>
