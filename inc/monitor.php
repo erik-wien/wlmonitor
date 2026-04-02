@@ -33,6 +33,7 @@ function monitor_get(mysqli $con, string $divaRaw, int $maxDepartures): array {
     $result = [];
     $prevStationId = null;
     $trainCount = 0;
+    $totalTrains = 0;
     $stationData = [];
 
     foreach ($monitors as $monitor) {
@@ -61,12 +62,13 @@ function monitor_get(mysqli $con, string $divaRaw, int $maxDepartures): array {
                 $dCount++;
             }
             $trainCount++;
+            $totalTrains++;
         }
 
         $result[$stationId] = $stationData;
     }
 
-    $result['trains']    = $trainCount;
+    $result['trains']    = $totalTrains;
     $result['update_at'] = date_format(date_create($serverTime), 'H:i:s');
     $result['api_ping']  = strtotime($serverTime) - time();
 

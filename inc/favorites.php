@@ -65,7 +65,7 @@ function favorites_edit(mysqli $con, int $idUser, int $favId, string $title, str
     $affected = $stmt->affected_rows;
     $stmt->close();
     appendLog($con, 'favEdit', "Favorite #$favId updated.", 'web');
-    return $affected >= 0;
+    return $affected > 0;
 }
 
 function favorites_delete(mysqli $con, int $idUser, int $favId): bool {

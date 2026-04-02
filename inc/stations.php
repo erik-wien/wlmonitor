@@ -4,13 +4,13 @@
 
 function stations_by_distance(mysqli $con, float $lat, float $lon): array {
     $sql = "SELECT s.Haltestelle AS station,
-                   FLOOR(ST_Distance_Sphere(point(s.LAT, s.LON), point(?, ?)) / 30) * 30 AS distance,
+                   FLOOR(ST_Distance_Sphere(point(s.LON, s.LAT), point(?, ?)) / 30) * 30 AS distance,
                    s.diva, s.lat, s.lon
             FROM ogd_stations AS s
             ORDER BY distance, station
             LIMIT 100";
     $stmt = $con->prepare($sql);
-    $stmt->bind_param('dd', $lat, $lon);
+    $stmt->bind_param('dd', $lon, $lat);
     $stmt->execute();
     $result = $stmt->get_result();
     $rows = [];
