@@ -10,10 +10,13 @@ function csrf_token(): string {
 }
 
 function csrf_verify(): bool {
+    if (empty($_SESSION['csrf_token'])) {
+        return false;
+    }
     $submitted = $_POST['csrf_token']
         ?? $_SERVER['HTTP_X_CSRF_TOKEN']
         ?? '';
-    return hash_equals($_SESSION['csrf_token'] ?? '', $submitted);
+    return hash_equals($_SESSION['csrf_token'], $submitted);
 }
 
 function csrf_input(): string {
