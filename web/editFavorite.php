@@ -166,13 +166,13 @@ if (isset( $_POST['favID']) ) {
 				<div class="alert alert-danger invisible" id="changeFavouriteError"></div>
 				
 				<!--Body-->
-				<form action='editFavourite.php?favID=<? echo $id; ?>' id='changeFavorite' method='post'>
+				<form action='editFavorite.php?favID=<?= (int)$id ?>' id='changeFavorite' method='post'>
 <?= csrf_input() ?>
 
 						<label id="title-error" for="title" class="error text-danger"></label>
 						<div class="input-group has-warning mb-5 mt-2 has-error has-success">
 							<span class="input-group-text p-2 bg-dark text-light"><i class="fas fa-map-marker-alt prefix"></i></span>
-							<input type="text" id="title" name="title" class="form-control validate" placeholder="Stationsbezeichnung" autocomplete="on" value="<? echo $title; ?>">
+							<input type="text" id="title" name="title" class="form-control validate" placeholder="Stationsbezeichnung" autocomplete="on" value="<?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?>">
 							<label id="title-success" for="title" class="text-success invisible"> <i class='fas fa-check'></i></label>
 						</div>
 
@@ -180,14 +180,14 @@ if (isset( $_POST['favID']) ) {
 						<label id="rbls-error" for="rbls" class="error text-danger"></label>
 						<div class="input-group mb-5 has-warning has-error has-success">
 							<span class="input-group-text p-2 bg-dark text-light"><i class="fas fa-bookmark prefix"></i></span>
-							<input type="text" id="rbls" name="rbls"  class="form-control validate" placeholder="Stationsnummern" autocomplete="on" value="<? echo $rbls; ?>">
+							<input type="text" id="rbls" name="rbls"  class="form-control validate" placeholder="Stationsnummern" autocomplete="on" value="<?= htmlspecialchars($rbls, ENT_QUOTES, 'UTF-8') ?>">
 							<label id="rbls-success" for="rbls" class="text-success invisible"> <i class='fas fa-check'></i></label>
 						</div>
 
 						<label id="sort-error" for="sort" class="error text-danger"></label>
 						<div class="input-group mb-5 has-warning has-error has-success">
 							<span class="input-group-text p-2 bg-dark text-light"><i class="fas fa-sort-amount-down prefix"></i></span>
-							<input type="text" id="sort" name="sort"  class="form-control validate" placeholder="Rang" autocomplete="on" value="<? echo $sort; ?>">
+							<input type="text" id="sort" name="sort"  class="form-control validate" placeholder="Rang" autocomplete="on" value="<?= (int)$sort ?>">
 							<label id="sort-success" for="sort" class="text-success invisible"> <i class='fas fa-check'></i></label>
 						</div>
 
@@ -215,7 +215,7 @@ if (isset( $_POST['favID']) ) {
 					
 					</div>
 					
-					<input type="hidden" name="favID" value="<? echo $id; ?>">
+					<input type="hidden" name="favID" value="<?= (int)$id ?>">
 		
 				</form>
 			
@@ -244,77 +244,22 @@ if (isset( $_POST['favID']) ) {
         integrity="sha384-YvpcrYf0tY3lHB60NNkmXc4s9bIOgUxi8T/jzmB6rVQO0ViiINFjyRUNLnCIE3T"
         crossorigin="anonymous"></script>
 	
-	<script>		
-		
-		$(document).ready(function(){
-		
-			// Validate Change Password Form
-			$("#xxxchangeFavorite").validate({
-				rules: {
-					title: {
-						required: true,
-						minlength: 3
-					},
-					rbls: {
-						required: true,
-						minlength: 3,
-						pattern: /^\S*$/
-					},
-					sort: {
-						required: true,
-						min: 0,
-						max: 999
-					}
-				},
-				messages: {
-					title: {
-						required: "Bitte geben Sie einen Titel ein",
-						minlength: "Bitte geben Sie einen Titel mit mindestens drei Buchstaben ein"
-						},
-					rbls: {
-						required: "Bitte geben Sie eine Stationsnummer ein",
-						minlength: "Bitte geben Sie eine gültige Stationsnummer ein",
-						pattern: "Bitte geben Sie keine Leerzeichen ein!"
-						},
-					sort: {
-						required: "Bitte geben Sie eine Rangnummer ein",
-						min: "Bitte geben Sie eine Rangnummer zwischen 0 und 999 ein",
-						max: "Bitte geben Sie eine Rangnummer zwischen 0 und 999 ein"
-						}
-				},
-				submitHandler: function(form) {
-					// do things for a valid form
-					form.submit;
-				},
-				success: function(){
-					// $("#changeFavorite .text-success").removeClass("invisible");
-				},
-				invalidHandler: function(event, validator) {
-					var errors = validator.numberOfInvalids();
-					if (errors) {
-						var message = errors == 1
-							? "Es gibt einen Fehler. Das betroffene Feld wurde markiert."
-							: "Es gibt "+ errors +" Fehler. Die betroffenen Felder wurden markiert.";
-						$("#changeFavoriteError").html(message);
-						$("#changeFavoriteError").show();
-					} else {
-						$("#changeFavoriteError").hide();
-					}
-				}
-			});
-		
-		
-		});
-		<?php
-		// Check for alerts 
-		// ----------------------------------------------------------------------------------------
-		if (isset($_SESSION['Error'])) {
-			echo('$("#alerts").append(\'<div class="alert alert-danger alert-dismissible fade show">'.$_SESSION['Error'] . ' <button type="button" class="close" data-bs-dismiss="alert">&times;</button></div>\');');
-			unset($_SESSION['Error']);
-		}
-		?>
-
+	<?php if (isset($_SESSION['Error'])): ?>
+	<script>
+	(function() {
+	  const container = document.getElementById('alerts');
+	  const div = document.createElement('div');
+	  div.className = 'alert alert-danger alert-dismissible fade show';
+	  div.textContent = <?= json_encode($_SESSION['Error']) ?>;
+	  const btn = document.createElement('button');
+	  btn.type = 'button';
+	  btn.className = 'btn-close';
+	  btn.dataset.bsDismiss = 'alert';
+	  div.appendChild(btn);
+	  container.appendChild(div);
+	})();
 	</script>
+	<?php unset($_SESSION['Error']); endif; ?>
 
 	<?php
 	
