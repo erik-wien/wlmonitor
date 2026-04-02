@@ -1,0 +1,14 @@
+{
+  "local": {
+    "host": "localhost",
+    "user": "your_local_user",
+    "pass": "your_local_pass",
+    "name": "your_local_db"
+  },
+  "production": {
+    "host": "your_production_host",
+    "user": "your_production_user",
+    "pass": "your_production_pass",
+    "name": "your_production_db"
+  }
+}
