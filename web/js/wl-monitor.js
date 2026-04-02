@@ -307,7 +307,11 @@ export function sendAlert(message, type) {
 // --- Cookies (theme + sId only) ----------------------------------------------
 function getCookie(name) {
   for (const part of decodeURIComponent(document.cookie).split(';')) {
-    const [k, v] = part.trim().split('=');
+    const trimmed = part.trim();
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx === -1) continue;
+    const k = trimmed.slice(0, eqIdx);
+    const v = trimmed.slice(eqIdx + 1);
     if (k === name) return v || '';
   }
   return '';
