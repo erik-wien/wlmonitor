@@ -4,9 +4,10 @@
 
 function admin_list_users(mysqli $con, int $page = 1, int $perPage = 25, string $filter = ''): array {
     $offset = ($page - 1) * $perPage;
+    $like = null;
     if ($filter !== '') {
-        $filter = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $filter);
-        $like = '%' . $filter . '%';
+        $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $filter);
+        $like = '%' . $escaped . '%';
         $stmt = $con->prepare(
             'SELECT id, username, email, disabled, departures, debug, rights
              FROM wl_accounts WHERE username LIKE ? ORDER BY username LIMIT ? OFFSET ?'
@@ -36,9 +37,7 @@ function admin_list_users(mysqli $con, int $page = 1, int $perPage = 25, string 
     $stmt->close();
 
     // Total count for pagination
-    if ($filter !== '') {
-        $filter = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $filter);
-        $like  = '%' . $filter . '%';
+    if ($like !== null) {
         $cstmt = $con->prepare('SELECT COUNT(*) FROM wl_accounts WHERE username LIKE ?');
         $cstmt->bind_param('s', $like);
     } else {
