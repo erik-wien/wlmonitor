@@ -26,21 +26,23 @@ function createDBConnection() {
 
 // Manage User Session
 function manageUserSession() {
-    // Harden session cookies before session_start
-    ini_set('session.cookie_httponly', 1);
-    ini_set('session.cookie_secure', 1);
-    ini_set('session.cookie_samesite', 'Strict');
-    ini_set('session.use_strict_mode', 1);
+    $sessionOpts = [
+        'cookie_lifetime' => 60 * 60 * 24 * 4,
+        'cookie_httponly' => true,
+        'cookie_secure'   => true,
+        'cookie_samesite' => 'Strict',
+        'use_strict_mode' => true,
+    ];
 
-    session_start(['cookie_lifetime' => 60 * 60 * 24 * 4]);
+    session_start($sessionOpts);
     $sId = $_SESSION["sId"] ?? "";
 
     if ($sId == "") {
-        if (isset($_COOKIE['sId']) && preg_match('/^[a-zA-Z0-9,\-]{22,128}$/', $_COOKIE['sId'])) {
+        if (isset($_COOKIE['sId']) && preg_match('/^[a-zA-Z0-9\-]{22,128}$/', $_COOKIE['sId'])) {
             $sId = $_COOKIE['sId'];
             session_abort();
             session_id($sId);
-            session_start(['cookie_lifetime' => 60 * 60 * 24 * 4]);
+            session_start($sessionOpts);
             addAlert('warning', 'Session recovered');
         } else {
             $sId = session_id();
