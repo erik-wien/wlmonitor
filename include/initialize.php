@@ -7,10 +7,17 @@ define("AVATAR_DIR", "img/user/");
 date_default_timezone_set('Europe/Vienna');
 define("APIKEY", 'tVqqssNTeDyFb35');
 define("MAX_DEPARTURES", 2);
-define("DATABASE_HOST", 'mysqlsvr78.world4you.com');
-define("DATABASE_USER", 'sql6675098');
-define("DATABASE_PASS", 'dr@3ysr');
-define("DATABASE_NAME", '5279249db19');
+
+// Load DB credentials from config/db.json
+$_dbConfigFile = __DIR__ . '/../config/db.json';
+$_dbConfig     = json_decode(file_get_contents($_dbConfigFile), true);
+$_dbEnv        = getenv('APP_ENV') ?: 'local';
+$_db           = $_dbConfig[$_dbEnv] ?? $dbConfig['local'];
+define("DATABASE_HOST", $_db['host']);
+define("DATABASE_USER", $_db['user']);
+define("DATABASE_PASS", $_db['pass']);
+define("DATABASE_NAME", $_db['name']);
+unset($_dbConfigFile, $_dbConfig, $_dbEnv, $_db);
 
 
 // Database Connection
