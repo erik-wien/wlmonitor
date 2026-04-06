@@ -44,14 +44,20 @@ function admin_list_users(mysqli $con, int $page = 1, int $perPage = 25, string 
         $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $filter);
         $like    = '%' . $escaped . '%';
         $stmt    = $con->prepare(
-            'SELECT id, username, email, disabled, departures, debug, rights
-             FROM jardyx_auth.auth_accounts WHERE username LIKE ? ORDER BY username LIMIT ? OFFSET ?'
+            'SELECT a.id, a.username, a.email, a.disabled, a.debug, a.rights,
+                    COALESCE(p.departures, 2) AS departures
+             FROM jardyx_auth.auth_accounts a
+             LEFT JOIN wl_preferences p ON p.user_id = a.id
+             WHERE a.username LIKE ? ORDER BY a.username LIMIT ? OFFSET ?'
         );
         $stmt->bind_param('sii', $like, $perPage, $offset);
     } else {
         $stmt = $con->prepare(
-            'SELECT id, username, email, disabled, departures, debug, rights
-             FROM jardyx_auth.auth_accounts ORDER BY username LIMIT ? OFFSET ?'
+            'SELECT a.id, a.username, a.email, a.disabled, a.debug, a.rights,
+                    COALESCE(p.departures, 2) AS departures
+             FROM jardyx_auth.auth_accounts a
+             LEFT JOIN wl_preferences p ON p.user_id = a.id
+             ORDER BY a.username LIMIT ? OFFSET ?'
         );
         $stmt->bind_param('ii', $perPage, $offset);
     }
@@ -108,13 +114,24 @@ function admin_edit_user(mysqli $con, int $targetId, string $email, string $righ
     $disabledStr = $disabled ? '1' : '0';
     $debugStr    = $debug    ? '1' : '0';
 
+    // Update auth fields
     $stmt = $con->prepare(
-        'UPDATE jardyx_auth.auth_accounts SET email = ?, rights = ?, disabled = ?, departures = ?, debug = ? WHERE id = ?'
+        'UPDATE jardyx_auth.auth_accounts SET email = ?, rights = ?, disabled = ?, debug = ? WHERE id = ?'
     );
-    $stmt->bind_param('sssisi', $email, $rights, $disabledStr, $departures, $debugStr, $targetId);
+    $stmt->bind_param('ssssi', $email, $rights, $disabledStr, $debugStr, $targetId);
     $stmt->execute();
     $ok = $stmt->affected_rows > 0;
     $stmt->close();
+
+    // Update departures in wl_preferences
+    $stmt = $con->prepare(
+        'INSERT INTO wl_preferences (user_id, departures) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE departures = VALUES(departures)'
+    );
+    $stmt->bind_param('ii', $targetId, $departures);
+    $stmt->execute();
+    $stmt->close();
+
     appendLog($con, 'admin', "User #$targetId updated.", 'web');
     return $ok;
 }
