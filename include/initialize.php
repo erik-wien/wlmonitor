@@ -1,127 +1,96 @@
 <?php
+/**
+ * include/initialize.php
+ *
+ * Bootstrap file — MUST be the first include in every PHP entry point.
+ *
+ * Responsibilities:
+ *  1. Load config and define constants.
+ *  2. Open $con (MySQLi to wlmonitor DB; auth queries use jardyx_auth. prefix).
+ *  3. Define RATE_LIMIT_FILE and AUTH_DB_PREFIX for the auth library.
+ *  4. Call auth_bootstrap() — security headers, session, CSRF.
+ *  5. Define wlmonitor-specific utility functions.
+ */
 
-// Global Constants
-define("SCRIPT_PATH", '/home/.sites/765/site679/web/jardyx.com/wlmonitor/');
-define("CURRENT_PATH", __FILE__);
-define("AVATAR_DIR", "img/user/");
-date_default_timezone_set('Europe/Vienna');
-define("APIKEY", 'tVqqssNTeDyFb35');
-define("MAX_DEPARTURES", 2);
+require_once __DIR__ . '/../vendor/autoload.php';
 
-// Load DB credentials from config/db.json
+// ── Load config ───────────────────────────────────────────────────────────────
+
 $_dbConfigFile = __DIR__ . '/../config/db.json';
 $_dbConfig     = json_decode(file_get_contents($_dbConfigFile), true);
 $_dbEnv        = getenv('APP_ENV') ?: 'local';
-$_db           = $_dbConfig[$_dbEnv] ?? $dbConfig['local'];
-define("DATABASE_HOST", $_db['host']);
-define("DATABASE_USER", $_db['user']);
-define("DATABASE_PASS", $_db['pass']);
-define("DATABASE_NAME", $_db['name']);
-unset($_dbConfigFile, $_dbConfig, $_dbEnv, $_db);
+$_db           = $_dbConfig[$_dbEnv] ?? $_dbConfig['local'];
 
+define('SCRIPT_PATH',    '/home/.sites/765/site679/web/jardyx.com/wlmonitor/');
+define('CURRENT_PATH',   __FILE__);
+define('AVATAR_DIR',     'img/user/');
+define('APIKEY',         'tVqqssNTeDyFb35');
+define('MAX_DEPARTURES', 2);
+define('APP_VERSION',    '3.0');
+define('APP_BUILD',      8);
 
-// Database Connection
-function createDBConnection() {
+define('DATABASE_HOST',     $_db['host']);
+define('DATABASE_USER',     $_db['user']);
+define('DATABASE_PASS',     $_db['pass']);
+define('DATABASE_NAME',     $_db['name']);
+define('AUTH_DATABASE_NAME',$_db['auth_name'] ?? 'jardyx_auth');
+define('APP_BASE_URL',      rtrim($_db['base_url'] ?? '', '/'));
+
+/** Prefix for all cross-DB auth table references (e.g. 'jardyx_auth.'). */
+define('AUTH_DB_PREFIX', AUTH_DATABASE_NAME . '.');
+
+$_smtp = $_dbConfig['smtp_' . $_dbEnv] ?? $_dbConfig['smtp_local'];
+define('SMTP_HOST',      $_smtp['host']);
+define('SMTP_PORT',      (int) $_smtp['port']);
+define('SMTP_USER',      $_smtp['user']);
+define('SMTP_PASS',      $_smtp['pass']);
+define('SMTP_FROM',      $_smtp['from']);
+define('SMTP_FROM_NAME', $_smtp['from_name']);
+
+unset($_dbConfigFile, $_dbConfig, $_dbEnv, $_db, $_smtp);
+
+date_default_timezone_set('Europe/Vienna');
+
+// ── Database ──────────────────────────────────────────────────────────────────
+
+function createDBConnection(): mysqli {
     mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
     $con = mysqli_connect(DATABASE_HOST, DATABASE_USER, DATABASE_PASS, DATABASE_NAME);
     mysqli_set_charset($con, 'utf8');
-    if (mysqli_connect_errno()) {
-        die('Failed to connect to MySQL: ' . mysqli_connect_error());
-    }
     return $con;
 }
 
-// Manage User Session
-function manageUserSession() {
-    $sessionOpts = [
-        'cookie_lifetime' => 60 * 60 * 24 * 4,
-        'cookie_httponly' => true,
-        'cookie_secure'   => true,
-        'cookie_samesite' => 'Strict',
-        'use_strict_mode' => true,
-    ];
+$con = createDBConnection();
 
-    session_start($sessionOpts);
-    $sId = $_SESSION["sId"] ?? "";
+// ── Auth library constants (must be defined before autoload side-effects) ─────
 
-    if ($sId == "") {
-        if (isset($_COOKIE['sId']) && preg_match('/^[a-zA-Z0-9\-]{22,128}$/', $_COOKIE['sId'])) {
-            $sId = $_COOKIE['sId'];
-            session_abort();
-            session_id($sId);
-            session_start($sessionOpts);
-            addAlert('warning', 'Session recovered');
-        } else {
-            $sId = session_id();
-            addAlert('warning', 'New Session.');
-            setCookie("theme", "auto", time() + 60 * 60 * 24 * 365);
-            $img = $_SESSION['img'] = "img/user-md-grey.svg";
-        }
-        setcookie('sId', $sId, [
-            'expires'  => time() + 60 * 60 * 24 * 4,
-            'path'     => '/',
-            'httponly' => true,
-            'secure'   => true,
-            'samesite' => 'Strict',
-        ]);
-        $_SESSION['sId'] = $sId;
-    }
+define('RATE_LIMIT_FILE', __DIR__ . '/../data/ratelimit.json');
 
-    $_SESSION["logPage"] ??= 1;
-    $_SESSION["logLimit"] ??= 20;
-    return $sId;
-}
+// ── Bootstrap (security headers + session + CSRF) ─────────────────────────────
 
-// Append Log Entry
-function appendLog($con, $context = "*", $activity = "*", $origin = "web") {
-    $sql = "INSERT INTO wl_log (idUser, context, activity, origin, ipAdress, logTime) VALUES (?, ?, ?, ?, INET_ATON(?), CURRENT_TIMESTAMP)";
-    $stmt = $con->prepare($sql);
-    $userIP = getUserIpAddr();
-    $id = $_SESSION['id'] ?? 1;
-    $stmt->bind_param('issss', $id, $context, $activity, $origin, $userIP);
-    $stmt->execute();
-    $stmt->close();
-    return true;
-}
+auth_bootstrap([
+    'script-src' => 'https://cdn.jsdelivr.net',
+    'style-src'  => 'https://cdn.jsdelivr.net https://use.fontawesome.com https://fonts.googleapis.com',
+    'font-src'   => 'https://use.fontawesome.com https://fonts.gstatic.com data:',
+]);
 
-// shortcut for append log entry
-function logDebug($label, $message) {
-    global $con;
-    if (($_SESSION["debug"] ?? null)) {
-        appendLog($con, $label, $message, 'web');
-    }
-}
+// ── Session globals ───────────────────────────────────────────────────────────
 
-// Get User IP Address
-function getUserIpAddr() {
-    return $_SERVER['HTTP_CLIENT_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'];
-}
+$loggedIn  = $_SESSION['loggedin'] ?? 0;
+$username  = $loggedIn ? $_SESSION['username'] : '';
+$img       = $_SESSION['img'] = $_SESSION['img'] ?? 'user-md-grey.svg';
+$avatarDir = $loggedIn ? AVATAR_DIR . $_SESSION['img'] : '';
 
-// Add Alert Message
-function addAlert($messageType, $message) {
-    $_SESSION['alerts'] = $_SESSION['alerts'] ?? [];
-    array_push($_SESSION['alerts'], [$messageType, htmlentities($message)]);
-}
+// ── wlmonitor-specific utilities ──────────────────────────────────────────────
 
+/**
+ * Strip everything except digits and commas from a DIVA/RBL input string.
+ */
 function sanitizeDivaInput(string $divaGet): string {
     return preg_replace('/[^0-9,]/', '', $divaGet);
 }
 
-// Alias so existing callers don't break during the transition
+/** Alias for sanitizeDivaInput() — backward compatibility. */
 function sanitizeRblInput(string $input): string {
     return sanitizeDivaInput($input);
 }
-
-
-// Create a Database Connection
-$con = createDBConnection();
-
-// Manage User Session
-$sId = manageUserSession();
-
-$loggedIn = $_SESSION['loggedin'] ?? 0;
-$username = $loggedIn ? $_SESSION['username'] : "";
-$img = $_SESSION['img'] = $_SESSION['img'] ?? "user-md-grey.svg";
-$avatarDir = $loggedIn ? AVATAR_DIR . $_SESSION['img'] : "";
-
-require_once(__DIR__ . '/csrf.php');
