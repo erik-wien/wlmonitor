@@ -30,7 +30,7 @@ class AuthTest extends IntegrationTestCase
     public function test_login_succeeds_with_correct_credentials(): void
     {
         $uid = $this->createUser(['password' => password_hash($this->password, PASSWORD_BCRYPT, ['cost' => 4])]);
-        $stmt = $this->con->prepare('SELECT username FROM auth_accounts WHERE id = ?');
+        $stmt = $this->con->prepare('SELECT username FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
         $stmt->bind_param('i', $uid);
         $stmt->execute();
         $username = $stmt->get_result()->fetch_assoc()['username'];
@@ -45,7 +45,7 @@ class AuthTest extends IntegrationTestCase
     public function test_login_sets_session_variables(): void
     {
         $uid = $this->createUser(['password' => password_hash($this->password, PASSWORD_BCRYPT, ['cost' => 4])]);
-        $stmt = $this->con->prepare('SELECT username FROM auth_accounts WHERE id = ?');
+        $stmt = $this->con->prepare('SELECT username FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
         $stmt->bind_param('i', $uid);
         $stmt->execute();
         $username = $stmt->get_result()->fetch_assoc()['username'];
@@ -63,7 +63,7 @@ class AuthTest extends IntegrationTestCase
     public function test_login_fails_with_wrong_password(): void
     {
         $uid = $this->createUser();
-        $stmt = $this->con->prepare('SELECT username FROM auth_accounts WHERE id = ?');
+        $stmt = $this->con->prepare('SELECT username FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
         $stmt->bind_param('i', $uid);
         $stmt->execute();
         $username = $stmt->get_result()->fetch_assoc()['username'];
@@ -88,7 +88,7 @@ class AuthTest extends IntegrationTestCase
             'disabled'  => '1',
             'password'  => password_hash($this->password, PASSWORD_BCRYPT, ['cost' => 4]),
         ]);
-        $stmt = $this->con->prepare('SELECT username FROM auth_accounts WHERE id = ?');
+        $stmt = $this->con->prepare('SELECT username FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
         $stmt->bind_param('i', $uid);
         $stmt->execute();
         $username = $stmt->get_result()->fetch_assoc()['username'];
@@ -106,7 +106,7 @@ class AuthTest extends IntegrationTestCase
             'activation_code' => 'someuniqcode',
             'password'        => password_hash($this->password, PASSWORD_BCRYPT, ['cost' => 4]),
         ]);
-        $stmt = $this->con->prepare('SELECT username FROM auth_accounts WHERE id = ?');
+        $stmt = $this->con->prepare('SELECT username FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
         $stmt->bind_param('i', $uid);
         $stmt->execute();
         $username = $stmt->get_result()->fetch_assoc()['username'];
@@ -123,7 +123,7 @@ class AuthTest extends IntegrationTestCase
     public function test_failed_login_increments_invalid_logins(): void
     {
         $uid = $this->createUser();
-        $stmt = $this->con->prepare('SELECT username FROM auth_accounts WHERE id = ?');
+        $stmt = $this->con->prepare('SELECT username FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
         $stmt->bind_param('i', $uid);
         $stmt->execute();
         $username = $stmt->get_result()->fetch_assoc()['username'];
@@ -131,7 +131,7 @@ class AuthTest extends IntegrationTestCase
 
         auth_login($this->con, $username, 'wrong');
 
-        $stmt = $this->con->prepare('SELECT invalidLogins FROM auth_accounts WHERE id = ?');
+        $stmt = $this->con->prepare('SELECT invalidLogins FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
         $stmt->bind_param('i', $uid);
         $stmt->execute();
         $count = (int) $stmt->get_result()->fetch_assoc()['invalidLogins'];
@@ -168,7 +168,7 @@ class AuthTest extends IntegrationTestCase
     public function test_successful_login_clears_rate_limit(): void
     {
         $uid = $this->createUser(['password' => password_hash($this->password, PASSWORD_BCRYPT, ['cost' => 4])]);
-        $stmt = $this->con->prepare('SELECT username FROM auth_accounts WHERE id = ?');
+        $stmt = $this->con->prepare('SELECT username FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
         $stmt->bind_param('i', $uid);
         $stmt->execute();
         $username = $stmt->get_result()->fetch_assoc()['username'];
