@@ -1,7 +1,34 @@
 <?php
-// inc/stations.php
-// Station list from ogd_stations table
+/**
+ * inc/stations.php
+ *
+ * Station list queries against the ogd_stations view.
+ *
+ * ogd_stations is a MariaDB view that joins ogd_haltestellen + ogd_steige +
+ * ogd_linien and exposes one row per physical station with its DIVA number
+ * (station-level, 8-digit), name, coordinates, and served lines.
+ *
+ * DIVA vs RBL distinction
+ * ───────────────────────
+ * - DIVA  (ogd_haltestellen.DIVA)  : station-level 8-digit identifier.
+ *                                     This is what the WL Realtime API accepts.
+ * - RBL   (ogd_steige.RBL)         : stop-level 4-digit identifier (one per
+ *                                     direction/platform).  Used in older data
+ *                                     formats; exposed via the ogd_diva view.
+ */
 
+/**
+ * Return up to 100 stations nearest to a geographic coordinate.
+ *
+ * Uses MySQL's ST_Distance_Sphere() for accurate great-circle distance.
+ * Results are rounded to the nearest 30 m increment to avoid false precision
+ * and sorted by distance, then alphabetically within the same bracket.
+ *
+ * @param mysqli $con Active database connection.
+ * @param float  $lat Latitude  in decimal degrees (range −90 … +90).
+ * @param float  $lon Longitude in decimal degrees (range −180 … +180).
+ * @return array[]    Rows: ['station', 'distance' (m), 'diva', 'lat', 'lon']
+ */
 function stations_by_distance(mysqli $con, float $lat, float $lon): array {
     $sql = "SELECT s.Haltestelle AS station,
                    FLOOR(ST_Distance_Sphere(point(s.LON, s.LAT), point(?, ?)) / 30) * 30 AS distance,
@@ -10,6 +37,7 @@ function stations_by_distance(mysqli $con, float $lat, float $lon): array {
             ORDER BY distance, station
             LIMIT 100";
     $stmt = $con->prepare($sql);
+    // Note: ST_Distance_Sphere takes (longitude, latitude) — arguments are intentionally swapped.
     $stmt->bind_param('dd', $lon, $lat);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -27,6 +55,15 @@ function stations_by_distance(mysqli $con, float $lat, float $lon): array {
     return $rows;
 }
 
+/**
+ * Return all stations in alphabetical order.
+ *
+ * Used for the default A–Z station list.  No LIMIT — the full ~4 000 row
+ * dataset is returned; the client filters in JavaScript.
+ *
+ * @param mysqli $con Active database connection.
+ * @return array[]    Rows: ['station', 'diva', 'lat', 'lon']
+ */
 function stations_alpha(mysqli $con): array {
     $result = $con->query(
         "SELECT s.Haltestelle AS station, s.diva, s.lat, s.lon FROM ogd_stations AS s ORDER BY station"
@@ -43,6 +80,16 @@ function stations_alpha(mysqli $con): array {
     return $rows;
 }
 
+/**
+ * Store the user's current geographic position in the session.
+ *
+ * Used to remember the last known location so the "Nähe" sort can be
+ * re-applied across page refreshes without re-requesting geolocation.
+ *
+ * @param mysqli $con Active database connection (used for logging only).
+ * @param float  $lat Latitude  in decimal degrees.
+ * @param float  $lon Longitude in decimal degrees.
+ */
 function stations_save_position(mysqli $con, float $lat, float $lon): void {
     $_SESSION['lat'] = $lat;
     $_SESSION['lon'] = $lon;

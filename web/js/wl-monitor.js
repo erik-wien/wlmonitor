@@ -4,8 +4,10 @@
  */
 
 // --- State -------------------------------------------------------------------
-let stationCache = [];
-let monitorTimer = null;
+let stationCache  = [];       // full list for current sort mode
+let currentSort   = 'alpha';  // 'alpha' | 'dist'
+let stationOrigin = null;     // { lat, lon } when sort=dist
+let monitorTimer  = null;
 
 // --- Init --------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
@@ -21,7 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
   startMonitorTimer();
   wireScrollButton();
   wireStationSort();
-  wireThemeToggle();
+  wireStationDropdown();
+  loadStationsAlpha();
 });
 
 // --- API helpers -------------------------------------------------------------
@@ -66,38 +69,125 @@ function renderMonitor(data) {
   const { trains, update_at, api_ping, ...stations } = data;
 
   for (const [, s] of Object.entries(stations)) {
-    if (typeof s !== 'object') continue;
+    if (typeof s !== 'object' || !Array.isArray(s.lines)) continue;
 
-    const card   = document.createElement('div');
+    const card = document.createElement('div');
     card.className = 'card mb-2';
 
     const header = document.createElement('div');
-    header.className = 'card-header';
+    header.className = 'card-header py-1';
     header.textContent = s.station_name;
     card.appendChild(header);
 
     const table = document.createElement('table');
     table.className = 'table table-sm departure-table mb-0';
 
-    let i = 0;
-    while (('train_' + i) in s) {
-      const tr    = table.insertRow();
-      const tdLine = tr.insertCell();
-      tdLine.textContent = s['train_' + i];
-      tdLine.className = 'fw-semibold';
-      const tdDep = tr.insertCell();
-      tdDep.textContent = s['departure_' + i];
-      i++;
+    // Group lines by name, preserving order of first appearance.
+    // Within each group: H (outgoing) first, R (incoming) second.
+    const groups = new Map();
+    for (const line of s.lines) {
+      if (!groups.has(line.name)) groups.set(line.name, { H: null, R: null });
+      const g = groups.get(line.name);
+      if (line.direction === 'R') { g.R = line; } else { g.H = line; }
     }
+
+    for (const [, g] of groups) {
+      const outgoing = g.H;
+      const incoming = g.R;
+      const tbody = document.createElement('tbody');
+
+      if (outgoing) {
+        const tr = tbody.insertRow();
+        const tdBadge = tr.insertCell();
+        tdBadge.className = 'badge-cell';
+        tdBadge.rowSpan = incoming ? 2 : 1;
+        tdBadge.appendChild(createLineBadge(outgoing));
+        appendDepartureColumns(tr, outgoing);
+        tbody.appendChild(tr);
+      }
+
+      if (incoming) {
+        const tr = tbody.insertRow();
+        if (!outgoing) {
+          const tdBadge = tr.insertCell();
+          tdBadge.className = 'badge-cell';
+          tdBadge.appendChild(createLineBadge(incoming));
+        }
+        appendDepartureColumns(tr, incoming);
+        tbody.appendChild(tr);
+      }
+
+      table.appendChild(tbody);
+    }
+
     card.appendChild(table);
 
     const footer = document.createElement('div');
-    footer.className = 'card-footer text-muted small';
+    footer.className = 'card-footer text-muted small py-1';
     footer.textContent = 'Aktualisiert: ' + update_at;
     card.appendChild(footer);
 
     container.appendChild(card);
   }
+}
+
+function appendDepartureColumns(tr, line) {
+  const tdPlatform = tr.insertCell();
+  tdPlatform.className = 'platform-cell';
+  tdPlatform.textContent = line.platform;
+
+  const tdTowards = tr.insertCell();
+  tdTowards.className = 'towards-cell';
+  tdTowards.textContent = line.towards;
+
+  const tdTimes = tr.insertCell();
+  tdTimes.className = 'times-cell';
+  tdTimes.textContent = line.departures;
+}
+
+function createLineBadge(line) {
+  const badge = document.createElement('span');
+  badge.className = 'line-badge';
+
+  if (line.type === 'ptTramWLB') {
+    badge.classList.add('pt-tram-wlb');
+    const img = document.createElement('img');
+    img.src = 'img/Logo_Wiener_Lokalbahn.svg';
+    img.alt = 'WLB';
+    img.className = 'wlb-logo';
+    badge.appendChild(img);
+    return badge;
+  }
+
+  badge.textContent = line.name;
+
+  switch (line.type) {
+    case 'ptTram':
+      badge.classList.add('pt-tram');
+      break;
+    case 'ptBusRegion':
+      badge.classList.add('pt-bus-region');
+      break;
+    case 'ptMetro':
+      badge.classList.add('pt-metro', line.name);
+      break;
+    case 'ptTrain':
+      badge.classList.add('pt-train');
+      break;
+    case 'ptTrainS':
+      badge.classList.add('pt-train-s');
+      break;
+    case 'ptBusCity':
+      badge.classList.add('pt-bus-city');
+      break;
+    case 'ptBusNight':
+      badge.classList.add('pt-bus-night');
+      break;
+    default:
+      badge.classList.add('pt-default');
+  }
+
+  return badge;
 }
 
 function startMonitorTimer() {
@@ -131,62 +221,74 @@ function renderFavorites(favs) {
       loadMonitor(fav.diva);
       startMonitorTimer();
     });
-    btn.addEventListener('dblclick', () => {
-      location.href = 'editFavorite.php?favID=' + fav.id;
-    });
-    container.appendChild(btn);
+
+    const editIcon = document.createElement('i');
+    editIcon.className = 'fas fa-pencil-alt';
+    const editBtn = document.createElement('a');
+    editBtn.href = 'editFavorite.php?favID=' + fav.id;
+    editBtn.className = 'btn btn-sm btn-outline-secondary ms-1';
+    editBtn.title = 'Bearbeiten';
+    editBtn.appendChild(editIcon);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'd-flex mb-1';
+    btn.className = 'btn ' + fav.bclass + ' flex-grow-1';
+    wrap.appendChild(btn);
+    wrap.appendChild(editBtn);
+    container.appendChild(wrap);
   }
 }
 
 // --- Stations ----------------------------------------------------------------
 async function loadStationsByDistance(position) {
   const { latitude, longitude } = position.coords;
-  const spinner = document.getElementById('stationSortDist');
-  if (spinner) spinner.classList.remove('d-none');
+  stationOrigin = { lat: latitude, lon: longitude };
   try {
-    await apiPost('position_save', { lat: latitude, lon: longitude });
+    if (window.wlConfig?.loggedIn) {
+      await apiPost('position_save', { lat: latitude, lon: longitude });
+    }
     const stations = await apiFetch('stations', { lat: latitude, lon: longitude });
     stationCache = stations;
-    renderStationList(stations, latitude, longitude);
+    renderStationList(stations);
   } catch (e) {
     console.error(e);
-    loadStationsAlpha();
-  } finally {
-    if (spinner) spinner.classList.add('d-none');
+    currentSort = 'alpha';
+    document.getElementById('sortAlpha')?.click();
   }
 }
 
 async function loadStationsAlpha() {
-  const spinner = document.getElementById('stationSortAlpha');
-  if (spinner) spinner.classList.remove('d-none');
+  stationOrigin = null;
   try {
     const stations = await apiFetch('stations');
     stationCache = stations;
     renderStationList(stations);
   } catch (e) {
     console.error('Could not load stations:', e);
-  } finally {
-    if (spinner) spinner.classList.add('d-none');
   }
 }
 
-function renderStationList(stations, originLat, originLon) {
+function renderStationList(stations) {
   const list = document.getElementById('stationList');
   if (!list) return;
+
+  const q = (document.getElementById('s')?.value ?? '').toLowerCase();
+  const visible = q ? stations.filter(s => s.station.toLowerCase().includes(q)) : stations;
+
   list.replaceChildren();
 
-  for (const s of stations) {
+  for (const s of visible) {
     const li = document.createElement('li');
     const p  = document.createElement('p');
     p.className = 'mb-1';
 
-    if (originLat !== undefined && s.distance !== undefined) {
+    if (currentSort === 'dist' && stationOrigin && s.distance !== undefined) {
       const dist = s.distance >= 1000
         ? (s.distance / 1000).toFixed(2) + ' km'
         : s.distance + ' m';
 
       const mapsUrl = 'https://www.google.com/maps/dir/?api=1'
-        + '&origin='      + encodeURIComponent(originLat + ',' + originLon)
+        + '&origin='      + encodeURIComponent(stationOrigin.lat + ',' + stationOrigin.lon)
         + '&destination=' + encodeURIComponent(s.lat + ',' + s.lon)
         + '&travelmode=walking';
 
@@ -201,12 +303,12 @@ function renderStationList(stations, originLat, originLon) {
       const span = document.createElement('span');
       span.textContent = s.station + ' (' + dist + ')';
       span.style.cursor = 'pointer';
-      span.addEventListener('click', () => { loadMonitor(s.diva); startMonitorTimer(); });
+      span.addEventListener('click', () => { loadMonitor(s.diva); startMonitorTimer(); closeStationDropdown(); });
       p.appendChild(span);
     } else {
       p.textContent = s.station;
       p.style.cursor = 'pointer';
-      p.addEventListener('click', () => { loadMonitor(s.diva); startMonitorTimer(); });
+      p.addEventListener('click', () => { loadMonitor(s.diva); startMonitorTimer(); closeStationDropdown(); });
     }
 
     li.appendChild(p);
@@ -216,42 +318,60 @@ function renderStationList(stations, originLat, originLon) {
 
 // --- Station sort radios + search --------------------------------------------
 function wireStationSort() {
-  const radios      = document.querySelectorAll('input[name="stationSort"]');
-  const searchInput = document.getElementById('s');
-
-  radios.forEach(radio => {
+  document.querySelectorAll('input[name="stationSort"]').forEach(radio => {
     radio.addEventListener('change', () => {
+      currentSort = radio.value;
       if (radio.value === 'dist') {
-        if (searchInput) searchInput.classList.add('d-none');
         navigator.geolocation.getCurrentPosition(
           loadStationsByDistance,
           positionError,
           { timeout: 8000 }
         );
-      } else if (radio.value === 'alpha') {
-        if (searchInput) searchInput.classList.add('d-none');
+      } else {
         loadStationsAlpha();
-      } else if (radio.value === 'search') {
-        if (searchInput) {
-          searchInput.classList.remove('d-none');
-          searchInput.focus();
-        }
-        if (stationCache.length === 0) loadStationsAlpha();
       }
     });
   });
 
-  if (searchInput) {
-    searchInput.addEventListener('input', () => {
-      const q        = searchInput.value.toLowerCase();
-      const filtered = stationCache.filter(s => s.station.toLowerCase().includes(q));
-      renderStationList(filtered);
-    });
-  }
+  document.getElementById('s')?.addEventListener('input', () => {
+    openStationDropdown();
+    renderStationList(stationCache);
+  });
+}
+
+// --- Station dropdown show/hide ----------------------------------------------
+function openStationDropdown() {
+  const dd = document.getElementById('stationDropdown');
+  if (dd) dd.style.display = '';
+}
+
+function closeStationDropdown() {
+  const dd = document.getElementById('stationDropdown');
+  if (dd) dd.style.display = 'none';
+}
+
+function wireStationDropdown() {
+  document.getElementById('stationListToggle')?.addEventListener('click', () => {
+    const dd = document.getElementById('stationDropdown');
+    if (!dd) return;
+    if (dd.style.display === 'none') {
+      openStationDropdown();
+    } else {
+      closeStationDropdown();
+    }
+  });
+
+  document.addEventListener('click', e => {
+    const wrap = document.getElementById('stationSearchWrap');
+    if (wrap && !wrap.contains(e.target)) closeStationDropdown();
+  });
 }
 
 function positionError(error) {
   console.warn('Geolocation error (' + error.code + '): ' + error.message);
+  currentSort = 'alpha';
+  const alphaRadio = document.getElementById('sortAlpha');
+  if (alphaRadio) alphaRadio.checked = true;
   loadStationsAlpha();
 }
 
@@ -264,17 +384,19 @@ function applyTheme() {
   // 'auto' or empty: CSS media query handles it
 }
 
-function wireThemeToggle() {
-  document.querySelectorAll('input[name="themePreference"]').forEach(radio => {
-    radio.addEventListener('change', () => {
-      if (radio.value === 'auto') {
-        delete document.documentElement.dataset.theme;
-      } else {
-        document.documentElement.dataset.theme = radio.value;
-      }
-      setCookie('theme', radio.value, 365);
-    });
+async function setTheme(t) {
+  if (t === 'dark' || t === 'light') {
+    document.documentElement.dataset.theme = t;
+  } else {
+    delete document.documentElement.dataset.theme;
+  }
+  setCookie('theme', t, 365);
+  document.querySelectorAll('[data-theme-btn]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.themeBtn === t);
   });
+  if (window.wlConfig?.loggedIn) {
+    try { await apiPost('theme_save', { theme: t }); } catch (e) { console.error(e); }
+  }
 }
 
 // --- Scroll to top -----------------------------------------------------------

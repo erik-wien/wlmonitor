@@ -11,52 +11,111 @@ $userID   = (int) ($_SESSION['id'] ?? 0);
 $loggedIn = !empty($_SESSION['loggedin']);
 $uname    = htmlspecialchars($_SESSION['username'] ?? '', ENT_QUOTES, 'UTF-8');
 $rights   = htmlspecialchars($_SESSION['rights']   ?? '', ENT_QUOTES, 'UTF-8');
-$theme    = htmlspecialchars($_COOKIE['theme']     ?? 'auto', ENT_QUOTES, 'UTF-8');
+// Logged-in users: DB preference (loaded into session at login) is authoritative
+$theme = $loggedIn
+    ? ($_SESSION['theme'] ?? 'auto')
+    : ($_COOKIE['theme']  ?? 'auto');
+$theme = htmlspecialchars($theme, ENT_QUOTES, 'UTF-8');
 ?>
 <?php include_once(__DIR__ . '/../include/html_header.php'); ?>
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+<?php $avatarUrl = 'avatar.php?id=' . (int) ($_SESSION['id'] ?? 0); ?>
+<nav class="navbar" id="mainNav">
   <div class="container-fluid">
-    <a class="navbar-brand" href="index.php">
+    <a class="navbar-brand fw-semibold" href="index.php">
       <i class="fas fa-subway me-1"></i> WL Monitor
     </a>
-    <button class="navbar-toggler" type="button"
-            data-bs-toggle="collapse" data-bs-target="#navMain">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navMain">
-      <ul class="navbar-nav ms-auto align-items-center gap-1">
-        <?php if ($loggedIn): ?>
-          <li class="nav-item"><span class="nav-link"><?= $uname ?></span></li>
-          <li class="nav-item"><a class="nav-link" href="changePassword.php" title="Passwort andern">
-            <i class="fas fa-key"></i></a></li>
-          <?php if ($rights === 'Admin'): ?>
-            <li class="nav-item"><a class="nav-link" href="admin.php">
-              <i class="fas fa-users-cog"></i> Admin</a></li>
-          <?php endif; ?>
-          <li class="nav-item"><a class="nav-link" href="logout.php" title="Abmelden">
-            <i class="fas fa-sign-out-alt"></i></a></li>
-        <?php else: ?>
-          <li class="nav-item">
-            <form class="d-flex gap-1 align-items-center" method="post" action="authentication.php">
-              <?= csrf_input() ?>
-              <input type="email" name="login-email" class="form-control form-control-sm"
-                     placeholder="E-Mail"
-                     value="<?= htmlspecialchars($_COOKIE['wlmonitor_username'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
-              <input type="password" name="login-password"
-                     class="form-control form-control-sm" placeholder="Kennwort">
-              <button class="btn btn-sm btn-outline-light" type="submit">
-                <i class="fas fa-sign-in-alt"></i>
-              </button>
-            </form>
-          </li>
-        <?php endif; ?>
-      </ul>
+
+    <!-- Station search — always visible (outside collapse) -->
+    <div id="stationSearchWrap" class="mx-2 flex-grow-1" style="position:relative;max-width:260px;">
+      <div class="input-group input-group-sm">
+        <input type="search" id="s" class="form-control" placeholder="Station suchen …" autocomplete="off">
+        <button class="btn btn-nav" id="stationListToggle" type="button"
+                tabindex="-1" title="Alle Stationen">
+          <i class="fas fa-chevron-down"></i>
+        </button>
+      </div>
+      <div id="stationDropdown" class="station-dropdown" style="display:none;">
+        <div class="station-dropdown-header">
+          <div class="btn-group btn-group-sm w-100" role="group">
+            <input type="radio" class="btn-check" name="stationSort"
+                   id="sortAlpha" value="alpha" autocomplete="off" checked>
+            <label class="btn btn-outline-secondary" for="sortAlpha">
+              <i class="fas fa-sort-alpha-down"></i> A–Z
+            </label>
+            <input type="radio" class="btn-check" name="stationSort"
+                   id="sortDist" value="dist" autocomplete="off">
+            <label class="btn btn-outline-secondary" for="sortDist">
+              <i class="fas fa-map-marker-alt"></i> Nähe
+            </label>
+          </div>
+        </div>
+        <ul id="stationList" class="list-unstyled mb-0"></ul>
+      </div>
+    </div>
+
+    <div class="ms-auto">
+      <?php if ($loggedIn): ?>
+        <div class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle d-flex align-items-center gap-2 px-2"
+             href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <img src="<?= $avatarUrl ?>" class="nav-avatar" alt=""
+                 onerror="this.outerHTML='<i class=\'fas fa-user-circle\'></i>'">
+            <span class="d-none d-sm-inline">Profil</span>
+          </a>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li>
+              <span class="dropdown-item-text small text-muted">
+                Angemeldet als <strong class="text-body"><?= $uname ?></strong>
+              </span>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="preferences.php">
+              <i class="fas fa-user-cog me-2"></i>Einstellungen
+            </a></li>
+            <?php if ($rights === 'Admin'): ?>
+              <li><a class="dropdown-item" href="admin.php">
+                <i class="fas fa-users-cog me-2"></i>Admin
+              </a></li>
+            <?php endif; ?>
+            <li><hr class="dropdown-divider"></li>
+            <li>
+              <div class="dropdown-item-text py-1">
+                <small class="text-muted d-block mb-1">Darstellung</small>
+                <div class="btn-group btn-group-sm w-100" role="group" aria-label="Farbschema">
+                  <button type="button" class="btn btn-outline-secondary<?= $theme === 'light' ? ' active' : '' ?>"
+                          data-theme-btn="light" onclick="setTheme('light')" title="Hell">
+                    <i class="fas fa-sun"></i>
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary<?= $theme === 'auto' ? ' active' : '' ?>"
+                          data-theme-btn="auto" onclick="setTheme('auto')" title="Automatisch">
+                    <i class="fas fa-adjust"></i>
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary<?= $theme === 'dark' ? ' active' : '' ?>"
+                          data-theme-btn="dark" onclick="setTheme('dark')" title="Dunkel">
+                    <i class="fas fa-moon"></i>
+                  </button>
+                </div>
+              </div>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="logout.php">
+              <i class="fas fa-sign-out-alt me-2"></i>Logout
+            </a></li>
+          </ul>
+        </div>
+      <?php else: ?>
+        <a class="nav-link px-2" href="login.php">
+          <i class="fas fa-key me-1"></i>
+          <span class="d-none d-sm-inline">Login</span>
+        </a>
+      <?php endif; ?>
     </div>
   </div>
 </nav>
 
 <div id="alerts" class="container-fluid mt-2"></div>
+<?= csrf_input() ?>
 
 <div class="container-fluid mt-2">
   <div class="row">
@@ -71,66 +130,7 @@ $theme    = htmlspecialchars($_COOKIE['theme']     ?? 'auto', ENT_QUOTES, 'UTF-8
 
     <!-- Sidebar -->
     <div class="col-md-4">
-      <div id="buttons" class="mb-3"></div>
-
-      <!-- Station sort controls -->
-      <div class="mb-2">
-        <div class="btn-group btn-group-sm w-100" role="group">
-          <input type="radio" class="btn-check" name="stationSort"
-                 id="sortDist" value="dist" autocomplete="off">
-          <label class="btn btn-outline-secondary" for="sortDist">
-            <i class="fas fa-map-marker-alt"></i> Nahe
-          </label>
-
-          <input type="radio" class="btn-check" name="stationSort"
-                 id="sortAlpha" value="alpha" autocomplete="off">
-          <label class="btn btn-outline-secondary" for="sortAlpha">
-            <i class="fas fa-sort-alpha-down"></i> A-Z
-          </label>
-
-          <input type="radio" class="btn-check" name="stationSort"
-                 id="sortSearch" value="search" autocomplete="off">
-          <label class="btn btn-outline-secondary" for="sortSearch">
-            <i class="fas fa-search"></i> Suche
-          </label>
-        </div>
-
-        <input type="text" id="s" class="form-control form-control-sm mt-1 d-none"
-               placeholder="Station suchen ...">
-
-        <div id="stationSortDist" class="d-none mt-1 text-muted small">
-          <span class="spinner-border spinner-border-sm"></span> Standort wird ermittelt ...
-        </div>
-        <div id="stationSortAlpha" class="d-none mt-1 text-muted small">
-          <span class="spinner-border spinner-border-sm"></span> Stationen werden geladen ...
-        </div>
-      </div>
-
-      <ul id="stationList" class="list-unstyled"></ul>
-
-      <!-- Theme toggle -->
-      <div class="mt-3">
-        <div class="btn-group btn-group-sm" role="group">
-          <input type="radio" class="btn-check" name="themePreference"
-                 id="themeAuto" value="auto" autocomplete="off"
-                 <?= $theme === 'auto'  ? 'checked' : '' ?>>
-          <label class="btn btn-outline-secondary" for="themeAuto">Auto</label>
-
-          <input type="radio" class="btn-check" name="themePreference"
-                 id="themeLight" value="light" autocomplete="off"
-                 <?= $theme === 'light' ? 'checked' : '' ?>>
-          <label class="btn btn-outline-secondary" for="themeLight">
-            <i class="fas fa-sun"></i>
-          </label>
-
-          <input type="radio" class="btn-check" name="themePreference"
-                 id="themeDark" value="dark" autocomplete="off"
-                 <?= $theme === 'dark'  ? 'checked' : '' ?>>
-          <label class="btn btn-outline-secondary" for="themeDark">
-            <i class="fas fa-moon"></i>
-          </label>
-        </div>
-      </div>
+      <div id="buttons"></div>
     </div>
 
   </div>
@@ -144,14 +144,14 @@ $theme    = htmlspecialchars($_COOKIE['theme']     ?? 'auto', ENT_QUOTES, 'UTF-8
 
 <!-- Bootstrap 5 JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc4s9bIOgUxi8T/jzmB6rVQO0ViiINFjyRUNLnCIE3T"
         crossorigin="anonymous"></script>
 
 <!-- Pass PHP state to JS module -->
-<script>
+<script nonce="<?= $_cspNonce ?>">
 window.wlConfig = {
   userID:   <?= $userID ?>,
   loggedIn: <?= $loggedIn ? 'true' : 'false' ?>,
+  theme:    <?= json_encode($theme) ?>,
   alerts:   <?= $alertsJson ?>
 };
 </script>

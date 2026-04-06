@@ -1,46 +1,92 @@
+<?php
+$_ft = '';
+if (!empty($_SESSION['loggedin'])) {
+    $_ft = $_SESSION['theme'] ?? 'auto';
+} else {
+    $_ft = $_COOKIE['theme'] ?? 'auto';
+}
+$_ft = htmlspecialchars($_ft, ENT_QUOTES, 'UTF-8');
+$_ftLoggedIn = !empty($_SESSION['loggedin']);
+?>
+<footer class="wl-footer fixed-bottom border-top">
+  <div class="container-fluid d-flex justify-content-between align-items-center py-1">
 
-	<!--
-	Navigation
-	___________________________________________________
-	-->
-	<div class="container fixed-bottom w-100 bg-light border border-dark border-left-0 border-right-0 border-bottom-0">
-		
-		<nav class="navbar p-0">
+    <!-- Theme toggle -->
+    <div class="btn-group btn-group-sm" role="group" aria-label="Theme">
+      <input type="radio" class="btn-check" name="themePreference"
+             id="themeAuto" value="auto" autocomplete="off"
+             <?= $_ft === 'auto'  ? 'checked' : '' ?>>
+      <label class="btn btn-footer-toggle" for="themeAuto">Auto</label>
 
-			<!-- Navbar -->
-			<ul id="userMenu" class="navbar-nav d-flex flex-row w-100 p-0 my-0 align-items-center justify-content-between" >
-				<li class="nav-item">
-					<button class="btn nav-link" onclick="toggleFullScreen();"><span class="fas fa-expand-arrows-alt"></span> Fullscreen</button>
-				</li>
+      <input type="radio" class="btn-check" name="themePreference"
+             id="themeLight" value="light" autocomplete="off"
+             <?= $_ft === 'light' ? 'checked' : '' ?>>
+      <label class="btn btn-footer-toggle" for="themeLight">
+        <i class="fas fa-sun"></i>
+      </label>
 
-				<li class="nav-item">
-					<button role='button' class='btn' animation="true" data-toggle='popover' data-html="true" data-placement="top"
-						data-content="
-							<a href='#' class='dropdown-item' data-toggle='modal' data-target='#modalHelp' id='navHelp'>
-								Funktionen</a>
+      <input type="radio" class="btn-check" name="themePreference"
+             id="themeDark" value="dark" autocomplete="off"
+             <?= $_ft === 'dark'  ? 'checked' : '' ?>>
+      <label class="btn btn-footer-toggle" for="themeDark">
+        <i class="fas fa-moon"></i>
+      </label>
+    </div>
 
-							<a href='#' class='dropdown-item' data-toggle='modal' data-target='#modalDocu' id='navDocu'>
-								Dokumentation</a>
-						">
-						<i class='far fa-question-circle'></i> Hilfe
-					</button>
-				</li>
+    <button class="btn btn-sm footer-btn" onclick="toggleFullScreen()" title="Vollbild">
+      <i class="fas fa-expand-arrows-alt"></i>
+      <span class="d-none d-sm-inline ms-1">Vollbild</span>
+    </button>
 
-				<li class="nav-item">
-					<button class="btn" animation="true" data-toggle="popover" data-html="true" data-placement="top"
-						data-content="
-							<a type='button' class='btn dropdown-item' href='https://about.me/erik.accart-huemer' target='_blank' id='navAbout'>
-								About </a>
+    <small class="text-muted">&copy; 2026 Erik R. Huemer</small>
 
-							<a type='button' class='btn dropdown-item' href='&#109;&#97;&#105;&#108;&#x74;&#111;&#x3a;&#x69;&#x6e;&#102;&#x6f;&#x40;&#x32;&#x6d;&#101;&#46;&#111;&#114;&#103;' id='navMail'>
-								Mail</a>
-						">
-						<i class='far fa-envelope'></i> <div class='d-none d-sm-inline-block'>Kontakt</div>
-					</button>
+    <small class="text-muted">v<?= APP_VERSION ?>.<?= APP_BUILD ?></small>
 
-				</li>
+  </div>
+</footer>
 
-			</ul>
-		</nav>
-	</div>
+<script nonce="<?= $_cspNonce ?>">
+(function () {
+  var loggedIn = <?= $_ftLoggedIn ? 'true' : 'false' ?>;
 
+  function getCookie(name) {
+    for (var part of decodeURIComponent(document.cookie).split(';')) {
+      var t = part.trim(), eq = t.indexOf('=');
+      if (eq !== -1 && t.slice(0, eq) === name) return t.slice(eq + 1);
+    }
+    return '';
+  }
+  function setCookie(name, val, days) {
+    var d = new Date();
+    d.setTime(d.getTime() + days * 86400000);
+    document.cookie = name + '=' + val + ';expires=' + d.toUTCString() + ';path=/;SameSite=Strict';
+  }
+
+  document.querySelectorAll('input[name="themePreference"]').forEach(function (radio) {
+    radio.addEventListener('change', function () {
+      var t = radio.value;
+      if (t === 'auto') {
+        delete document.documentElement.dataset.theme;
+      } else {
+        document.documentElement.dataset.theme = t;
+      }
+      setCookie('theme', t, 365);
+      if (loggedIn) {
+        var fd = new FormData();
+        fd.append('action', 'theme_save');
+        fd.append('theme', t);
+        fetch('api.php', { method: 'POST', body: fd }).catch(function () {});
+      }
+    });
+  });
+
+  function toggleFullScreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+    } else {
+      document.exitFullscreen && document.exitFullscreen();
+    }
+  }
+  window.toggleFullScreen = toggleFullScreen;
+})();
+</script>

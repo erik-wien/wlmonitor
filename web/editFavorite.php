@@ -1,282 +1,155 @@
 <?php
-/**
- * store new password
- * 
- * 
- * 
- * 
- * 
- * PHP version 7.2
- *
- * LICENSE: This source file is subject to version 3.01 of the PHP license
- * that is available through the world-wide-web at the following URI:
- * http://www.php.net/license/3_01.txt.  If you did not receive a copy of
- * the PHP License and are unable to obtain it through the web, please
- * send a note to license@php.net so we can mail you a copy immediately.
- *
- * @category   geo-information
- * @package    wl-monitor
- * @author     Erik R. Huemer <erik.huemer@jardyx.com>
- * @copyright  2019 Erik R. Huemer
- * @license    http://www.php.net/license/3_01.txt  PHP License 3.01
- * @version    SVN: $Id$
- * @link       https://www.jardyx.com/wl-monitor/download/wl-monitor.zip
- * @see        https://www.jardyx.com/wl-monitor/
- * @since      File available since Release 1.2.0
- * @deprecated not depreciated
- */
-session_start();
 require_once(__DIR__ . '/../include/initialize.php');
-	
-appendLog('edf', 'Edit favourite.', 'web');
 
-?>
-<html lang="de">
-<head>
-  <title>Favorit bearbeiten - WL Monitor</title>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet"
-        href="https://use.fontawesome.com/releases/v5.7.0/css/all.css"
-        integrity="sha384-lZN37f5QGtY3VHgisS14W3ExzMWZxybE1SJSEsQp9S+oqd12jhcu+A56Ebc1zFSJ"
-        crossorigin="anonymous">
-  <link rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
-        crossorigin="anonymous">
-  <link rel="stylesheet" href="css/theme.css">
-  <link rel="stylesheet" href="style/wl-monitor.css">
-</head>
+if (empty($_SESSION['loggedin'])) {
+    header('Location: index.php'); exit;
+}
 
-<body>
-	
-	<!--
-	Alerts
-	-------------------------------------------------------------------------
-	 -->
+$userID = (int) $_SESSION['id'];
 
-<div class="container shadow border my-3">
-
-    <div class="jumbotron px-0 py-md-4 mb-0 bg-white " >
-        <h2>Favoriten Editor</h2>
-    </div>
-
-    <div class="row" >
-        <div class="col-md-12" >
-	        <div id="alerts"></div>
-        </div>
-    </div>
-
-    <div class="row " >
-        <div class="col-md-12" >
-
-<?php
-
-if (isset( $_POST['favID']) ) {
+// --- POST: save changes ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_verify()) {
-        $_SESSION['Error'] = 'Ungultige Anfrage.';
+        $_SESSION['alerts'][] = ['danger', 'Ungültige Anfrage.'];
         header('Location: index.php'); exit;
     }
 
-	// Let's check if the data was submitted, isset() function will check if the data exists.
-	if (!isset($_POST['title'], $_POST['rbls'], $_POST['bclass'], $_POST['favID'])) {
-		// Could not get the data that should have been sent.
-		$_SESSION["Error"] = 'Bitte füllen Sie das Formular vollständig aus!!';
-		appendLog('edf', 'Unsuccessful: Fields missing.', 'web');
-		header('Location: index.php'); exit;
-	}
-	
-	
-	// Make sure the submitted registration values are not empty.
-	if (empty($_POST['title']) || empty($_POST['rbls']) || empty($_POST['bclass']) || empty($_POST['favID'])) {
-		// One or more values are empty.
-		$_SESSION["Error"] = 'Bitte füllen Sie das Formular vollständig aus!!';
-		appendLog('edf', 'Unsuccessful: Fields empty.', 'web');
-		header('Location: index.php'); exit;
-	}
+    $favID  = (int) ($_POST['favID']  ?? 0);
+    $title  = trim($_POST['title']    ?? '');
+    $diva   = trim($_POST['diva']     ?? '');
+    $bclass = trim($_POST['bclass']   ?? '');
+    $sort   = (int) ($_POST['sort']   ?? 0);
 
-	 $favID =  $_POST['favID'];
-	 $userID = $_SESSION['id'];
-	 $title =  $_POST['title'];
-	 $rbls =   $_POST['rbls'];
-	 $bclass = $_POST['bclass'];
-	 $sort = $_POST['sort'];
+    if ($favID === 0 || $title === '' || $diva === '') {
+        $_SESSION['alerts'][] = ['danger', 'Bitte füllen Sie das Formular vollständig aus.'];
+        header('Location: index.php'); exit;
+    }
 
-	// check if favourite exists.
-	if ($stmt = $con->prepare('SELECT id FROM wl_favorites WHERE idUser = ? AND id = ?')) {
-		// Bind parameters (s = string, i = int, b = blob, etc), in our case the username is a string so we use "s"
-		$stmt->bind_param('ii', $userID, $favID);
-		$stmt->execute();
-		
-		$stmt->store_result();
-		if ($stmt->num_rows > 0) {
+    // Ownership check
+    $chk = $con->prepare('SELECT id FROM wl_favorites WHERE id = ? AND idUser = ?');
+    $chk->bind_param('ii', $favID, $userID);
+    $chk->execute();
+    $chk->store_result();
+    $found = $chk->num_rows > 0;
+    $chk->close();
 
-				if ($stmt = $con->prepare('UPDATE wl_favorites SET title = ?, rbls = ?, bclass = ?, sort = ? WHERE id = ?')) {
-					$stmt->bind_param('sssii', $title, $rbls, $bclass, $sort, $favID);
-					$stmt->execute();
-					
-					appendLog('edf', 'Successful: Favourite updated.', 'web');
-					$_SESSION["Success"] = 'Der Favorit wurde gespeichert.';
-					header('Location: index.php'); exit;
-				} else {
-					appendLog('edf', 'Error: Could not update #'.$_POST['id']." ".$_POST['title'], 'web');
-					$_SESSION['Error'] = 'Fehler beim Ändern des Favoriten #' . $favID . '.';
-					header('Location: index.php'); exit;
-				}
+    if (!$found) {
+        appendLog($con, 'edf', 'Unauthorized edit attempt on fav #' . $favID, 'web');
+        $_SESSION['alerts'][] = ['danger', 'Favorit nicht gefunden.'];
+        header('Location: index.php'); exit;
+    }
 
-		} else {
-				
-			$_SESSION['Error'] = 'Favorit #'.$favID . "/". $userID.' nicht gefunden.';
-			appendLog('edf', 'Wrong ID #'.$favID . "/". $userID, 'web');
-			header('Location: index.php'); exit;
-		}
-	} else {
-			
-			$_SESSION['Error'] = 'Datenbank Fehler.';
-			appendLog('edf', 'Wrong ID: '.$_SESSION['id'], 'web');
-			header('Location: index.php'); exit;
-			
-	}
-} else {
-		
-	// Did we get an ID to edit?
-	if (!isset($_GET['favID'])) {
-		// Could not get the data that should have been sent.
-		$_SESSION["Error"] = 'Programmfehler: no favID provided.';
-		appendLog('edf', 'Error: no favID provided.', 'web');
-		header('Location: index.php'); exit;
-	} else {
-	
-		$favID = $_GET['favID'];
-		
-		// Get current data for favourite
-		if ($stmt = $con->prepare('SELECT id,idUser,title,rbls,bclass, sort FROM wl_favorites WHERE id = ? ORDER BY sort,id')) {
-			// Bind parameters (s = string, i = int, b = blob, etc), in our case the username is a string so we use "s"
-			$stmt->bind_param('i', $favID);
-			$stmt->execute();
-			
-			$stmt->bind_result($id,$idUser,$title,$rbls,$bclass,$sort);
-		
-			// Store the result so we can check if the data exists in the database.
-			$stmt->store_result();
-			
-			if ($stmt->num_rows>0) {
-				$stmt->fetch()
-	?>
-				<div class="alert alert-danger invisible" id="changeFavouriteError"></div>
-				
-				<!--Body-->
-				<form action='editFavorite.php?favID=<?= (int)$id ?>' id='changeFavorite' method='post'>
-<?= csrf_input() ?>
+    $diva   = sanitizeDivaInput($diva);
+    $title  = mb_substr($title, 0, 100);
+    $bclass = preg_replace('/[^a-z0-9\-]/', '', $bclass);
 
-						<label id="title-error" for="title" class="error text-danger"></label>
-						<div class="input-group has-warning mb-5 mt-2 has-error has-success">
-							<span class="input-group-text p-2 bg-dark text-light"><i class="fas fa-map-marker-alt prefix"></i></span>
-							<input type="text" id="title" name="title" class="form-control validate" placeholder="Stationsbezeichnung" autocomplete="on" value="<?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?>">
-							<label id="title-success" for="title" class="text-success invisible"> <i class='fas fa-check'></i></label>
-						</div>
+    $stmt = $con->prepare('UPDATE wl_favorites SET title = ?, diva = ?, bclass = ?, sort = ? WHERE id = ? AND idUser = ?');
+    $stmt->bind_param('sssiii', $title, $diva, $bclass, $sort, $favID, $userID);
+    $stmt->execute();
+    $stmt->close();
 
-						
-						<label id="rbls-error" for="rbls" class="error text-danger"></label>
-						<div class="input-group mb-5 has-warning has-error has-success">
-							<span class="input-group-text p-2 bg-dark text-light"><i class="fas fa-bookmark prefix"></i></span>
-							<input type="text" id="rbls" name="rbls"  class="form-control validate" placeholder="Stationsnummern" autocomplete="on" value="<?= htmlspecialchars($rbls, ENT_QUOTES, 'UTF-8') ?>">
-							<label id="rbls-success" for="rbls" class="text-success invisible"> <i class='fas fa-check'></i></label>
-						</div>
-
-						<label id="sort-error" for="sort" class="error text-danger"></label>
-						<div class="input-group mb-5 has-warning has-error has-success">
-							<span class="input-group-text p-2 bg-dark text-light"><i class="fas fa-sort-amount-down prefix"></i></span>
-							<input type="text" id="sort" name="sort"  class="form-control validate" placeholder="Rang" autocomplete="on" value="<?= (int)$sort ?>">
-							<label id="sort-success" for="sort" class="text-success invisible"> <i class='fas fa-check'></i></label>
-						</div>
-
-						
-						<label id="bclass-error" for="sort" class="error text-danger"></label>
-						<div class="input-group mb-5 has-warning has-error has-success">
-							<span class="input-group-text p-2 bg-dark text-light" ><i class="fas fa-palette"></i></span>
-							
-							<select id="bclass" name="bclass" class="form-control" placeholder="Farbe">
-								<option class="bg-default"	title="weiss"	<? echo ($bclass == "btn-outline-default"	? "selected" : "") ?> > btn-outline-default </option>
-								<option class="bg-primary"	title="türkis"	<? echo ($bclass == "btn-outline-primary"	? "selected" : "") ?> > btn-outline-primary </option>
-								<option class="bg-success"	title="grün"	<? echo ($bclass == "btn-outline-success"	? "selected" : "") ?> > btn-outline-success </option>
-								<option class="bg-info"		title="lila"	<? echo ($bclass == "btn-outline-info"		? "selected" : "") ?> > btn-outline-info	</option>
-								<option class="bg-warning"	title="orange"	<? echo ($bclass == "btn-outline-warning"	? "selected" : "") ?> > btn-outline-warning	</option>
-								<option class="bg-danger"	title="rot" 	<? echo ($bclass == "btn-outline-danger"	? "selected" : "") ?> > btn-outline-danger	</option>
-								<option class="bg-danger"	title="rot" 	<? echo ($bclass == "btn-outline-danger"	? "selected" : "") ?> > btn-outline-secondary	</option>
-								<option class="bg-danger"	title="rot" 	<? echo ($bclass == "btn-outline-danger"	? "selected" : "") ?> > btn-outline-dark	</option>
-							</select>
-							<label id="bclass-success" for="bclass" class="text-success invisible"> <i class='fas fa-check'></i></label>
-						</div>
-						
-						<div class="text-center form-sm mt-2">
-							<button class="btn btn-primary"> <i class="fas fa-save ml-1"></i> Speichern</button>
-						</div>
-					
-					</div>
-					
-					<input type="hidden" name="favID" value="<?= (int)$id ?>">
-		
-				</form>
-			
-			<?php
-			
-			} else {
-				$_SESSION["Error"] = 'Fehler: Favorit #' . $favID . ' ' . $title . '  nicht gefunden.';
-				appendLog('edf', 'Error: Favourite #'. $favID. ' '.$title.' not found.', 'web');
-				header('Location: index.php'); exit;
-			}
-		
-		} else {
-			$_SESSION["Error"] = "Fehler : Datenbank Fehler.";
-			appendLog('edf', 'SQL Error:', 'web');
-			header('Location: index.php'); exit;
-		}
-	}
+    appendLog($con, 'edf', 'Favourite #' . $favID . ' updated.', 'web');
+    $_SESSION['alerts'][] = ['success', 'Der Favorit wurde gespeichert.'];
+    header('Location: index.php'); exit;
 }
 
+// --- GET: show edit form ---
+$favID = (int) ($_GET['favID'] ?? 0);
+if ($favID === 0) {
+    $_SESSION['alerts'][] = ['danger', 'Programmfehler: keine favID angegeben.'];
+    header('Location: index.php'); exit;
+}
 
+$stmt = $con->prepare('SELECT id, title, diva, bclass, sort FROM wl_favorites WHERE id = ? AND idUser = ?');
+$stmt->bind_param('ii', $favID, $userID);
+$stmt->execute();
+$row = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
+if (!$row) {
+    appendLog($con, 'edf', 'Favourite #' . $favID . ' not found for user #' . $userID, 'web');
+    $_SESSION['alerts'][] = ['danger', 'Favorit #' . $favID . ' nicht gefunden.'];
+    header('Location: index.php'); exit;
+}
+
+$theme = htmlspecialchars($_SESSION['theme'] ?? ($_COOKIE['theme'] ?? 'auto'), ENT_QUOTES, 'UTF-8');
+$uname = htmlspecialchars($_SESSION['username'] ?? '', ENT_QUOTES, 'UTF-8');
+
+$bclassOptions = [
+    'btn-outline-default'   => 'Standard',
+    'btn-outline-primary'   => 'Blau',
+    'btn-outline-success'   => 'Grün',
+    'btn-outline-info'      => 'Cyan',
+    'btn-outline-warning'   => 'Orange',
+    'btn-outline-danger'    => 'Rot',
+    'btn-outline-secondary' => 'Grau',
+    'btn-outline-dark'      => 'Dunkel',
+];
 ?>
-        </div>
+<?php include_once(__DIR__ . '/../include/html_header.php'); ?>
+<script nonce="<?= $_cspNonce ?>">
+(function() {
+  var t = <?= json_encode($theme) ?>;
+  if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
+})();
+</script>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="index.php"><i class="fas fa-subway me-1"></i> WL Monitor</a>
+    <div class="navbar-nav ms-auto align-items-center gap-1">
+      <span class="nav-link text-light"><?= $uname ?></span>
+      <a class="nav-link text-light" href="index.php" title="Zurück"><i class="fas fa-arrow-left"></i></a>
     </div>
+  </div>
+</nav>
+
+<div class="container mt-4" style="max-width:520px">
+  <h4 class="mb-3">Favorit bearbeiten</h4>
+
+  <form method="post" action="editFavorite.php?favID=<?= $row['id'] ?>">
+    <?= csrf_input() ?>
+    <input type="hidden" name="favID" value="<?= $row['id'] ?>">
+
+    <div class="mb-3">
+      <label class="form-label" for="title">Bezeichnung</label>
+      <input type="text" id="title" name="title" class="form-control"
+             value="<?= htmlspecialchars($row['title'], ENT_QUOTES, 'UTF-8') ?>"
+             maxlength="100" required autocomplete="off">
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="diva">DIVA-Nummern</label>
+      <input type="text" id="diva" name="diva" class="form-control"
+             value="<?= htmlspecialchars($row['diva'], ENT_QUOTES, 'UTF-8') ?>"
+             placeholder="z.B. 60200103,60200104" required autocomplete="off">
+      <div class="form-text">Kommagetrennte DIVA/RBL-Nummern der Haltestellen.</div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="sort">Rang</label>
+      <input type="number" id="sort" name="sort" class="form-control"
+             value="<?= (int) $row['sort'] ?>" min="0">
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="bclass">Farbe</label>
+      <select id="bclass" name="bclass" class="form-select">
+        <?php foreach ($bclassOptions as $val => $label): ?>
+          <option value="<?= htmlspecialchars($val, ENT_QUOTES, 'UTF-8') ?>"
+            <?= $row['bclass'] === $val ? 'selected' : '' ?>>
+            <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?>
+          </option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+
+    <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i> Speichern</button>
+    <a href="index.php" class="btn btn-secondary ms-2">Abbrechen</a>
+  </form>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc4s9bIOgUxi8T/jzmB6rVQO0ViiINFjyRUNLnCIE3T"
         crossorigin="anonymous"></script>
-	
-	<?php if (isset($_SESSION['Error'])): ?>
-	<script>
-	(function() {
-	  const container = document.getElementById('alerts');
-	  const div = document.createElement('div');
-	  div.className = 'alert alert-danger alert-dismissible fade show';
-	  div.textContent = <?= json_encode($_SESSION['Error']) ?>;
-	  const btn = document.createElement('button');
-	  btn.type = 'button';
-	  btn.className = 'btn-close';
-	  btn.dataset.bsDismiss = 'alert';
-	  div.appendChild(btn);
-	  container.appendChild(div);
-	})();
-	</script>
-	<?php unset($_SESSION['Error']); endif; ?>
 
-	<?php
-	
-		$stmt->close();
-		
-		if ($_SESSION['debug']) {
-			
-			$arr = get_defined_vars();
-			$out  = "<p id='debugHeader'><b>Debug</b></p>\n";
-			$out .= "<pre id='debugBody'>\n _SESSION ";
-			$out .= print_r($arr, true);
-			$out .= "</pre>";
-			
-		echo $out;
-		}
-		
-	?>
-
-</body>
-</html>
+<?php include_once(__DIR__ . '/../include/html_footer.php'); ?>
