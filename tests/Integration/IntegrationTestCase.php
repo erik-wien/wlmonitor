@@ -55,7 +55,7 @@ abstract class IntegrationTestCase extends TestCase
         ], $overrides);
 
         $stmt = $this->con->prepare(
-            'INSERT INTO auth_accounts
+            'INSERT INTO ' . AUTH_DB_PREFIX . 'auth_accounts
                 (username, email, password, activation_code, disabled, rights,
                  debug, img, img_type, img_size, newMail, lastLogin, invalidLogins)
              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
