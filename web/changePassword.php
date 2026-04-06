@@ -1,111 +1,103 @@
 <?php
-/**
- * store new password
- * 
- * 
- * 
- * 
- * 
- * PHP version 7.2
- *
- * LICENSE: This source file is subject to version 3.01 of the PHP license
- * that is available through the world-wide-web at the following URI:
- * http://www.php.net/license/3_01.txt.  If you did not receive a copy of
- * the PHP License and are unable to obtain it through the web, please
- * send a note to license@php.net so we can mail you a copy immediately.
- *
- * @category   geo-information
- * @package    wl-monitor
- * @author     Erik R. Huemer <erik.huemer@jardyx.com>
- * @copyright  2019 Erik R. Huemer
- * @license    http://www.php.net/license/3_01.txt  PHP License 3.01
- * @version    SVN: $Id$
- * @link       https://www.jardyx.com/wl-monitor/download/wl-monitor.zip
- * @see        https://www.jardyx.com/wl-monitor/
- * @since      File available since Release 1.2.0
- * @deprecated not depreciated
- */
 require_once(__DIR__ . '/../include/initialize.php');
-	
-appendLog('npw', 'New Password request received.', 'web');
 
-// Let's check if the data was submitted, isset() function will check if the data exists.
-if (!isset($_POST['oldPassword'], $_POST['newPassword1'], $_POST['newPassword2'])) {
-	// Could not get the data that should have been sent.
-	$_SESSION["Error"] = 'Bitte füllen Sie das Formular vollständig aus!!';
-	appendLog('npw', 'Unsuccessful: Form incomplete.', 'web');
-	header('Location: index.php'); exit;
-	
-} 
+// Functionality moved to preferences.php
+header('Location: preferences.php'); exit;
 
-// Make sure the submitted registration values are not empty.
-if (empty($_POST['oldPassword']) || empty($_POST['newPassword1']) || empty($_POST['newPassword2'])) {
-	// One or more values are empty.
-	$_SESSION["Error"] = 'Bitte füllen Sie das Formular vollständig aus!!';
-	appendLog('npw', 'Unsuccessful: Form incomplete.', 'web');
-	header('Location: index.php'); exit;
+appendLog($con, 'npw', 'Change password page loaded.', 'web');
+
+$error = null;
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!csrf_verify()) {
+        $_SESSION['alerts'][] = ['danger', 'Ungültige Anfrage.'];
+        header('Location: index.php'); exit;
+    }
+
+    $old  = $_POST['oldPassword']  ?? '';
+    $new1 = $_POST['newPassword1'] ?? '';
+    $new2 = $_POST['newPassword2'] ?? '';
+
+    if ($old === '' || $new1 === '' || $new2 === '') {
+        $error = 'Bitte füllen Sie das Formular vollständig aus.';
+    } elseif ($new1 !== $new2) {
+        $error = 'Die neuen Passwörter stimmen nicht überein.';
+    } else {
+        $stmt = $con->prepare('SELECT password FROM jardyx_auth.auth_accounts WHERE id = ?');
+        $stmt->bind_param('i', $_SESSION['id']);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if (!$row || !password_verify($old, $row['password'])) {
+            $upd = $con->prepare('UPDATE jardyx_auth.auth_accounts SET invalidLogins = invalidLogins + 1 WHERE id = ?');
+            $upd->bind_param('i', $_SESSION['id']);
+            $upd->execute();
+            $upd->close();
+            appendLog($con, 'npw', 'Failed: wrong old password for ' . ($_SESSION['username'] ?? ''), 'web');
+            $error = 'Das alte Kennwort ist falsch.';
+        } else {
+            $hash = password_hash($new1, PASSWORD_BCRYPT, ['cost' => 13]);
+            $upd = $con->prepare('UPDATE jardyx_auth.auth_accounts SET password = ? WHERE id = ?');
+            $upd->bind_param('si', $hash, $_SESSION['id']);
+            $upd->execute();
+            $upd->close();
+            appendLog($con, 'npw', 'Success: password changed for ' . ($_SESSION['username'] ?? ''), 'web');
+            $_SESSION['alerts'][] = ['success', 'Das neue Kennwort wurde gespeichert.'];
+            header('Location: index.php'); exit;
+        }
+    }
 }
 
-// Make sure the submitted new Passwords match.
-if ( $_POST['newPassword1'] != $_POST['newPassword2'] ) {
-	// New passwords don't match.
-	$_SESSION["Error"] = 'Die neuen Passwörter stimmen nicht überein.';
-	appendLog('npw', 'Unsuccessful: New passwords don\'t match.', 'web');
-	header('Location: index.php'); exit;
-}
-
-
-
-// Prepare our SQL, preparing the SQL statement will prevent SQL injection.
-if ($stmt = $con->prepare('SELECT id,password FROM wl_accounts WHERE id = ?')) {
-	// Bind parameters (s = string, i = int, b = blob, etc), in our case the username is a string so we use "s"
-	$stmt->bind_param('s', $_SESSION['id']);
-	$stmt->execute();
-	
-	$stmt->store_result();
-	if ($stmt->num_rows > 0) {
-		$stmt->bind_result($id,$password);
-		$stmt->fetch();
-		// Account exists, now we verify the password.
-		// Note: remember to use password_hash in your registration file to store the hashed passwords.
-		if (password_verify($_POST['oldPassword'], $password)) {
-			if ($stmt = $con->prepare('UPDATE wl_accounts SET password = ? WHERE id = ?')) {
-				$password = password_hash($_POST['newPassword1'], PASSWORD_DEFAULT);
-				$stmt->bind_param('ss', $password, $_SESSION['id']);
-				$stmt->execute();
-				appendLog('npw', 'Successful: Password updated.', 'web');
-				$_SESSION["Success"] = 'Das neue Kennwort wurde gespeichert.';
-				header('Location: index.php'); exit;
-			}
-		} else {
-			
-			// log incorrect login with correct username
-			if ($stmt = $con->prepare('UPDATE `wl_accounts` SET `invalidLogins` = `invalidLogins` + 1 WHERE id = ?')) {
-				// Bind parameters (s = string, i = int, b = blob, etc), in our case the username is a string so we use "s"
-				$stmt->bind_param('s', $_SESSION['id']);
-				$stmt->execute();
-			}
-			if (isset($_SESSION['failedLogins'])) {
-				$_SESSION['failedLogins'] += 1;
-			} else {
-				$_SESSION['failedLogins'] = 1;
-			}
-			sleep(5*$_SESSION['failedLogins']);
-			$_SESSION['Error'] = 'Falsches Kennwort.';
-			appendLog('npw', 'Wrong Password: '. password_hash($_POST["password"]).'/'.$password, 'web');
-			header('Location: index.php'); exit;
-		}
-	} else {
-			
-		$_SESSION['Error'] = 'Fehler beim Ändern des Kennwortes.';
-		appendLog('npw', 'Wrong ID: '.$_SESSION['id'], 'web');
-		header('Location: index.php'); exit;
-	}
-}else {
-		
-		$_SESSION['Error'] = 'Datenbank Fehler.';
-		appendLog('npw', 'Wrong ID: '.$_SESSION['username'], 'web');
-		header('Location: index.php'); exit;
-	}
-
+$uname  = htmlspecialchars($_SESSION['username'] ?? '', ENT_QUOTES, 'UTF-8');
+$rights = htmlspecialchars($_SESSION['rights']   ?? '', ENT_QUOTES, 'UTF-8');
+$theme  = htmlspecialchars($_SESSION['theme'] ?? ($_COOKIE['theme'] ?? 'auto'), ENT_QUOTES, 'UTF-8');
 ?>
+<?php include_once(__DIR__ . '/../include/html_header.php'); ?>
+<script>
+(function() {
+  var t = <?= json_encode($theme) ?>;
+  if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
+})();
+</script>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="index.php"><i class="fas fa-subway me-1"></i> WL Monitor</a>
+    <div class="navbar-nav ms-auto align-items-center gap-1">
+      <span class="nav-link text-light"><?= $uname ?></span>
+      <a class="nav-link text-light" href="index.php" title="Zurück"><i class="fas fa-arrow-left"></i></a>
+    </div>
+  </div>
+</nav>
+
+<div class="container mt-4" style="max-width:480px">
+  <h4 class="mb-3">Kennwort ändern</h4>
+
+  <?php if ($error !== null): ?>
+    <div class="alert alert-danger"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
+  <?php endif; ?>
+
+  <form method="post" action="changePassword.php">
+    <?= csrf_input() ?>
+    <div class="mb-3">
+      <label class="form-label" for="oldPassword">Altes Kennwort</label>
+      <input type="password" id="oldPassword" name="oldPassword" class="form-control" required autocomplete="current-password">
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="newPassword1">Neues Kennwort</label>
+      <input type="password" id="newPassword1" name="newPassword1" class="form-control" required autocomplete="new-password">
+    </div>
+    <div class="mb-3">
+      <label class="form-label" for="newPassword2">Neues Kennwort bestätigen</label>
+      <input type="password" id="newPassword2" name="newPassword2" class="form-control" required autocomplete="new-password">
+    </div>
+    <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i> Speichern</button>
+    <a href="index.php" class="btn btn-secondary ms-2">Abbrechen</a>
+  </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        crossorigin="anonymous"></script>
+
+<?php include_once(__DIR__ . '/../include/html_footer.php'); ?>

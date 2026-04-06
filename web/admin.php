@@ -19,18 +19,32 @@ $csrfToken = csrf_token();
 ?>
 <?php include_once(__DIR__ . '/../include/html_header.php'); ?>
 
-<nav class="navbar navbar-dark bg-dark mb-3">
+<nav class="navbar" id="mainNav">
   <div class="container-fluid">
-    <span class="navbar-brand">
+    <span class="navbar-brand fw-semibold">
       <i class="fas fa-users-cog me-1"></i> Benutzerverwaltung
     </span>
-    <a href="index.php" class="btn btn-sm btn-outline-light">
+    <a href="index.php" class="btn btn-sm btn-nav ms-auto">
       <i class="fas fa-arrow-left me-1"></i> Monitor
     </a>
   </div>
 </nav>
 
 <div id="adminAlerts" class="container-fluid"></div>
+
+<div class="container-fluid mb-3">
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="fas fa-database me-1"></i> Stationsdaten (OGD)</span>
+      <button id="btnOgdUpdate" class="btn btn-sm btn-outline-primary">
+        <i class="fas fa-sync-alt me-1"></i> Jetzt aktualisieren
+      </button>
+    </div>
+    <div id="ogdLog" class="card-body p-2" style="display:none">
+      <pre id="ogdLogPre" class="mb-0 small" style="white-space:pre-wrap"></pre>
+    </div>
+  </div>
+</div>
 
 <div class="container-fluid">
   <form class="d-flex gap-2 mb-3" method="get">
@@ -144,9 +158,8 @@ $csrfToken = csrf_token();
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc4s9bIOgUxi8T/jzmB6rVQO0ViiINFjyRUNLnCIE3T"
         crossorigin="anonymous"></script>
-<script>
+<script nonce="<?= $_cspNonce ?>">
 const CSRF = <?= json_encode($csrfToken) ?>;
 
 function showAlert(msg, type) {
@@ -207,6 +220,33 @@ document.querySelectorAll('.btn-reset').forEach(btn => {
       showAlert('Fehler beim Zurucksetzen.', 'danger');
     }
   });
+});
+
+document.getElementById('btnOgdUpdate').addEventListener('click', async () => {
+  const btn    = document.getElementById('btnOgdUpdate');
+  const logBox = document.getElementById('ogdLog');
+  const logPre = document.getElementById('ogdLogPre');
+
+  btn.disabled = true;
+  btn.textContent = 'Läuft...';
+  logBox.style.display = 'block';
+  logPre.textContent = 'Verbinde...';
+
+  try {
+    const res = await adminPost('admin_ogd_update', {});
+    logPre.textContent = (res.log ?? []).join('\n');
+    if (res.ok) {
+      showAlert('OGD-Daten aktualisiert.', 'success');
+    } else {
+      showAlert('Fehler: ' + (res.error ?? 'Unbekannt'), 'danger');
+    }
+  } catch (e) {
+    logPre.textContent = 'Netzwerkfehler: ' + e.message;
+    showAlert('Netzwerkfehler beim OGD-Update.', 'danger');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Jetzt aktualisieren';
+  }
 });
 
 document.querySelectorAll('.btn-delete').forEach(btn => {
