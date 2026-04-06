@@ -15,6 +15,14 @@ if (!csrf_verify()) {
 $result = auth_login($con, $_POST['login-username'], $_POST['login-password']);
 
 if ($result['ok']) {
+    // Load wlmonitor-specific preferences
+    $pref = $con->prepare('SELECT departures FROM wl_preferences WHERE user_id = ?');
+    $pref->bind_param('i', $_SESSION['id']);
+    $pref->execute();
+    $prefRow = $pref->get_result()->fetch_assoc();
+    $pref->close();
+    $_SESSION['departures'] = (int) ($prefRow['departures'] ?? MAX_DEPARTURES);
+
     if (!empty($_POST['rememberName'])) {
         setcookie('wlmonitor_username', $_POST['login-username'], [
             'expires'  => time() + 10 * 24 * 60 * 60,

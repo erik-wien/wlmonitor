@@ -45,7 +45,6 @@ abstract class IntegrationTestCase extends TestCase
             'activation_code' => 'activated',
             'disabled'        => '0',
             'rights'          => 'User',
-            'departures'      => 2,
             'debug'           => '0',
             'img'             => 'user-md-grey.svg',
             'img_type'        => '',
@@ -58,19 +57,29 @@ abstract class IntegrationTestCase extends TestCase
         $stmt = $this->con->prepare(
             'INSERT INTO auth_accounts
                 (username, email, password, activation_code, disabled, rights,
-                 departures, debug, img, img_type, img_size, newMail, lastLogin, invalidLogins)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+                 debug, img, img_type, img_size, newMail, lastLogin, invalidLogins)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
         );
         $stmt->bind_param(
-            'ssssssisssiisi',
+            'sssssssssiisi',
             $d['username'], $d['email'], $d['password'], $d['activation_code'],
-            $d['disabled'], $d['rights'], $d['departures'], $d['debug'],
+            $d['disabled'], $d['rights'], $d['debug'],
             $d['img'], $d['img_type'], $d['img_size'], $d['newMail'],
             $d['lastLogin'], $d['invalidLogins']
         );
         $stmt->execute();
         $id = (int) $this->con->insert_id;
         $stmt->close();
+
+        // Seed wl_preferences for this test user
+        $pref = $this->con->prepare(
+            'INSERT INTO wl_preferences (user_id, departures) VALUES (?, 2)
+             ON DUPLICATE KEY UPDATE departures = 2'
+        );
+        $pref->bind_param('i', $id);
+        $pref->execute();
+        $pref->close();
+
         return $id;
     }
 }

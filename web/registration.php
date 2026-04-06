@@ -67,17 +67,25 @@ if ($exists) {
 }
 
 // ── Insert account ────────────────────────────────────────────────────────────
-$hash   = password_hash($password, PASSWORD_BCRYPT, ['cost' => 13]);
-$code   = bin2hex(random_bytes(64));    // 128-char hex activation code
-$depDef = MAX_DEPARTURES;
+$hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 13]);
+$code = bin2hex(random_bytes(64));    // 128-char hex activation code
 
 $ins = $con->prepare(
-    'INSERT INTO jardyx_auth.auth_accounts (username, password, email, activation_code, departures, lastLogin, disabled)
-     VALUES (?, ?, ?, ?, ?, NOW(), 1)'
+    'INSERT INTO jardyx_auth.auth_accounts (username, password, email, activation_code, lastLogin, disabled)
+     VALUES (?, ?, ?, ?, NOW(), 1)'
 );
-$ins->bind_param('ssssi', $username, $hash, $email, $code, $depDef);
+$ins->bind_param('ssss', $username, $hash, $email, $code);
 $ins->execute();
 $ins->close();
+
+$newId = (int) $con->insert_id;
+$pref = $con->prepare(
+    'INSERT INTO wl_preferences (user_id, departures) VALUES (?, 2)
+     ON DUPLICATE KEY UPDATE departures = 2'
+);
+$pref->bind_param('i', $newId);
+$pref->execute();
+$pref->close();
 
 appendLog($con, 'reg', 'Account created: ' . $username . ' / ' . $email, 'web');
 

@@ -203,8 +203,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($dep < 1 || $dep > 5) {
             $errors['departures'] = 'Bitte einen Wert zwischen 1 und 5 wählen.';
         } else {
-            $upd = $con->prepare('UPDATE jardyx_auth.auth_accounts SET departures = ? WHERE id = ?');
-            $upd->bind_param('ii', $dep, $userId);
+            $upd = $con->prepare(
+                'INSERT INTO wl_preferences (user_id, departures) VALUES (?, ?)
+                 ON DUPLICATE KEY UPDATE departures = VALUES(departures)'
+            );
+            $upd->bind_param('ii', $userId, $dep);
             $upd->execute();
             $upd->close();
             $_SESSION['departures'] = $dep;
