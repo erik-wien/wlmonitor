@@ -1,0 +1,27 @@
+{
+    "name": "wlmonitor/wlmonitor",
+    "description": "Wiener Abfahrtsmonitor",
+    "type": "project",
+    "authors": [
+        {
+            "name": "Erik Huemer",
+            "email": "58554544+erik-wien@users.noreply.github.com"
+        }
+    ],
+    "repositories": [
+        {"type": "path", "url": "../auth"}
+    ],
+    "require": {
+        "erikr/auth": "*"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "require-dev": {
+        "phpunit/phpunit": "^13.0"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "WLMonitor\\Tests\\": "tests/"
+        }
+    }
+}
