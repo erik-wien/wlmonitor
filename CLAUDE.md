@@ -39,21 +39,23 @@ The Wiener Linien API uses **DIVA numbers** (also called RBL numbers) to identif
 
 ### User/Auth System
 
+Authentication is handled by the `erikr/auth` library (Composer). Login/logout/password reset code is shared across projects.
+
 - `authentication.php` — login handler (POST)
-- `registration.php` — new user registration
-- `logout.php`, `changePassword.php`, `admin/resetPassword.php`
+- `logout.php`, `changePassword.php`, `admin/resetPassword.php` — auth library
 - User state is tracked via PHP sessions + a `sId` cookie for session recovery across browser restarts
-- Passwords are stored as hashes (`password_hash`/`password_verify`)
+- `AUTH_DB_PREFIX = 'jardyx_auth.'` — tables prefixed with `jardyx_auth.` (e.g., `jardyx_auth.accounts`, `jardyx_auth.log`)
 
 ### Database Tables
 
-- `wl_accounts` — user accounts (id, username, email, password hash, img, rights, departures setting, debug flag)
+- `jardyx_auth.accounts` — user accounts (id, username, email, password hash, img, rights, debug flag)
+- `wl_preferences` — user-specific departures setting (name, divas)
 - `ogd_stations` — all Vienna transit stops (Haltestelle, LAT, LON, rbls)
-- `wl_log` — activity log (user actions, logins, errors)
+- `jardyx_auth.log` — activity log (user actions, logins, errors)
 
 ## Configuration
 
-All runtime config lives in **`initialize.php`**: DB credentials (`DATABASE_HOST/USER/PASS/NAME`), the Wiener Linien API key (`APIKEY`), and the server file path (`SCRIPT_PATH`). These are hardcoded — update this file when deploying to a different environment.
+All runtime config lives in **`initialize.php`**: DB credentials (`DATABASE_HOST/USER/PASS/NAME`), the Wiener Linien API key (`APIKEY`), the server file path (`SCRIPT_PATH`), and `AUTH_DB_PREFIX = 'jardyx_auth.'` for auth table prefixes. These are hardcoded — update this file when deploying to a different environment. Shared auth code lives in `/Users/erikr/Git/auth` (via Composer as `erikr/auth`).
 
 ## Deployment
 
