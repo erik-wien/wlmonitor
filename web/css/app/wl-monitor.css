@@ -1,0 +1,135 @@
+/* web/css/app/wl-monitor.css
+   wlmonitor-specific styles. Not portable to other apps.
+*/
+
+/* ── Departure table ────────────────────────────────────────────────────────── */
+
+.departure-table { table-layout: fixed; width: 100%; }
+.departure-table .badge-cell    { width: 2.8em; padding: 0.2em; vertical-align: middle; }
+.departure-table .platform-cell { width: 2.2em; font-size: 0.7em; color: var(--color-muted); vertical-align: middle; }
+.departure-table .towards-cell  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+.departure-table .times-cell    { width: 5.5em; text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; vertical-align: middle; }
+.departure-table td, .departure-table th {
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+/* ── Line badges ────────────────────────────────────────────────────────────── */
+
+.line-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4em; height: 2.4em;
+  font-weight: 700;
+  font-size: 0.7rem;
+  color: #fff;
+  line-height: 1;
+}
+
+/* ptTram — black circle; inverted in dark mode */
+.line-badge.pt-tram { border-radius: 50%; background: #000; color: #fff; }
+[data-theme="dark"] .line-badge.pt-tram { background: #fff; color: #000; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .line-badge.pt-tram { background: #fff; color: #000; }
+}
+
+/* ptBusRegion — black circle, yellow text */
+.line-badge.pt-bus-region { border-radius: 50%; background: #000; color: #ffd700; }
+
+/* ptMetro — square, per-line colour */
+.line-badge.pt-metro     { border-radius: 5px; background: #666; }
+.line-badge.pt-metro.U1  { background: #e2001a; }
+.line-badge.pt-metro.U2  { background: #a762a3; }
+.line-badge.pt-metro.U3  { background: #ec6725; }
+.line-badge.pt-metro.U4  { background: #009540; }
+.line-badge.pt-metro.U5  { background: #008f95; }
+.line-badge.pt-metro.U6  { background: #9d6930; }
+
+/* ptTrain — red square */
+.line-badge.pt-train   { border-radius: 5px; background: #e2001a; }
+
+/* ptTrainS — blue square */
+.line-badge.pt-train-s { border-radius: 5px; background: #0000ff; }
+
+/* ptBusCity — navy square */
+.line-badge.pt-bus-city  { border-radius: 5px; background: #000080; }
+
+/* ptBusNight — navy square, orange text */
+.line-badge.pt-bus-night { border-radius: 5px; background: #000080; color: #ff8c00; }
+
+/* ptTramWLB — blue square */
+.line-badge.pt-tram-wlb  { border-radius: 5px; background: #0055a5; padding: 0.2em; }
+.line-badge.pt-tram-wlb .wlb-logo {
+  width: 100%; height: 100%;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+}
+
+/* unknown type fallback */
+.line-badge.pt-default { border-radius: 5px; background: #555; }
+
+/* ── Station search dropdown ────────────────────────────────────────────────── */
+
+.station-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 240px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 16px rgba(0,0,0,.35);
+  z-index: 1055;
+}
+.station-dropdown-header {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  background-color: var(--color-surface);
+  z-index: 1;
+}
+.station-dropdown #stationList li p {
+  padding: 0.35rem 0.75rem;
+  margin: 0;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.station-dropdown #stationList li p:hover { background-color: var(--color-surface-alt); }
+
+/* ── Search input inside navbar ─────────────────────────────────────────────── */
+
+nav.navbar #s {
+  background-color: color-mix(in srgb, var(--color-nav-bg) 70%, var(--color-surface));
+  color: var(--color-nav-text);
+  border-color: color-mix(in srgb, var(--color-nav-text) 25%, transparent);
+}
+nav.navbar #s::placeholder { color: var(--color-muted); opacity: 1; }
+nav.navbar #s:focus {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+/* ── Misc app elements ──────────────────────────────────────────────────────── */
+
+#topBtn {
+  position: fixed;
+  bottom: 70px;
+  right: 20px;
+  z-index: 99;
+  display: none;
+}
+
+body {
+  padding-bottom: 48px; /* prevent footer overlap */
+}
+
+#stationList { cursor: default; }
