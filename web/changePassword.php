@@ -61,12 +61,12 @@ $theme  = htmlspecialchars($_SESSION['theme'] ?? ($_COOKIE['theme'] ?? 'auto'), 
 })();
 </script>
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+<nav class="navbar">
   <div class="container-fluid">
-    <a class="navbar-brand" href="index.php"><i class="fas fa-subway me-1"></i> WL Monitor</a>
+    <a class="navbar-brand fw-semibold" href="index.php"><?= icon("subway", "me-1") ?> WL Monitor</a>
     <div class="navbar-nav ms-auto align-items-center gap-1">
-      <span class="nav-link text-light"><?= $uname ?></span>
-      <a class="nav-link text-light" href="index.php" title="Zurück"><i class="fas fa-arrow-left"></i></a>
+      <span class="nav-link"><?= $uname ?></span>
+      <a class="nav-link" href="index.php" title="Zurück"><?= icon("arrow-left") ?></a>
     </div>
   </div>
 </nav>
@@ -92,12 +92,9 @@ $theme  = htmlspecialchars($_SESSION['theme'] ?? ($_COOKIE['theme'] ?? 'auto'), 
       <label class="form-label" for="newPassword2">Neues Kennwort bestätigen</label>
       <input type="password" id="newPassword2" name="newPassword2" class="form-control" required autocomplete="new-password">
     </div>
-    <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i> Speichern</button>
+    <button type="submit" class="btn btn-primary"><?= icon("save", "me-1") ?> Speichern</button>
     <a href="index.php" class="btn btn-secondary ms-2">Abbrechen</a>
   </form>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-        crossorigin="anonymous"></script>
 
 <?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>

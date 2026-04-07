@@ -58,10 +58,10 @@ header('Content-Type: text/html; charset=utf-8');
 ?>
 <?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
 
-<nav class="navbar navbar-dark bg-dark">
+<nav class="navbar">
   <div class="container-fluid">
-    <a class="navbar-brand" href="index.php">
-      <i class="fas fa-subway me-1"></i> WL Monitor
+    <a class="navbar-brand fw-semibold" href="index.php">
+      <?= icon("subway", "me-1") ?> WL Monitor
     </a>
   </div>
 </nav>

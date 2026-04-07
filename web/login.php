@@ -24,7 +24,7 @@ unset($_SESSION['alerts']);
 <nav class="navbar" id="mainNav">
   <div class="container-fluid">
     <a class="navbar-brand fw-semibold" href="index.php">
-      <i class="fas fa-subway me-1"></i> WL Monitor
+      <?= icon("subway", "me-1") ?> WL Monitor
     </a>
   </div>
 </nav>
@@ -34,14 +34,14 @@ unset($_SESSION['alerts']);
   <?php foreach ($alerts as [$type, $msg]): ?>
     <div class="alert alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?> alert-dismissible fade show">
       <?= $msg ?>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      <button type="button" class="btn-close" data-dismiss-alert></button>
     </div>
   <?php endforeach; ?>
 
   <div class="card shadow-sm">
     <div class="card-body p-4">
       <h4 class="card-title mb-4 text-center">
-        <i class="fas fa-subway me-2"></i>Anmelden
+        <?= icon("subway", "me-2") ?>Anmelden
       </h4>
 
       <form method="post" action="authentication.php">
@@ -68,7 +68,7 @@ unset($_SESSION['alerts']);
         </div>
 
         <button type="submit" class="btn btn-primary w-100 mb-3">
-          <i class="fas fa-sign-in-alt me-1"></i> Anmelden
+          <?= icon("sign-in", "me-1") ?> Anmelden
         </button>
 
         <div class="small">
@@ -78,8 +78,5 @@ unset($_SESSION['alerts']);
     </div>
   </div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-        crossorigin="anonymous"></script>
 
 <?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>
