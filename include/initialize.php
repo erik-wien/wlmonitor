@@ -68,11 +68,7 @@ define('RATE_LIMIT_FILE', __DIR__ . '/../data/ratelimit.json');
 
 // ── Bootstrap (security headers + session + CSRF) ─────────────────────────────
 
-auth_bootstrap([
-    'script-src' => 'https://cdn.jsdelivr.net',
-    'style-src'  => 'https://cdn.jsdelivr.net https://use.fontawesome.com https://fonts.googleapis.com',
-    'font-src'   => 'https://use.fontawesome.com https://fonts.gstatic.com data:',
-]);
+auth_bootstrap([]);
 
 // ── Session globals ───────────────────────────────────────────────────────────
 
@@ -93,4 +89,19 @@ function sanitizeDivaInput(string $divaGet): string {
 /** Alias for sanitizeDivaInput() — backward compatibility. */
 function sanitizeRblInput(string $input): string {
     return sanitizeDivaInput($input);
+}
+
+/**
+ * Render an SVG icon from the sprite.
+ *
+ * @param string $id    Icon ID (without 'icon-' prefix, e.g. 'subway').
+ * @param string $class Extra CSS classes to add alongside 'icon'.
+ * @return string       HTML <svg> element (safe, no user input reflected).
+ */
+function icon(string $id, string $class = ''): string {
+    $c = 'icon' . ($class !== '' ? ' ' . htmlspecialchars($class, ENT_QUOTES, 'UTF-8') : '');
+    $safeId = htmlspecialchars($id, ENT_QUOTES, 'UTF-8');
+    return '<svg class="' . $c . '" aria-hidden="true" focusable="false">'
+         . '<use href="css/icons.svg#icon-' . $safeId . '"></use>'
+         . '</svg>';
 }
