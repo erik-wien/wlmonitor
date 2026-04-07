@@ -15,7 +15,7 @@
  * Cache-Control is set to 1 hour so browsers don't hit the DB on every page load.
  */
 
-require_once(__DIR__ . '/../include/initialize.php');
+require_once(__DIR__ . '/../inc/initialize.php');
 
 $uid = (int) ($_GET['id'] ?? 0);
 if ($uid <= 0) {

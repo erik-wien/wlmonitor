@@ -1,5 +1,5 @@
 <?php
-require_once(__DIR__ . '/../include/initialize.php');
+require_once(__DIR__ . '/../inc/initialize.php');
 
 // Functionality moved to preferences.php
 header('Location: preferences.php'); exit;
@@ -53,7 +53,7 @@ $uname  = htmlspecialchars($_SESSION['username'] ?? '', ENT_QUOTES, 'UTF-8');
 $rights = htmlspecialchars($_SESSION['rights']   ?? '', ENT_QUOTES, 'UTF-8');
 $theme  = htmlspecialchars($_SESSION['theme'] ?? ($_COOKIE['theme'] ?? 'auto'), ENT_QUOTES, 'UTF-8');
 ?>
-<?php include_once(__DIR__ . '/../include/html_header.php'); ?>
+<?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
 <script>
 (function() {
   var t = <?= json_encode($theme) ?>;
@@ -100,4 +100,4 @@ $theme  = htmlspecialchars($_SESSION['theme'] ?? ($_COOKIE['theme'] ?? 'auto'), 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
         crossorigin="anonymous"></script>
 
-<?php include_once(__DIR__ . '/../include/html_footer.php'); ?>
+<?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>

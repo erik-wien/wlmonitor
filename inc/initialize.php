@@ -1,6 +1,6 @@
 <?php
 /**
- * include/initialize.php
+ * inc/initialize.php
  *
  * Bootstrap file — MUST be the first include in every PHP entry point.
  *

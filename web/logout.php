@@ -1,5 +1,5 @@
 <?php
-require_once(__DIR__ . '/../include/initialize.php');
+require_once(__DIR__ . '/../inc/initialize.php');
 
 auth_logout($con);
 addAlert('notice', 'Sie wurden abgemeldet.');

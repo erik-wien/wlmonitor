@@ -8,7 +8,7 @@
  * This script verifies the code, sets activation_code='activated', and clears
  * the disabled flag so the user can log in.
  */
-require_once(__DIR__ . '/../include/initialize.php');
+require_once(__DIR__ . '/../inc/initialize.php');
 
 if (!isset($_GET['email'], $_GET['code'])) {
     addAlert('danger', 'Ungültiger Aktivierungslink.');

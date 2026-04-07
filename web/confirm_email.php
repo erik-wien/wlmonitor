@@ -13,7 +13,7 @@
  *  - The match is done in SQL so timing is not relevant for enumeration.
  *  - The account must exist with a matching code; nothing is leaked otherwise.
  */
-require_once(__DIR__ . '/../include/initialize.php');
+require_once(__DIR__ . '/../inc/initialize.php');
 
 $code = trim($_GET['code'] ?? '');
 
