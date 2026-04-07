@@ -1,5 +1,5 @@
 <?php
-require_once(__DIR__ . '/../include/initialize.php');
+require_once(__DIR__ . '/../inc/initialize.php');
 require_once(__DIR__ . '/../inc/admin.php');
 
 if (empty($_SESSION['loggedin']) || ($_SESSION['rights'] ?? '') !== 'Admin') {
@@ -17,7 +17,7 @@ $pages  = (int) ceil($total / 25);
 
 $csrfToken = csrf_token();
 ?>
-<?php include_once(__DIR__ . '/../include/html_header.php'); ?>
+<?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
 
 <nav class="navbar" id="mainNav">
   <div class="container-fluid">
@@ -263,4 +263,4 @@ document.querySelectorAll('.btn-delete').forEach(btn => {
 });
 </script>
 
-<?php include_once(__DIR__ . '/../include/html_footer.php'); ?>
+<?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>

@@ -1,5 +1,5 @@
 <?php
-require_once(__DIR__ . '/../include/initialize.php');
+require_once(__DIR__ . '/../inc/initialize.php');
 
 $token = trim($_GET['token'] ?? '');
 $error = '';
@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resetRow !== null) {
 
 header('Content-Type: text/html; charset=utf-8');
 ?>
-<?php include_once(__DIR__ . '/../include/html_header.php'); ?>
+<?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
 
 <nav class="navbar navbar-dark bg-dark">
   <div class="container-fluid">
@@ -92,4 +92,4 @@ header('Content-Type: text/html; charset=utf-8');
   <?php endif; ?>
 </div>
 
-<?php include_once(__DIR__ . '/../include/html_footer.php'); ?>
+<?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>

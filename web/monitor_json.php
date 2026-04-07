@@ -3,7 +3,7 @@
 // JSON departure feed — for use with Home Assistant and similar integrations.
 // No authentication required. Rate limiting applies via the shared API key.
 
-require_once(__DIR__ . '/../include/initialize.php');
+require_once(__DIR__ . '/../inc/initialize.php');
 require_once(__DIR__ . '/../inc/monitor.php');
 
 header('Content-Type: application/json; charset=utf-8');

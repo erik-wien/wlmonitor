@@ -42,7 +42,7 @@
  *   admin_user_delete POST  id= (CSRF)  Delete user
  */
 
-require_once(__DIR__ . '/../include/initialize.php');
+require_once(__DIR__ . '/../inc/initialize.php');
 require_once(__DIR__ . '/../inc/monitor.php');
 require_once(__DIR__ . '/../inc/stations.php');
 require_once(__DIR__ . '/../inc/favorites.php');

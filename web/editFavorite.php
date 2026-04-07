@@ -1,5 +1,5 @@
 <?php
-require_once(__DIR__ . '/../include/initialize.php');
+require_once(__DIR__ . '/../inc/initialize.php');
 
 if (empty($_SESSION['loggedin'])) {
     header('Location: index.php'); exit;
@@ -86,7 +86,7 @@ $bclassOptions = [
     'btn-outline-dark'      => 'Dunkel',
 ];
 ?>
-<?php include_once(__DIR__ . '/../include/html_header.php'); ?>
+<?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
 <script nonce="<?= $_cspNonce ?>">
 (function() {
   var t = <?= json_encode($theme) ?>;
@@ -152,4 +152,4 @@ $bclassOptions = [
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
         crossorigin="anonymous"></script>
 
-<?php include_once(__DIR__ . '/../include/html_footer.php'); ?>
+<?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>
