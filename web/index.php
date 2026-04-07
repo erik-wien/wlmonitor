@@ -23,7 +23,7 @@ $theme = htmlspecialchars($theme, ENT_QUOTES, 'UTF-8');
 <nav class="navbar" id="mainNav">
   <div class="container-fluid">
     <a class="navbar-brand fw-semibold" href="index.php">
-      <i class="fas fa-subway me-1"></i> WL Monitor
+      <?= icon("subway", "me-1") ?> WL Monitor
     </a>
 
     <!-- Station search — always visible (outside collapse) -->
@@ -32,7 +32,7 @@ $theme = htmlspecialchars($theme, ENT_QUOTES, 'UTF-8');
         <input type="search" id="s" class="form-control" placeholder="Station suchen …" autocomplete="off">
         <button class="btn btn-nav" id="stationListToggle" type="button"
                 tabindex="-1" title="Alle Stationen">
-          <i class="fas fa-chevron-down"></i>
+          <?= icon("chevron-down") ?>
         </button>
       </div>
       <div id="stationDropdown" class="station-dropdown" style="display:none;">
@@ -41,12 +41,12 @@ $theme = htmlspecialchars($theme, ENT_QUOTES, 'UTF-8');
             <input type="radio" class="btn-check" name="stationSort"
                    id="sortAlpha" value="alpha" autocomplete="off" checked>
             <label class="btn btn-outline-secondary" for="sortAlpha">
-              <i class="fas fa-sort-alpha-down"></i> A–Z
+              <?= icon("sort-alpha") ?> A–Z
             </label>
             <input type="radio" class="btn-check" name="stationSort"
                    id="sortDist" value="dist" autocomplete="off">
             <label class="btn btn-outline-secondary" for="sortDist">
-              <i class="fas fa-map-marker-alt"></i> Nähe
+              <?= icon("map-marker") ?> Nähe
             </label>
           </div>
         </div>
@@ -58,9 +58,8 @@ $theme = htmlspecialchars($theme, ENT_QUOTES, 'UTF-8');
       <?php if ($loggedIn): ?>
         <div class="nav-item dropdown">
           <a class="nav-link dropdown-toggle d-flex align-items-center gap-2 px-2"
-             href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <img src="<?= $avatarUrl ?>" class="nav-avatar" alt=""
-                 onerror="this.outerHTML='<i class=\'fas fa-user-circle\'></i>'">
+             href="#" role="button" data-dropdown-toggle aria-expanded="false">
+            <img src="<?= $avatarUrl ?>" class="nav-avatar" alt="">
             <span class="d-none d-sm-inline">Profil</span>
           </a>
           <ul class="dropdown-menu dropdown-menu-end">
@@ -71,11 +70,11 @@ $theme = htmlspecialchars($theme, ENT_QUOTES, 'UTF-8');
             </li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="preferences.php">
-              <i class="fas fa-user-cog me-2"></i>Einstellungen
+              <?= icon("user-cog", "me-2") ?>Einstellungen
             </a></li>
             <?php if ($rights === 'Admin'): ?>
               <li><a class="dropdown-item" href="admin.php">
-                <i class="fas fa-users-cog me-2"></i>Admin
+                <?= icon("users-cog", "me-2") ?>Admin
               </a></li>
             <?php endif; ?>
             <li><hr class="dropdown-divider"></li>
@@ -85,28 +84,28 @@ $theme = htmlspecialchars($theme, ENT_QUOTES, 'UTF-8');
                 <div class="btn-group btn-group-sm w-100" role="group" aria-label="Farbschema">
                   <button type="button" class="btn btn-outline-secondary<?= $theme === 'light' ? ' active' : '' ?>"
                           data-theme-btn="light" onclick="setTheme('light')" title="Hell">
-                    <i class="fas fa-sun"></i>
+                    <?= icon("sun") ?>
                   </button>
                   <button type="button" class="btn btn-outline-secondary<?= $theme === 'auto' ? ' active' : '' ?>"
                           data-theme-btn="auto" onclick="setTheme('auto')" title="Automatisch">
-                    <i class="fas fa-adjust"></i>
+                    <?= icon("adjust") ?>
                   </button>
                   <button type="button" class="btn btn-outline-secondary<?= $theme === 'dark' ? ' active' : '' ?>"
                           data-theme-btn="dark" onclick="setTheme('dark')" title="Dunkel">
-                    <i class="fas fa-moon"></i>
+                    <?= icon("moon") ?>
                   </button>
                 </div>
               </div>
             </li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="logout.php">
-              <i class="fas fa-sign-out-alt me-2"></i>Logout
+              <?= icon("sign-out", "me-2") ?>Logout
             </a></li>
           </ul>
         </div>
       <?php else: ?>
         <a class="nav-link px-2" href="login.php">
-          <i class="fas fa-key me-1"></i>
+          <?= icon("key", "me-1") ?>
           <span class="d-none d-sm-inline">Login</span>
         </a>
       <?php endif; ?>
@@ -137,14 +136,9 @@ $theme = htmlspecialchars($theme, ENT_QUOTES, 'UTF-8');
 </div>
 
 <button id="topBtn" class="btn btn-secondary btn-sm"
-        style="display:none;position:fixed;bottom:20px;right:20px;"
         title="Nach oben">
-  <i class="fas fa-arrow-up"></i>
+  <?= icon("arrow-up") ?>
 </button>
-
-<!-- Bootstrap 5 JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-        crossorigin="anonymous"></script>
 
 <!-- Pass PHP state to JS module -->
 <script nonce="<?= $_cspNonce ?>">

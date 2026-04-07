@@ -22,10 +22,10 @@ $csrfToken = csrf_token();
 <nav class="navbar" id="mainNav">
   <div class="container-fluid">
     <span class="navbar-brand fw-semibold">
-      <i class="fas fa-users-cog me-1"></i> Benutzerverwaltung
+      <?= icon("users-cog", "me-1") ?> Benutzerverwaltung
     </span>
     <a href="index.php" class="btn btn-sm btn-nav ms-auto">
-      <i class="fas fa-arrow-left me-1"></i> Monitor
+      <?= icon("arrow-left", "me-1") ?> Monitor
     </a>
   </div>
 </nav>
@@ -35,9 +35,9 @@ $csrfToken = csrf_token();
 <div class="container-fluid mb-3">
   <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <span><i class="fas fa-database me-1"></i> Stationsdaten (OGD)</span>
+      <span><?= icon("database", "me-1") ?> Stationsdaten (OGD)</span>
       <button id="btnOgdUpdate" class="btn btn-sm btn-outline-primary">
-        <i class="fas fa-sync-alt me-1"></i> Jetzt aktualisieren
+        <?= icon("sync", "me-1") ?> Jetzt aktualisieren
       </button>
     </div>
     <div id="ogdLog" class="card-body p-2" style="display:none">
@@ -51,7 +51,7 @@ $csrfToken = csrf_token();
     <input type="text" name="filter" class="form-control form-control-sm w-auto"
            placeholder="Username suchen" value="<?= $filter ?>">
     <button class="btn btn-sm btn-secondary" type="submit">
-      <i class="fas fa-search"></i>
+      <?= icon("search") ?>
     </button>
   </form>
 
@@ -81,7 +81,7 @@ $csrfToken = csrf_token();
               data-disabled="<?= $u['disabled'] ?>"
               data-departures="<?= $u['departures'] ?>"
               data-debug="<?= $u['debug'] ?>"
-              data-bs-toggle="modal" data-bs-target="#editModal">
+              data-modal-open="editModal">
               Bearbeiten
             </button>
             <button class="btn btn-sm btn-outline-warning btn-reset"
@@ -113,7 +113,7 @@ $csrfToken = csrf_token();
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="editModalLabel">Benutzer bearbeiten</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <button type="button" class="btn-close" data-modal-close></button>
       </div>
       <form id="editForm">
         <div class="modal-body">
@@ -149,7 +149,7 @@ $csrfToken = csrf_token();
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary"
-                  data-bs-dismiss="modal">Abbrechen</button>
+                  data-modal-close>Abbrechen</button>
           <button type="submit" class="btn btn-primary">Speichern</button>
         </div>
       </form>
@@ -157,8 +157,6 @@ $csrfToken = csrf_token();
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-        crossorigin="anonymous"></script>
 <script nonce="<?= $_cspNonce ?>">
 const CSRF = <?= json_encode($csrfToken) ?>;
 
@@ -170,7 +168,7 @@ function showAlert(msg, type) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'btn-close';
-  btn.dataset.bsDismiss = 'alert';
+  btn.dataset.dismissAlert = '';
   div.appendChild(btn);
   container.appendChild(div);
   setTimeout(() => div.remove(), 5000);
@@ -203,7 +201,7 @@ document.getElementById('editForm').addEventListener('submit', async e => {
   const res = await adminPost('admin_user_edit', Object.fromEntries(fd));
   if (res.ok) {
     showAlert('Gespeichert.', 'success');
-    bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+    closeModal('editModal');
     setTimeout(() => location.reload(), 900);
   } else {
     showAlert('Fehler beim Speichern.', 'danger');

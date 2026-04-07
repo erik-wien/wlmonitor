@@ -231,42 +231,40 @@ $avatarUrl  = 'avatar.php?id=' . $userId;
 })();
 </script>
 
-<nav class="navbar navbar-expand-lg" id="mainNav">
+<nav class="navbar" id="mainNav">
   <div class="container-fluid">
     <a class="navbar-brand fw-semibold" href="index.php">
-      <i class="fas fa-subway me-1"></i> WL Monitor
+      <?= icon("subway", "me-1") ?> WL Monitor
     </a>
     <div class="navbar-nav ms-auto align-items-center gap-2">
       <span class="nav-link d-flex align-items-center gap-2">
-        <img src="<?= $avatarUrl ?>" class="nav-avatar" alt=""
-             onerror="this.outerHTML='<i class=\'fas fa-user\'></i>'">
+        <img src="<?= $avatarUrl ?>" class="nav-avatar" alt="">
         <?= $uname ?>
       </span>
       <a class="nav-link" href="index.php" title="Zurück zur Übersicht">
-        <i class="fas fa-arrow-left"></i>
+        <?= icon("arrow-left") ?>
       </a>
     </div>
   </div>
 </nav>
 
 <div class="container mt-4" style="max-width:560px;">
-  <h4 class="mb-4"><i class="fas fa-user-cog me-2"></i>Einstellungen</h4>
+  <h4 class="mb-4"><?= icon("user-cog", "me-2") ?>Einstellungen</h4>
 
   <?php foreach ($_SESSION['alerts'] ?? [] as [$type, $msg]): ?>
     <div class="alert alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?> alert-dismissible fade show">
       <?= $msg ?>
-      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      <button type="button" class="btn-close" data-dismiss-alert></button>
     </div>
   <?php endforeach; unset($_SESSION['alerts']); ?>
 
   <!-- ── Profilbild ──────────────────────────────────────────────────────── -->
   <div class="card mb-3">
-    <div class="card-header"><i class="fas fa-camera me-1"></i> Profilbild</div>
+    <div class="card-header"><?= icon("camera", "me-1") ?> Profilbild</div>
     <div class="card-body">
       <div class="d-flex align-items-center gap-3 mb-3">
         <img src="<?= $avatarUrl ?>" class="rounded-circle"
-             style="width:64px;height:64px;object-fit:cover;" alt="Profilbild"
-             onerror="this.outerHTML='<div class=\'rounded-circle bg-secondary d-flex align-items-center justify-content-center\' style=\'width:64px;height:64px;\'><i class=\'fas fa-user fa-2x text-white\'></i></div>'">
+             style="width:64px;height:64px;object-fit:cover;" alt="Profilbild">
         <div class="text-muted small">JPEG, PNG, GIF oder WebP · max. 2 MB</div>
       </div>
 
@@ -283,7 +281,7 @@ $avatarUrl  = 'avatar.php?id=' . $userId;
           <input type="file" class="form-control" name="avatar" id="avatarFile"
                  accept="image/jpeg,image/png,image/gif,image/webp" required>
           <button class="btn btn-primary" type="submit">
-            <i class="fas fa-upload me-1"></i> Hochladen
+            <?= icon("upload", "me-1") ?> Hochladen
           </button>
         </div>
       </form>
@@ -292,7 +290,7 @@ $avatarUrl  = 'avatar.php?id=' . $userId;
 
   <!-- ── Design ───────────────────────────────────────────────────────────── -->
   <div class="card mb-3">
-    <div class="card-header"><i class="fas fa-palette me-1"></i> Design</div>
+    <div class="card-header"><?= icon("palette", "me-1") ?> Design</div>
     <div class="card-body">
       <?php if (!empty($errors['theme'])): ?>
         <div class="alert alert-danger py-2">
@@ -304,16 +302,16 @@ $avatarUrl  = 'avatar.php?id=' . $userId;
         <?= csrf_input() ?>
         <input type="hidden" name="action" value="change_theme">
         <div class="btn-group w-100 mb-3" role="group" aria-label="Farbschema">
-          <?php foreach (['light' => ['fas fa-sun', 'Hell'], 'auto' => ['fas fa-adjust', 'Automatisch'], 'dark' => ['fas fa-moon', 'Dunkel']] as $val => [$icon, $label]): ?>
+          <?php foreach (['light' => ['sun', 'Hell'], 'auto' => ['adjust', 'Automatisch'], 'dark' => ['moon', 'Dunkel']] as $val => [$iconId, $label]): ?>
             <input type="radio" class="btn-check" name="theme" id="theme_<?= $val ?>"
                    value="<?= $val ?>" autocomplete="off" <?= $theme === $val ? 'checked' : '' ?>>
             <label class="btn btn-outline-secondary" for="theme_<?= $val ?>">
-              <i class="<?= $icon ?> me-1"></i><?= $label ?>
+              <?= icon($iconId, 'me-1') ?><?= $label ?>
             </label>
           <?php endforeach; ?>
         </div>
         <button type="submit" class="btn btn-primary">
-          <i class="fas fa-save me-1"></i> Speichern
+          <?= icon("save", "me-1") ?> Speichern
         </button>
       </form>
     </div>
@@ -321,7 +319,7 @@ $avatarUrl  = 'avatar.php?id=' . $userId;
 
   <!-- ── Abfahrten ──────────────────────────────────────────────────────── -->
   <div class="card mb-3">
-    <div class="card-header"><i class="fas fa-list-ol me-1"></i> Abfahrten pro Linie</div>
+    <div class="card-header"><?= icon("list-ol", "me-1") ?> Abfahrten pro Linie</div>
     <div class="card-body">
       <p class="text-muted small mb-3">
         Wie viele Abfahrten pro Linie und Richtung werden angezeigt (1–5)?
@@ -348,7 +346,7 @@ $avatarUrl  = 'avatar.php?id=' . $userId;
           </div>
         </div>
         <button type="submit" class="btn btn-primary">
-          <i class="fas fa-save me-1"></i> Speichern
+          <?= icon("save", "me-1") ?> Speichern
         </button>
       </form>
     </div>
@@ -356,7 +354,7 @@ $avatarUrl  = 'avatar.php?id=' . $userId;
 
   <!-- ── E-Mail ──────────────────────────────────────────────────────────── -->
   <div class="card mb-3">
-    <div class="card-header"><i class="fas fa-envelope me-1"></i> E-Mail-Adresse</div>
+    <div class="card-header"><?= icon("envelope", "me-1") ?> E-Mail-Adresse</div>
     <div class="card-body">
       <p class="text-muted small mb-3">
         Aktuelle Adresse: <strong><?= $currentEmail ?></strong>
@@ -388,7 +386,7 @@ $avatarUrl  = 'avatar.php?id=' . $userId;
                  class="form-control" autocomplete="current-password" required>
         </div>
         <button type="submit" class="btn btn-primary">
-          <i class="fas fa-paper-plane me-1"></i> Bestätigungslink senden
+          <?= icon("paper-plane", "me-1") ?> Bestätigungslink senden
         </button>
       </form>
     </div>
@@ -396,7 +394,7 @@ $avatarUrl  = 'avatar.php?id=' . $userId;
 
   <!-- ── Kennwort ────────────────────────────────────────────────────────── -->
   <div class="card mb-4">
-    <div class="card-header"><i class="fas fa-key me-1"></i> Kennwort ändern</div>
+    <div class="card-header"><?= icon("key", "me-1") ?> Kennwort ändern</div>
     <div class="card-body">
       <?php if (!empty($errors['password'])): ?>
         <div class="alert alert-danger py-2">
@@ -425,7 +423,7 @@ $avatarUrl  = 'avatar.php?id=' . $userId;
                  minlength="8" required>
         </div>
         <button type="submit" class="btn btn-primary">
-          <i class="fas fa-save me-1"></i> Speichern
+          <?= icon("save", "me-1") ?> Speichern
         </button>
       </form>
     </div>
@@ -433,7 +431,4 @@ $avatarUrl  = 'avatar.php?id=' . $userId;
 
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-        crossorigin="anonymous"></script>
-<?= csrf_input() ?>
 <?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>

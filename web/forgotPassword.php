@@ -77,7 +77,7 @@ header('Content-Type: text/html; charset=utf-8');
 <nav class="navbar" id="mainNav">
   <div class="container-fluid">
     <a class="navbar-brand fw-semibold" href="index.php">
-      <i class="fas fa-subway me-1"></i> WL Monitor
+      <?= icon("subway", "me-1") ?> WL Monitor
     </a>
   </div>
 </nav>
