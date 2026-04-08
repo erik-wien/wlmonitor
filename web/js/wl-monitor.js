@@ -12,6 +12,9 @@ let monitorTimer  = null;
 // --- Init --------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
   applyTheme();
+  initDropdowns();
+  initModals();
+  initAlerts();
   // Render any PHP session alerts passed via wlConfig
   if (window.wlConfig?.alerts?.length) {
     for (const [type, msg] of window.wlConfig.alerts) {
@@ -222,13 +225,11 @@ function renderFavorites(favs) {
       startMonitorTimer();
     });
 
-    const editIcon = document.createElement('i');
-    editIcon.className = 'fas fa-pencil-alt';
     const editBtn = document.createElement('a');
     editBtn.href = 'editFavorite.php?favID=' + fav.id;
     editBtn.className = 'btn btn-sm btn-outline-secondary ms-1';
     editBtn.title = 'Bearbeiten';
-    editBtn.appendChild(editIcon);
+    editBtn.appendChild(makeSvgIcon('save'));
 
     const wrap = document.createElement('div');
     wrap.className = 'd-flex mb-1';
@@ -295,9 +296,7 @@ function renderStationList(stations) {
       const a = document.createElement('a');
       a.href   = mapsUrl;
       a.target = 'wlmonitor';
-      const icon = document.createElement('i');
-      icon.className = 'fas fa-location-arrow me-2';
-      a.appendChild(icon);
+      a.appendChild(makeSvgIcon('map-marker', 'me-2'));
       p.appendChild(a);
 
       const span = document.createElement('span');
@@ -420,7 +419,7 @@ export function sendAlert(message, type) {
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
   closeBtn.className = 'btn-close';
-  closeBtn.dataset.bsDismiss = 'alert';
+  closeBtn.dataset.dismissAlert = '';
   div.appendChild(closeBtn);
   container.appendChild(div);
   setTimeout(() => div.remove(), 6000);
@@ -443,4 +442,74 @@ function setCookie(name, value, days) {
   const d = new Date();
   d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
   document.cookie = name + '=' + value + ';expires=' + d.toUTCString() + ';path=/;SameSite=Strict';
+}
+
+// --- SVG icon helper (mirrors PHP icon()) ------------------------------------
+function makeSvgIcon(id, cls) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('class', 'icon' + (cls ? ' ' + cls : ''));
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const use = document.createElementNS(ns, 'use');
+  use.setAttribute('href', 'css/icons.svg#icon-' + id);
+  svg.appendChild(use);
+  return svg;
+}
+
+// --- Dropdowns ---------------------------------------------------------------
+function initDropdowns() {
+  document.querySelectorAll('[data-dropdown-toggle]').forEach(toggle => {
+    const menu = toggle.closest('.dropdown')?.querySelector('.dropdown-menu');
+    if (!menu) return;
+    toggle.addEventListener('click', e => {
+      e.stopPropagation();
+      const open = menu.classList.contains('show');
+      closeAllDropdowns();
+      if (!open) menu.classList.add('show');
+    });
+  });
+  document.addEventListener('click', closeAllDropdowns);
+}
+
+function closeAllDropdowns() {
+  document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+}
+
+// --- Modals ------------------------------------------------------------------
+window.openModal = function(id) {
+  const modal = document.getElementById(id);
+  if (modal) modal.classList.add('show');
+};
+
+window.closeModal = function(id) {
+  const modal = document.getElementById(id);
+  if (modal) modal.classList.remove('show');
+};
+
+function initModals() {
+  document.querySelectorAll('[data-modal-open]').forEach(btn => {
+    btn.addEventListener('click', () => openModal(btn.dataset.modalOpen));
+  });
+  document.querySelectorAll('[data-modal-close]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const modal = btn.closest('.modal');
+      if (modal) modal.classList.remove('show');
+    });
+  });
+  document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('click', e => {
+      if (e.target === modal) modal.classList.remove('show');
+    });
+  });
+}
+
+// --- Alert dismiss -----------------------------------------------------------
+function initAlerts() {
+  document.addEventListener('click', e => {
+    if (e.target.matches('[data-dismiss-alert]')) {
+      const alert = e.target.closest('.alert');
+      if (alert) alert.remove();
+    }
+  });
 }
