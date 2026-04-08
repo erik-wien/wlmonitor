@@ -22,19 +22,19 @@ $_ftLoggedIn = !empty($_SESSION['loggedin']);
              id="themeLight" value="light" autocomplete="off"
              <?= $_ft === 'light' ? 'checked' : '' ?>>
       <label class="btn btn-footer-toggle" for="themeLight">
-        <i class="fas fa-sun"></i>
+        <?= icon("sun") ?>
       </label>
 
       <input type="radio" class="btn-check" name="themePreference"
              id="themeDark" value="dark" autocomplete="off"
              <?= $_ft === 'dark'  ? 'checked' : '' ?>>
       <label class="btn btn-footer-toggle" for="themeDark">
-        <i class="fas fa-moon"></i>
+        <?= icon("moon") ?>
       </label>
     </div>
 
-    <button class="btn btn-sm footer-btn" onclick="toggleFullScreen()" title="Vollbild">
-      <i class="fas fa-expand-arrows-alt"></i>
+    <button class="btn btn-sm btn-nav" onclick="toggleFullScreen()" title="Vollbild">
+      <?= icon("expand") ?>
       <span class="d-none d-sm-inline ms-1">Vollbild</span>
     </button>
 
