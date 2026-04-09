@@ -4,11 +4,11 @@
 
 /* ── Departure table ────────────────────────────────────────────────────────── */
 
-.departure-table { table-layout: fixed; width: 100%; }
+.departure-table { table-layout: auto; width: 100%; }
 .departure-table .badge-cell    { width: 2.8em; padding: 0.2em; vertical-align: middle; }
 .departure-table .platform-cell { width: 2.2em; font-size: 0.7em; color: var(--color-muted); vertical-align: middle; }
-.departure-table .towards-cell  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
-.departure-table .times-cell    { width: 5.5em; text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; vertical-align: middle; }
+.departure-table .towards-cell  { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+.departure-table .times-cell    { white-space: nowrap; text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; vertical-align: middle; padding-left: 0.5em; }
 .departure-table td, .departure-table th {
   color: var(--color-text);
   border-color: var(--color-border);
@@ -133,3 +133,66 @@ body {
 }
 
 #stationList { cursor: default; }
+
+/* ── Monitor card colors ─────────────────────────────────────────────────────── */
+
+#monitor .card {
+  background-color: #f4f7f4;
+}
+#monitor .card-header {
+  background-color: #404d40;
+  color: #e8ede8;
+  border-bottom-color: #303d30;
+}
+
+[data-theme="dark"] #monitor .card {
+  background-color: #141814;
+}
+[data-theme="dark"] #monitor .card-header {
+  background-color: #2a342a;
+  color: #cdd5cd;
+  border-bottom-color: #1e281e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #monitor .card {
+    background-color: #141814;
+  }
+  :root:not([data-theme="light"]) #monitor .card-header {
+    background-color: #2a342a;
+    color: #cdd5cd;
+    border-bottom-color: #1e281e;
+  }
+}
+
+#monitorUpdateTime {
+  font-size: 8pt;
+  color: var(--color-muted);
+  text-align: end;
+  margin-top: 0.25rem;
+  padding: 0 0.25rem;
+}
+
+/* ── Per-card "+" button in card header ──────────────────────────────────────── */
+
+#monitor .btn-add-steig {
+  opacity: .3;
+  transition: opacity .15s, background .15s;
+  background: none;
+  border: none;
+  color: #e8ede8; /* matches header text */
+  padding: 0 .2rem;
+  border-radius: var(--radius-sm);
+}
+#monitor .card-header:hover .btn-add-steig,
+#monitor .btn-add-steig:hover,
+#monitor .btn-add-steig:focus {
+  opacity: 1;
+  background: rgba(255,255,255,.18);
+}
+
+[data-theme="dark"] #monitor .btn-add-steig { color: #cdd5cd; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #monitor .btn-add-steig { color: #cdd5cd; }
+}

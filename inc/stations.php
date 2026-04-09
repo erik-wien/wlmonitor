@@ -32,8 +32,11 @@
 function stations_by_distance(mysqli $con, float $lat, float $lon): array {
     $sql = "SELECT s.Haltestelle AS station,
                    FLOOR(ST_Distance_Sphere(point(s.LON, s.LAT), point(?, ?)) / 30) * 30 AS distance,
-                   s.diva, s.lat, s.lon
+                   s.diva, s.Linien AS `lines`, s.LAT AS lat, s.LON AS lon,
+                   GROUP_CONCAT(DISTINCT st.RICHTUNG ORDER BY st.RICHTUNG SEPARATOR '') AS directions
             FROM ogd_stations AS s
+            JOIN ogd_steige st ON st.DIVA = s.diva
+            GROUP BY s.diva, s.Haltestelle, s.Linien, s.LAT, s.LON
             ORDER BY distance, station
             LIMIT 100";
     $stmt = $con->prepare($sql);
@@ -44,11 +47,13 @@ function stations_by_distance(mysqli $con, float $lat, float $lon): array {
     $rows = [];
     while ($row = $result->fetch_assoc()) {
         $rows[] = [
-            'station'  => $row['station'],
-            'distance' => (int) ($row['distance'] ?? 0),
-            'diva'     => $row['diva'],
-            'lat'      => $row['lat'],
-            'lon'      => $row['lon'],
+            'station'    => $row['station'],
+            'distance'   => (int) ($row['distance'] ?? 0),
+            'diva'       => $row['diva'],
+            'lines'      => $row['lines'] ?? '',
+            'directions' => $row['directions'] ?? '',
+            'lat'        => $row['lat'],
+            'lon'        => $row['lon'],
         ];
     }
     $stmt->close();
@@ -66,18 +71,62 @@ function stations_by_distance(mysqli $con, float $lat, float $lon): array {
  */
 function stations_alpha(mysqli $con): array {
     $result = $con->query(
-        "SELECT s.Haltestelle AS station, s.diva, s.lat, s.lon FROM ogd_stations AS s ORDER BY station"
+        "SELECT s.diva, s.Haltestelle AS station, s.Linien AS `lines`, s.LAT AS lat, s.LON AS lon,
+                GROUP_CONCAT(DISTINCT st.RICHTUNG ORDER BY st.RICHTUNG SEPARATOR '') AS directions
+         FROM ogd_stations AS s
+         JOIN ogd_steige st ON st.DIVA = s.diva
+         GROUP BY s.diva, s.Haltestelle, s.Linien, s.LAT, s.LON
+         ORDER BY station"
     );
     $rows = [];
     while ($row = $result->fetch_assoc()) {
         $rows[] = [
-            'station' => $row['station'],
-            'diva'    => $row['diva'],
-            'lat'     => $row['lat'],
-            'lon'     => $row['lon'],
+            'station'    => $row['station'],
+            'diva'       => $row['diva'],
+            'lines'      => $row['lines'] ?? '',
+            'directions' => $row['directions'] ?? '',
+            'lat'        => $row['lat'],
+            'lon'        => $row['lon'],
         ];
     }
     return $rows;
+}
+
+/**
+ * Look up station name, lines and direction for an array of DIVA numbers.
+ *
+ * Returns a map keyed by DIVA.  DIVAs not found in the DB are omitted.
+ *
+ * @param mysqli   $con   Active database connection.
+ * @param string[] $divas DIVA numbers to look up.
+ * @return array<string, array{diva:string, station:string, lines:string, directions:string}>
+ */
+function diva_info(mysqli $con, array $divas): array {
+    if (empty($divas)) return [];
+    $ph    = implode(',', array_fill(0, count($divas), '?'));
+    $types = str_repeat('s', count($divas));
+    $sql   = "SELECT s.diva, s.Haltestelle AS station, s.Linien AS `lines`,
+                     GROUP_CONCAT(DISTINCT st.RICHTUNG ORDER BY st.RICHTUNG SEPARATOR '') AS directions
+              FROM ogd_stations s
+              JOIN ogd_steige st ON st.DIVA = s.diva
+              WHERE s.diva IN ($ph)
+              GROUP BY s.diva, s.Haltestelle, s.Linien";
+    $stmt = $con->prepare($sql);
+    $stmt->bind_param($types, ...$divas);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $map = [];
+    while ($row = $result->fetch_assoc()) {
+        $map[$row['diva']] = [
+            'diva'       => $row['diva'],
+            'station'    => $row['station'],
+            'lines'      => $row['lines'] ?? '',
+            'directions' => $row['directions'] ?? '',
+        ];
+    }
+    $result->free();
+    $stmt->close();
+    return $map;
 }
 
 /**

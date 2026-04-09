@@ -68,7 +68,7 @@ function monitor_get(mysqli $con, string $divaRaw, int $maxDepartures): array {
         . '&sender=' . APIKEY
         . '&activateTrafficInfo=stoerungkurz&activateTrafficInfo=stoerunglang';
 
-    $raw = @file_get_contents($apiUrl);
+    $raw = file_get_contents($apiUrl);
     if ($raw === false) {
         throw new RuntimeException('Wiener Linien API request failed.');
     }
@@ -86,19 +86,22 @@ function monitor_get(mysqli $con, string $divaRaw, int $maxDepartures): array {
     }
 
     $result      = [];
-    $prevStation = null;
     $totalTrains = 0;
-    $stationData = [];
 
     foreach ($monitors as $monitor) {
         $stationName = $monitor['locationStop']['properties']['title'];
         $stationId   = $monitor['locationStop']['properties']['name'];
+        // Extract numeric DIVA from station code (e.g. "STK60200103" → "60200103")
+        $stationDiva = $monitor['locationStop']['properties']['diva']['statId']
+            ?? preg_replace('/\D/', '', $stationId);
 
-        // Start a new station block when the station changes.
-        if ($stationId !== $prevStation) {
-            $prevStation = $stationId;
-            $stationData = [
+        // The WL API returns one monitor entry per line, not per station — entries
+        // for the same station are interleaved with entries for other stations.
+        // Initialise on first encounter; subsequent entries append their lines.
+        if (!isset($result[$stationId])) {
+            $result[$stationId] = [
                 'id'           => $stationId,
+                'diva'         => $stationDiva,
                 'station_name' => $stationName,
                 'lines'        => [],
             ];
@@ -116,7 +119,7 @@ function monitor_get(mysqli $con, string $divaRaw, int $maxDepartures): array {
                 $dCount++;
             }
 
-            $stationData['lines'][] = [
+            $result[$stationId]['lines'][] = [
                 'name'       => $line['name'],
                 'towards'    => $line['towards'],
                 'type'       => $line['type']      ?? '',
@@ -127,8 +130,6 @@ function monitor_get(mysqli $con, string $divaRaw, int $maxDepartures): array {
 
             $totalTrains++;
         }
-
-        $result[$stationId] = $stationData;
     }
 
     $result['trains']    = $totalTrains;

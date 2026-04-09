@@ -82,7 +82,7 @@ header('Content-Type: text/html; charset=utf-8');
   </div>
 </nav>
 
-<div class="container mt-4" style="max-width:420px">
+<div class="container-sm mt-4">
   <h4 class="mb-3">Kennwort vergessen</h4>
 
   <?php if ($error): ?>

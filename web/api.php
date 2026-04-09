@@ -112,7 +112,30 @@ try {
             $diva = sanitizeDivaInput($_GET['diva'] ?? $_SESSION['diva'] ?? '60200103');
             $_SESSION['diva'] = $diva;
             $maxDep = (int) ($_SESSION['departures'] ?? MAX_DEPARTURES);
-            api_json(monitor_get($con, $diva, $maxDep));
+            $monitorData = monitor_get($con, $diva, $maxDep);
+
+            // The WL API silently omits stops with no upcoming departures.
+            // Inject empty placeholder entries so the JS can render a card for
+            // every requested DIVA (filtered-favourite cards must always be visible).
+            $requestedDivas = array_filter(array_map('trim', explode(',', $diva)));
+            $returnedDivas  = [];
+            foreach ($monitorData as $k => $v) {
+                if (is_array($v) && isset($v['diva'])) $returnedDivas[] = $v['diva'];
+            }
+            $missingDivas = array_diff($requestedDivas, $returnedDivas);
+            if (!empty($missingDivas)) {
+                $nameMap = diva_info($con, array_values($missingDivas));
+                foreach ($missingDivas as $missingDiva) {
+                    $monitorData['__stop_' . $missingDiva] = [
+                        'id'           => '__stop_' . $missingDiva,
+                        'diva'         => $missingDiva,
+                        'station_name' => $nameMap[$missingDiva]['station'] ?? $missingDiva,
+                        'lines'        => [],
+                    ];
+                }
+            }
+
+            api_json($monitorData);
 
         // ── Stations ─────────────────────────────────────────────────────────
 
@@ -173,10 +196,11 @@ try {
             $id = favorites_add(
                 $con,
                 (int) $_SESSION['id'],
-                $_POST['title']  ?? '',
-                $_POST['diva']   ?? '',
-                $_POST['bclass'] ?? 'btn-outline-success',
-                (int) ($_POST['sort'] ?? 0)
+                $_POST['title']       ?? '',
+                $_POST['diva']        ?? '',
+                $_POST['bclass']      ?? 'btn-outline-success',
+                (int) ($_POST['sort'] ?? 0),
+                isset($_POST['filter_json']) ? (string) $_POST['filter_json'] : null
             );
             api_json(['id' => $id]);
 
@@ -187,10 +211,11 @@ try {
                 $con,
                 (int) $_SESSION['id'],
                 (int) ($_POST['favId'] ?? 0),
-                $_POST['title']  ?? '',
-                $_POST['diva']   ?? '',
-                $_POST['bclass'] ?? 'btn-outline-success',
-                (int) ($_POST['sort'] ?? 0)
+                $_POST['title']       ?? '',
+                $_POST['diva']        ?? '',
+                $_POST['bclass']      ?? 'btn-outline-success',
+                (int) ($_POST['sort'] ?? 0),
+                isset($_POST['filter_json']) ? (string) $_POST['filter_json'] : null
             );
             api_json(['ok' => $ok]);
 

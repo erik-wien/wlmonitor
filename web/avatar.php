@@ -36,9 +36,10 @@ if (!$row || empty($row['img_blob'])) {
     exit;
 }
 
-$mime = $row['img_type'] ?: 'image/jpeg';
+$allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+$mime = in_array($row['img_type'], $allowed, true) ? $row['img_type'] : 'image/jpeg';
 
-header('Content-Type: '  . $mime);
+header('Content-Type: ' . $mime);
 header('Cache-Control: public, max-age=3600');
 header('Content-Length: ' . strlen($row['img_blob']));
 echo $row['img_blob'];
