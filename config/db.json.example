@@ -1,14 +1,34 @@
 {
   "local": {
     "host": "localhost",
-    "user": "your_local_user",
-    "pass": "your_local_pass",
-    "name": "your_local_db"
+    "user": "root",
+    "pass": "",
+    "name": "wlmonitor_dev",
+    "auth_name": "jardyx_auth",
+    "base_url": "http://localhost/wlmonitor.test"
   },
   "production": {
-    "host": "your_production_host",
-    "user": "your_production_user",
-    "pass": "your_production_pass",
-    "name": "your_production_db"
+    "host": "localhost",
+    "user": "root",
+    "pass": "",
+    "name": "wlmonitor",
+    "auth_name": "jardyx_auth",
+    "base_url": "http://localhost/wlmonitor"
+  },
+  "smtp_local": {
+    "host": "smtp.example.com",
+    "port": 587,
+    "user": "your_smtp_user",
+    "pass": "your_smtp_pass",
+    "from": "noreply@example.com",
+    "from_name": "WL Monitor"
+  },
+  "smtp_production": {
+    "host": "smtp.example.com",
+    "port": 587,
+    "user": "your_smtp_user",
+    "pass": "your_smtp_pass",
+    "from": "noreply@example.com",
+    "from_name": "WL Monitor"
   }
 }

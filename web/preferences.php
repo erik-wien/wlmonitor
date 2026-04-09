@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors['avatar'] = 'Upload fehlgeschlagen (Fehlercode ' . ($file['error'] ?? '?') . ').';
         } else {
             $allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-            $info    = @getimagesize($file['tmp_name']);
+            $info    = getimagesize($file['tmp_name']);
             if (!$info || !in_array($info['mime'], $allowed, true)) {
                 $errors['avatar'] = 'Nur Bilder (JPEG, PNG, GIF, WebP) sind erlaubt.';
             } elseif ($file['size'] > 2 * 1024 * 1024) {
@@ -248,7 +248,7 @@ $avatarUrl  = 'avatar.php?id=' . $userId;
   </div>
 </nav>
 
-<div class="container mt-4" style="max-width:560px;">
+<div class="container-md mt-4">
   <h4 class="mb-4"><?= icon("user-cog", "me-2") ?>Einstellungen</h4>
 
   <?php foreach ($_SESSION['alerts'] ?? [] as [$type, $msg]): ?>

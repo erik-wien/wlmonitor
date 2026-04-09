@@ -13,10 +13,10 @@
   <link rel="shortcut icon" type="image/x-icon" href="img/favicon.ico">
   <link rel="apple-touch-icon" sizes="180x180" href="img/apple-touch-icon-180x180.png">
   <link rel="manifest" href="img/manifest.json">
-  <link rel="stylesheet" href="css/base/theme.css">
-  <link rel="stylesheet" href="css/base/reset.css">
-  <link rel="stylesheet" href="css/base/layout.css">
-  <link rel="stylesheet" href="css/base/components.css">
+  <link rel="stylesheet" href="css/shared/theme.css">
+  <link rel="stylesheet" href="css/shared/reset.css">
+  <link rel="stylesheet" href="css/shared/layout.css">
+  <link rel="stylesheet" href="css/shared/components.css">
   <link rel="stylesheet" href="css/app/wl-monitor.css">
 </head>
 <body>

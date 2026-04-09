@@ -34,6 +34,40 @@ $csrfToken = csrf_token();
 
 <div class="container-fluid mb-3">
   <div class="card">
+    <div class="card-header"><?= icon("palette", "me-1") ?> Favorit-Farben</div>
+    <div class="card-body py-2 d-flex flex-wrap gap-2">
+      <?php
+      $bclasses = [
+        'btn-outline-default'   => 'Standard',
+        'btn-outline-primary'   => 'Blau',
+        'btn-outline-success'   => 'Grün',
+        'btn-outline-info'      => 'Cyan',
+        'btn-outline-warning'   => 'Orange',
+        'btn-outline-danger'    => 'Rot',
+        'btn-outline-secondary' => 'Grau',
+        'btn-outline-dark'      => 'Dunkel',
+        'btn-primary'           => 'Blau (voll)',
+        'btn-success'           => 'Grün (voll)',
+        'btn-info'              => 'Cyan (voll)',
+        'btn-warning'           => 'Orange (voll)',
+        'btn-danger'            => 'Rot (voll)',
+        'btn-secondary'         => 'Grau (voll)',
+        'btn-dark'              => 'Dunkel (voll)',
+      ];
+      foreach ($bclasses as $cls => $label): ?>
+        <code class="btn btn-sm <?= htmlspecialchars($cls, ENT_QUOTES, 'UTF-8') ?>"
+              title="<?= htmlspecialchars($cls, ENT_QUOTES, 'UTF-8') ?>"
+              onclick="navigator.clipboard?.writeText('<?= htmlspecialchars($cls, ENT_QUOTES, 'UTF-8') ?>')"
+              style="cursor:pointer;font-family:var(--font-mono);font-size:.75rem">
+          <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?>
+        </code>
+      <?php endforeach; ?>
+    </div>
+  </div>
+</div>
+
+<div class="container-fluid mb-3">
+  <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
       <span><?= icon("database", "me-1") ?> Stationsdaten (OGD)</span>
       <button id="btnOgdUpdate" class="btn btn-sm btn-outline-primary">

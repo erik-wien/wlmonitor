@@ -29,7 +29,7 @@ unset($_SESSION['alerts']);
   </div>
 </nav>
 
-<div class="container mt-5" style="max-width:400px;">
+<div class="container-sm mt-5">
 
   <?php foreach ($alerts as [$type, $msg]): ?>
     <div class="alert alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?> alert-dismissible fade show">

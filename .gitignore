@@ -1,2 +1,7 @@
 config/db.json
 data/ratelimit.json
+vendor/
+backups/
+.DS_Store
+**/.DS_Store
+.phpunit.result.cache

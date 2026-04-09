@@ -70,6 +70,7 @@ RSYNC_OPTS=(
     --verbose
     --delete
     --delete-excluded
+    --copy-links
     --exclude=".git/"
     --exclude=".gitignore"
     --exclude=".DS_Store"
@@ -98,14 +99,46 @@ if [[ "$MODE" == "local" ]]; then
     # Ensure runtime directories exist (rsync won't create excluded dirs)
     mkdir -p "$LOCAL_DEST/data"
 
-    # Ensure config/ exists with at least an example if not already present
-    if [[ ! -f "$LOCAL_DEST/config/db.json" ]]; then
-        mkdir -p "$LOCAL_DEST/config"
-        cp "$REPO_DIR/config/db.json.example" "$LOCAL_DEST/config/db.json"
-        echo
-        info "  config/db.json was missing — copied from db.json.example."
-        info "  Edit $LOCAL_DEST/config/db.json with your local credentials."
-    fi
+    # Write the local-production db.json (wlmonitor DB, local credentials).
+    # This is distinct from the repo's db.json which points to wlmonitor_dev.
+    mkdir -p "$LOCAL_DEST/config"
+    cat > "$LOCAL_DEST/config/db.json" << 'DBJSON'
+{
+  "local": {
+    "host": "localhost",
+    "user": "wlmonitor",
+    "pass": "sopdi9-nyKnyb-zyqpyh",
+    "name": "wlmonitor",
+    "auth_name": "jardyx_auth",
+    "base_url": "http://localhost/wlmonitor"
+  },
+  "production": {
+    "host": "mysqlsvr78.world4you.com",
+    "user": "sql6675098",
+    "pass": "dr@3ysr",
+    "name": "5279249db19",
+    "auth_name": "jardyx_auth",
+    "base_url": "https://www.jardyx.com/wl-monitor"
+  },
+  "smtp_local": {
+    "host": "smtp.world4you.com",
+    "port": 587,
+    "user": "catchall@jardyx.com",
+    "pass": "rtuk4cy5gu",
+    "from": "wlmonitor@jardyx.com",
+    "from_name": "WL Monitor"
+  },
+  "smtp_production": {
+    "host": "smtp.world4you.com",
+    "port": 587,
+    "user": "catchall@jardyx.com",
+    "pass": "rtuk4cy5gu",
+    "from": "wlmonitor@jardyx.com",
+    "from_name": "WL Monitor"
+  }
+}
+DBJSON
+    ok "  config/db.json written (wlmonitor DB)"
 
     # For local, APP_ENV defaults to 'local' in initialize.php (no .htaccess needed).
     # Remove a stale production .htaccess if present.

@@ -54,9 +54,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resetRow !== null) {
     }
 }
 
+$theme = htmlspecialchars($_COOKIE['theme'] ?? 'auto', ENT_QUOTES, 'UTF-8');
+
 header('Content-Type: text/html; charset=utf-8');
 ?>
 <?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
+<script nonce="<?= $_cspNonce ?>">
+(function () {
+  var t = <?= json_encode($theme) ?>;
+  if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
+})();
+</script>
 
 <nav class="navbar">
   <div class="container-fluid">
@@ -66,7 +74,7 @@ header('Content-Type: text/html; charset=utf-8');
   </div>
 </nav>
 
-<div class="container mt-4" style="max-width:420px">
+<div class="container-sm mt-4">
   <h4 class="mb-3">Neues Kennwort setzen</h4>
 
   <?php if ($error): ?>

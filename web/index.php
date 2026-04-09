@@ -7,7 +7,9 @@ $alerts = $_SESSION['alerts'] ?? [];
 unset($_SESSION['alerts']);
 $alertsJson = json_encode($alerts, JSON_HEX_TAG | JSON_HEX_AMP);
 
-$userID   = (int) ($_SESSION['id'] ?? 0);
+$userID     = (int) ($_SESSION['id'] ?? 0);
+$loadFavId  = (int) ($_SESSION['loadFavId'] ?? 0);
+unset($_SESSION['loadFavId']);
 $loggedIn = !empty($_SESSION['loggedin']);
 $uname    = htmlspecialchars($_SESSION['username'] ?? '', ENT_QUOTES, 'UTF-8');
 $rights   = htmlspecialchars($_SESSION['rights']   ?? '', ENT_QUOTES, 'UTF-8');
@@ -98,9 +100,14 @@ $theme = htmlspecialchars($theme, ENT_QUOTES, 'UTF-8');
               </div>
             </li>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item" href="logout.php">
-              <?= icon("sign-out", "me-2") ?>Logout
-            </a></li>
+            <li>
+              <form method="post" action="logout.php">
+                <?= csrf_input() ?>
+                <button type="submit" class="dropdown-item">
+                  <?= icon("sign-out", "me-2") ?>Logout
+                </button>
+              </form>
+            </li>
           </ul>
         </div>
       <?php else: ?>
@@ -121,7 +128,7 @@ $theme = htmlspecialchars($theme, ENT_QUOTES, 'UTF-8');
 
     <!-- Monitor panel -->
     <div class="col-md-8">
-      <div id="monitor" class="mb-3">
+      <div id="monitor" class="mb-1">
         <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
         <span class="ms-2 text-muted">Lade Abfahrten ...</span>
       </div>
@@ -140,13 +147,57 @@ $theme = htmlspecialchars($theme, ENT_QUOTES, 'UTF-8');
   <?= icon("arrow-up") ?>
 </button>
 
+<?php if ($loggedIn): ?>
+<!-- Add-favourite modal -->
+<div class="modal" id="addFavModal">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><?= icon("star", "me-1") ?> Als Favorit speichern</h5>
+        <button type="button" class="btn-close" data-modal-close></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label" for="addFavTitle">Bezeichnung</label>
+          <input type="text" id="addFavTitle" class="form-control" maxlength="100" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="addFavColor">Farbe</label>
+          <select id="addFavColor" class="form-select">
+            <option value="btn-outline-default">Standard</option>
+            <option value="btn-outline-primary">Blau</option>
+            <option value="btn-outline-success">Grün</option>
+            <option value="btn-outline-info">Cyan</option>
+            <option value="btn-outline-warning">Orange</option>
+            <option value="btn-outline-danger">Rot</option>
+            <option value="btn-outline-secondary">Grau</option>
+            <option value="btn-outline-dark">Dunkel</option>
+          </select>
+        </div>
+        <div id="addFavLinesSection" style="display:none">
+          <label class="form-label">Linien</label>
+          <div id="addFavLines" class="d-flex flex-column gap-1 mb-1"
+               style="max-height:200px;overflow-y:auto"></div>
+          <div class="form-text">Wähle die Linien aus, die dieser Favorit anzeigen soll.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-modal-close>Abbrechen</button>
+        <button type="button" class="btn btn-primary" id="addFavSubmit"><?= icon("save", "me-1") ?> Speichern</button>
+      </div>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
+
 <!-- Pass PHP state to JS module -->
 <script nonce="<?= $_cspNonce ?>">
 window.wlConfig = {
-  userID:   <?= $userID ?>,
-  loggedIn: <?= $loggedIn ? 'true' : 'false' ?>,
-  theme:    <?= json_encode($theme) ?>,
-  alerts:   <?= $alertsJson ?>
+  userID:    <?= $userID ?>,
+  loggedIn:  <?= $loggedIn ? 'true' : 'false' ?>,
+  theme:     <?= json_encode($theme) ?>,
+  alerts:    <?= $alertsJson ?>,
+  loadFavId: <?= $loadFavId ?>
 };
 </script>
 

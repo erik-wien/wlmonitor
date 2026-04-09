@@ -4,25 +4,35 @@
  */
 
 // --- State -------------------------------------------------------------------
-let stationCache  = [];       // full list for current sort mode
-let currentSort   = 'alpha';  // 'alpha' | 'dist'
-let stationOrigin = null;     // { lat, lon } when sort=dist
-let monitorTimer  = null;
+let stationCache       = [];       // full list for current sort mode
+let currentSort        = 'alpha';  // 'alpha' | 'dist'
+let stationOrigin      = null;     // { lat, lon } when sort=dist
+let monitorTimer       = null;
+let currentMonitor     = { diva: null, favId: null, fav: null }; // active monitor context
+let addModalDiva       = null;     // DIVA override for add-favourite modal (single-steig "+")
+let currentMonitorLines = [];      // [{diva, line, platform, direction}] — collected on last render
 
 // --- Init --------------------------------------------------------------------
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   applyTheme();
   initDropdowns();
   initModals();
   initAlerts();
-  // Render any PHP session alerts passed via wlConfig
   if (window.wlConfig?.alerts?.length) {
-    for (const [type, msg] of window.wlConfig.alerts) {
-      sendAlert(msg, type);
-    }
+    for (const [type, msg] of window.wlConfig.alerts) sendAlert(msg, type);
   }
-  loadFavorites();
-  loadMonitor();
+
+  // Load favourites first so we can resolve loadFavId if set
+  const favs = await loadFavorites();
+
+  const loadFavId = window.wlConfig?.loadFavId;
+  const targetFav = loadFavId ? favs.find(f => f.id === loadFavId) : null;
+  if (targetFav) {
+    loadMonitor(targetFav.diva, targetFav);
+  } else {
+    loadMonitor();
+  }
+
   startMonitorTimer();
   wireScrollButton();
   wireStationSort();
@@ -52,14 +62,185 @@ async function apiPost(action, body = {}) {
 }
 
 // --- Monitor -----------------------------------------------------------------
-async function loadMonitor(diva) {
+async function loadMonitor(diva, fav = null) {
+  currentMonitor = { diva: diva || null, favId: fav ? fav.id : null, fav };
   const params = diva ? { diva } : {};
   try {
     const data = await apiFetch('monitor', params);
     renderMonitor(data);
+    updateMonitorToolbar();
   } catch (e) {
     const container = document.getElementById('monitor');
-    if (container) container.textContent = 'Keine Abfahrtsdaten verfugbar.';
+    if (container) container.textContent = 'Keine Abfahrtsdaten verfügbar.';
+    console.error(e);
+  }
+}
+
+function updateMonitorToolbar() {
+  const bar = document.getElementById('monitorToolbar');
+  if (!bar) return;
+
+  bar.replaceChildren();
+
+  if (!currentMonitor.diva) return;
+
+  if (currentMonitor.favId) {
+    const editBtn = document.createElement('a');
+    editBtn.href = 'editFavorite.php?favID=' + currentMonitor.favId;
+    editBtn.className = 'btn btn-sm btn-outline-secondary';
+    editBtn.appendChild(makeSvgIcon('pencil', 'me-1'));
+    editBtn.appendChild(document.createTextNode('Bearbeiten'));
+    bar.appendChild(editBtn);
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'btn btn-sm btn-outline-danger';
+    delBtn.appendChild(makeSvgIcon('trash', 'me-1'));
+    delBtn.appendChild(document.createTextNode('Löschen'));
+    delBtn.addEventListener('click', deleteFavoriteFromMonitor);
+    bar.appendChild(delBtn);
+  } else {
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-sm btn-outline-primary';
+    addBtn.appendChild(makeSvgIcon('star', 'me-1'));
+    addBtn.appendChild(document.createTextNode('Als Favorit speichern'));
+    addBtn.addEventListener('click', () => {
+      addModalDiva = null;
+      populateAddFavLines(null);
+      openModal('addFavModal');
+    });
+    bar.appendChild(addBtn);
+  }
+
+  // Wire add-fav submit button
+  const addSubmit = document.getElementById('addFavSubmit');
+  if (addSubmit) addSubmit.onclick = () => addFavoriteFromMonitor();
+}
+
+async function addFavoriteFromMonitor() {
+  const diva   = addModalDiva ?? currentMonitor.diva;
+  const title  = document.getElementById('addFavTitle')?.value.trim();
+  const bclass = document.getElementById('addFavColor')?.value || 'btn-outline-default';
+  if (!title || !diva) return;
+
+  // Collect checked lines, grouped by DIVA into new per-station format
+  const checked = [...document.querySelectorAll('#addFavLines input[type="checkbox"]:checked')];
+  let filterJson = null;
+  if (checked.length) {
+    const byDiva = {};
+    for (const cb of checked) {
+      const val = JSON.parse(cb.value);
+      if (!byDiva[val.diva]) byDiva[val.diva] = [];
+      byDiva[val.diva].push({ line: val.line, platform: val.platform });
+    }
+    filterJson = JSON.stringify(byDiva);
+  }
+
+  try {
+    const body = { title, diva, bclass, sort: 0 };
+    if (filterJson) body.filter_json = filterJson;
+    const res = await apiPost('favorites_add', body);
+    closeModal('addFavModal');
+    document.getElementById('addFavTitle').value = '';
+    addModalDiva = null;
+    // Only update toolbar state if the saved DIVA matches the current monitor
+    if (diva === currentMonitor.diva) {
+      currentMonitor.favId = res.id;
+      currentMonitor.fav   = { id: res.id, title, diva, bclass, sort: 0, filter: filterJson ? JSON.parse(filterJson) : null };
+      updateMonitorToolbar();
+    }
+    await loadFavorites();
+    sendAlert('Favorit gespeichert.', 'success');
+  } catch (e) {
+    sendAlert('Favorit konnte nicht gespeichert werden.', 'danger');
+    console.error(e);
+  }
+}
+
+/**
+ * Populate the line-filter checkboxes in the add-favourite modal.
+ * Renders a vertical list; disables the save button until at least one is checked.
+ *
+ * @param {string|null} filterByDiva  If set, show only lines for this DIVA.
+ *                                    If null, show all lines from the current monitor.
+ */
+function populateAddFavLines(filterByDiva) {
+  const section   = document.getElementById('addFavLinesSection');
+  const container = document.getElementById('addFavLines');
+  const saveBtn   = document.getElementById('addFavSubmit');
+  if (!section || !container) return;
+  container.replaceChildren();
+
+  const lines = filterByDiva
+    ? currentMonitorLines.filter(l => l.diva === filterByDiva)
+    : currentMonitorLines;
+
+  // Deduplicate by line + platform
+  const seen   = new Set();
+  const unique = [];
+  for (const l of lines) {
+    const key = l.line + '|' + l.platform;
+    if (!seen.has(key)) { seen.add(key); unique.push(l); }
+  }
+
+  if (!unique.length) {
+    section.style.display = 'none';
+    if (saveBtn) saveBtn.disabled = false;
+    return;
+  }
+  section.style.display = '';
+  if (saveBtn) saveBtn.disabled = true; // require at least one selection
+
+  function syncSaveBtn() {
+    if (!saveBtn) return;
+    saveBtn.disabled = !container.querySelector('input[type="checkbox"]:checked');
+  }
+
+  for (const l of unique) {
+    const label = document.createElement('label');
+    label.className = 'd-flex align-items-center gap-2 px-2 py-1 rounded';
+    label.style.cssText = 'cursor:pointer;font-size:.85rem;border:1px solid var(--color-border)';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'form-check-input mt-0 flex-shrink-0';
+    cb.value = JSON.stringify({ diva: l.diva, line: l.line, platform: l.platform });
+    cb.addEventListener('change', syncSaveBtn);
+
+    // Line name — bold, fixed width
+    const lineName = document.createElement('span');
+    lineName.style.cssText = 'font-weight:700;min-width:2.5em;flex-shrink:0';
+    lineName.textContent = l.line;
+
+    // Platform + direction arrow
+    const plat = document.createElement('span');
+    plat.style.cssText = 'color:var(--color-muted);flex-shrink:0;min-width:1.5em';
+    const dirStr = l.direction === 'H' ? '→' : l.direction === 'R' ? '←' : '';
+    plat.textContent = l.platform + (dirStr ? '\u00a0' + dirStr : '');
+
+    // Destination — truncated
+    const dest = document.createElement('span');
+    dest.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--color-muted)';
+    dest.textContent = l.towards ?? '';
+
+    label.append(cb, lineName, plat, dest);
+    container.appendChild(label);
+  }
+}
+
+async function deleteFavoriteFromMonitor() {
+  if (!currentMonitor.favId) return;
+  if (!confirm('Favorit "' + (currentMonitor.fav?.title ?? '') + '" wirklich löschen?')) return;
+  try {
+    await apiPost('favorites_delete', { id: currentMonitor.favId });
+    currentMonitor.favId = null;
+    currentMonitor.fav = null;
+    updateMonitorToolbar();
+    await loadFavorites();
+    sendAlert('Favorit gelöscht.', 'success');
+  } catch (e) {
+    sendAlert('Favorit konnte nicht gelöscht werden.', 'danger');
     console.error(e);
   }
 }
@@ -68,27 +249,64 @@ function renderMonitor(data) {
   const container = document.getElementById('monitor');
   if (!container) return;
   container.replaceChildren();
+  currentMonitorLines = []; // reset for add-modal checkbox population
 
+  const activeFilter = currentMonitor.fav?.filter ?? null; // {diva: [{line,platform}]} or null
   const { trains, update_at, api_ping, ...stations } = data;
 
   for (const [, s] of Object.entries(stations)) {
     if (typeof s !== 'object' || !Array.isArray(s.lines)) continue;
 
+    // Collect all lines before filtering (for add-modal checkboxes)
+    for (const line of s.lines) {
+      currentMonitorLines.push({ diva: s.diva, line: line.name, platform: line.platform, direction: line.direction, towards: line.towards });
+    }
+
+    // Apply per-station line filter when active
+    const stationFilter = activeFilter?.[s.diva] ?? null;
+    const visibleLines = stationFilter
+      ? s.lines.filter(l => stationFilter.some(f => f.line === l.name && String(f.platform) === String(l.platform)))
+      : s.lines;
+
+    // Skip unfiltered cards with no lines; keep filtered cards even if empty (line may be out of service)
+    if (!visibleLines.length && stationFilter === null) continue;
+
     const card = document.createElement('div');
     card.className = 'card mb-2';
 
     const header = document.createElement('div');
-    header.className = 'card-header py-1';
-    header.textContent = s.station_name;
+    header.className = 'card-header py-1 d-flex align-items-center';
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'flex-grow-1 text-truncate';
+    nameSpan.textContent = s.station_name;
+    header.appendChild(nameSpan);
+
+    if (window.wlConfig?.loggedIn && s.diva) {
+      const plusBtn = document.createElement('button');
+      plusBtn.type = 'button';
+      plusBtn.className = 'btn-add-steig btn btn-sm py-0 px-1 ms-1';
+      plusBtn.title = 'Als Favorit speichern';
+      plusBtn.appendChild(makeSvgIcon('plus'));
+      const steigDiva = s.diva;
+      plusBtn.addEventListener('click', () => {
+        addModalDiva = steigDiva;
+        document.getElementById('addFavTitle').value = s.station_name;
+        populateAddFavLines(steigDiva);
+        openModal('addFavModal');
+      });
+      header.appendChild(plusBtn);
+    }
+
     card.appendChild(header);
 
     const table = document.createElement('table');
     table.className = 'table table-sm departure-table mb-0';
 
-    // Group lines by name, preserving order of first appearance.
+    // Group visible lines by name, preserving order of first appearance.
     // Within each group: H (outgoing) first, R (incoming) second.
     const groups = new Map();
-    for (const line of s.lines) {
+    for (const line of visibleLines) {
       if (!groups.has(line.name)) groups.set(line.name, { H: null, R: null });
       const g = groups.get(line.name);
       if (line.direction === 'R') { g.R = line; } else { g.H = line; }
@@ -123,14 +341,32 @@ function renderMonitor(data) {
       table.appendChild(tbody);
     }
 
+    if (visibleLines.length === 0 && stationFilter !== null) {
+      const tbody = document.createElement('tbody');
+      const tr = tbody.insertRow();
+      const td = tr.insertCell();
+      td.colSpan = 4;
+      td.className = 'text-center text-muted py-2 small';
+      td.textContent = 'Keine aktuellen Abfahrten';
+      table.appendChild(tbody);
+    }
+
     card.appendChild(table);
-
-    const footer = document.createElement('div');
-    footer.className = 'card-footer text-muted small py-1';
-    footer.textContent = 'Aktualisiert: ' + update_at;
-    card.appendChild(footer);
-
     container.appendChild(card);
+  }
+
+  if (update_at) {
+    const t = document.createElement('p');
+    t.id = 'monitorUpdateTime';
+    t.textContent = 'Aktualisiert: ' + update_at;
+    container.appendChild(t);
+  }
+
+  if (window.wlConfig?.loggedIn) {
+    const bar = document.createElement('div');
+    bar.id = 'monitorToolbar';
+    bar.className = 'd-flex gap-2 mt-2 justify-content-end';
+    container.appendChild(bar);
   }
 }
 
@@ -195,7 +431,7 @@ function createLineBadge(line) {
 
 function startMonitorTimer() {
   if (monitorTimer) clearInterval(monitorTimer);
-  monitorTimer = setInterval(() => loadMonitor(), 20000);
+  monitorTimer = setInterval(() => loadMonitor(currentMonitor.diva, currentMonitor.fav), 20000);
 }
 
 // --- Favorites ---------------------------------------------------------------
@@ -203,8 +439,10 @@ async function loadFavorites() {
   try {
     const favs = await apiFetch('favorites');
     renderFavorites(favs);
+    return favs;
   } catch (e) {
     console.error('Could not load favorites:', e);
+    return [];
   }
 }
 
@@ -215,28 +453,31 @@ function renderFavorites(favs) {
   for (const fav of favs) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'btn ' + fav.bclass + ' d-block w-100 mb-1';
+    btn.className = 'btn ' + fav.bclass + ' d-block w-100 mb-1 text-start';
     btn.id = 'btnFav-' + fav.id;
     btn.dataset.diva = fav.diva;
-    btn.dataset.sort = fav.sort;
-    btn.textContent = fav.title;
+
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'd-block';
+    titleSpan.textContent = fav.title;
+    btn.appendChild(titleSpan);
+
+    if (fav.filter && typeof fav.filter === 'object') {
+      const allEntries = Object.values(fav.filter).flat();
+      if (allEntries.length) {
+        const sub = document.createElement('span');
+        sub.className = 'd-block';
+        sub.style.cssText = 'font-size:.7em;opacity:.75;font-weight:400';
+        sub.textContent = allEntries.map(f => f.line + '\u00a0' + f.platform).join(' · ');
+        btn.appendChild(sub);
+      }
+    }
+
     btn.addEventListener('click', () => {
-      loadMonitor(fav.diva);
+      loadMonitor(fav.diva, fav);
       startMonitorTimer();
     });
-
-    const editBtn = document.createElement('a');
-    editBtn.href = 'editFavorite.php?favID=' + fav.id;
-    editBtn.className = 'btn btn-sm btn-outline-secondary ms-1';
-    editBtn.title = 'Bearbeiten';
-    editBtn.appendChild(makeSvgIcon('save'));
-
-    const wrap = document.createElement('div');
-    wrap.className = 'd-flex mb-1';
-    btn.className = 'btn ' + fav.bclass + ' flex-grow-1';
-    wrap.appendChild(btn);
-    wrap.appendChild(editBtn);
-    container.appendChild(wrap);
+    container.appendChild(btn);
   }
 }
 
