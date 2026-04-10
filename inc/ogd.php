@@ -177,23 +177,8 @@ function ogd_update(mysqli $con): array {
             throw new RuntimeException('ogd_stations view failed: ' . $con->error);
         }
 
-        $con->query('DROP VIEW IF EXISTS ogd_diva');
-        $con->query("CREATE SQL SECURITY INVOKER VIEW ogd_diva AS
-            SELECT s.RBL AS rbl, h.NAME AS station,
-                GROUP_CONCAT(DISTINCT l.BEZEICHNUNG ORDER BY l.BEZEICHNUNG ASC SEPARATOR ',') AS `lines`,
-                s.STEIG_WGS84_LAT AS LAT, s.STEIG_WGS84_LON AS LON
-            FROM ogd_steige s
-            JOIN ogd_linien l ON s.FK_LINIEN_ID = l.LINIEN_ID
-            JOIN ogd_haltestellen h ON s.FK_HALTESTELLEN_ID = h.HALTESTELLEN_ID
-            WHERE s.RBL IS NOT NULL AND s.RBL <> ''
-            GROUP BY s.RBL");
-        if ($con->error) {
-            throw new RuntimeException('ogd_diva view failed: ' . $con->error);
-        }
-
         $nStations = (int) $con->query('SELECT COUNT(*) AS n FROM ogd_stations')->fetch_assoc()['n'];
-        $nDiva     = (int) $con->query('SELECT COUNT(*) AS n FROM ogd_diva')->fetch_assoc()['n'];
-        $out("Views recreated: ogd_stations=$nStations, ogd_diva=$nDiva");
+        $out("View recreated: ogd_stations=$nStations");
         $out('Done.');
 
         return ['ok' => true, 'log' => $log, 'error' => null];

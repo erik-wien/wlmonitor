@@ -13,8 +13,7 @@
  * - DIVA  (ogd_haltestellen.DIVA)  : station-level 8-digit identifier.
  *                                     This is what the WL Realtime API accepts.
  * - RBL   (ogd_steige.RBL)         : stop-level 4-digit identifier (one per
- *                                     direction/platform).  Used in older data
- *                                     formats; exposed via the ogd_diva view.
+ *                                     direction/platform).  Not used by the app.
  */
 
 /**
