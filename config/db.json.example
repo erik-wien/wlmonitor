@@ -1,21 +1,29 @@
 {
-  "local": {
+  "dev": {
     "host": "localhost",
-    "user": "root",
-    "pass": "",
+    "user": "your_db_user",
+    "pass": "your_db_pass",
     "name": "wlmonitor_dev",
     "auth_name": "jardyx_auth",
     "base_url": "http://localhost/wlmonitor.test"
   },
-  "production": {
+  "prod": {
     "host": "localhost",
-    "user": "root",
-    "pass": "",
+    "user": "your_db_user",
+    "pass": "your_db_pass",
     "name": "wlmonitor",
     "auth_name": "jardyx_auth",
     "base_url": "http://localhost/wlmonitor"
   },
-  "smtp_local": {
+  "world4you": {
+    "host": "mysqlsvr.world4you.com",
+    "user": "your_db_user",
+    "pass": "your_db_pass",
+    "name": "your_db_name",
+    "auth_name": "jardyx_auth",
+    "base_url": "https://www.jardyx.com/wl-monitor"
+  },
+  "smtp_dev": {
     "host": "smtp.example.com",
     "port": 587,
     "user": "your_smtp_user",
@@ -23,7 +31,15 @@
     "from": "noreply@example.com",
     "from_name": "WL Monitor"
   },
-  "smtp_production": {
+  "smtp_prod": {
+    "host": "smtp.example.com",
+    "port": 587,
+    "user": "your_smtp_user",
+    "pass": "your_smtp_pass",
+    "from": "noreply@example.com",
+    "from_name": "WL Monitor"
+  },
+  "smtp_world4you": {
     "host": "smtp.example.com",
     "port": 587,
     "user": "your_smtp_user",

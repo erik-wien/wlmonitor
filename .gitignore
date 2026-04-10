@@ -1,7 +1,12 @@
+backups/
 config/db.json
 data/ratelimit.json
+deprecated/
+docs/superpowers
+web/Archiv/
+app.prod
+app.world4you
 vendor/
-backups/
 .DS_Store
 **/.DS_Store
 .phpunit.result.cache

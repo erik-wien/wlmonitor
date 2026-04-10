@@ -18,8 +18,9 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 $_dbConfigFile = __DIR__ . '/../config/db.json';
 $_dbConfig     = json_decode(file_get_contents($_dbConfigFile), true);
-$_dbEnv        = getenv('APP_ENV') ?: 'local';
-$_db           = $_dbConfig[$_dbEnv] ?? $_dbConfig['local'];
+$_dbEnv        = file_exists(__DIR__ . '/../app.world4you') ? 'world4you'
+               : (file_exists(__DIR__ . '/../app.prod') ? 'prod' : 'dev');
+$_db           = $_dbConfig[$_dbEnv] ?? $_dbConfig['dev'];
 
 define('SCRIPT_PATH',    '/home/.sites/765/site679/web/jardyx.com/wlmonitor/');
 define('CURRENT_PATH',   __FILE__);
@@ -27,7 +28,7 @@ define('AVATAR_DIR',     'img/user/');
 define('APIKEY',         'tVqqssNTeDyFb35');
 define('MAX_DEPARTURES', 2);
 define('APP_VERSION',    '3.0');
-define('APP_BUILD',      19);
+define('APP_BUILD',      20);
 
 define('DATABASE_HOST',     $_db['host']);
 define('DATABASE_USER',     $_db['user']);
@@ -39,7 +40,7 @@ define('APP_BASE_URL',      rtrim($_db['base_url'] ?? '', '/'));
 /** Prefix for all cross-DB auth table references (e.g. 'jardyx_auth.'). */
 define('AUTH_DB_PREFIX', AUTH_DATABASE_NAME . '.');
 
-$_smtp = $_dbConfig['smtp_' . $_dbEnv] ?? $_dbConfig['smtp_local'];
+$_smtp = $_dbConfig['smtp_' . $_dbEnv] ?? $_dbConfig['smtp_dev'];
 define('SMTP_HOST',      $_smtp['host']);
 define('SMTP_PORT',      (int) $_smtp['port']);
 define('SMTP_USER',      $_smtp['user']);
