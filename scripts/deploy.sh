@@ -64,6 +64,7 @@ fi
 #   img/       — top-level img/ (assets are under web/img/)
 #   *.md, CLAUDE.md — documentation
 #   phpunit.xml, composer.{json,lock} — build tooling
+#   app.dev    — dev sentinel; destination gets app.prod instead
 
 RSYNC_OPTS=(
     --archive
@@ -87,6 +88,8 @@ RSYNC_OPTS=(
     --exclude="/img/"
     --exclude="config/"
     --exclude="data/"
+    --exclude="app.dev"
+    --exclude="app.prod"
 )
 
 # ── Local deploy ─────────────────────────────────────────────────────────────
@@ -99,12 +102,20 @@ if [[ "$MODE" == "local" ]]; then
     # Ensure runtime directories exist (rsync won't create excluded dirs)
     mkdir -p "$LOCAL_DEST/data"
 
-    # Write the local-production db.json (wlmonitor DB, local credentials).
-    # This is distinct from the repo's db.json which points to wlmonitor_dev.
+    # Write the prod db.json (wlmonitor DB, local Apache credentials).
+    # Keys match initialize.php: dev / prod / smtp_dev / smtp_prod.
     mkdir -p "$LOCAL_DEST/config"
     cat > "$LOCAL_DEST/config/db.json" << 'DBJSON'
 {
-  "local": {
+  "dev": {
+    "host": "localhost",
+    "user": "wlmonitor",
+    "pass": "sopdi9-nyKnyb-zyqpyh",
+    "name": "wlmonitor_dev",
+    "auth_name": "jardyx_auth",
+    "base_url": "http://localhost/wlmonitor.test"
+  },
+  "prod": {
     "host": "localhost",
     "user": "wlmonitor",
     "pass": "sopdi9-nyKnyb-zyqpyh",
@@ -112,7 +123,7 @@ if [[ "$MODE" == "local" ]]; then
     "auth_name": "jardyx_auth",
     "base_url": "http://localhost/wlmonitor"
   },
-  "production": {
+  "world4you": {
     "host": "mysqlsvr78.world4you.com",
     "user": "sql6675098",
     "pass": "dr@3ysr",
@@ -120,7 +131,7 @@ if [[ "$MODE" == "local" ]]; then
     "auth_name": "jardyx_auth",
     "base_url": "https://www.jardyx.com/wl-monitor"
   },
-  "smtp_local": {
+  "smtp_dev": {
     "host": "smtp.world4you.com",
     "port": 587,
     "user": "catchall@jardyx.com",
@@ -128,7 +139,15 @@ if [[ "$MODE" == "local" ]]; then
     "from": "wlmonitor@jardyx.com",
     "from_name": "WL Monitor"
   },
-  "smtp_production": {
+  "smtp_prod": {
+    "host": "smtp.world4you.com",
+    "port": 587,
+    "user": "catchall@jardyx.com",
+    "pass": "rtuk4cy5gu",
+    "from": "wlmonitor@jardyx.com",
+    "from_name": "WL Monitor"
+  },
+  "smtp_world4you": {
     "host": "smtp.world4you.com",
     "port": 587,
     "user": "catchall@jardyx.com",
@@ -138,18 +157,16 @@ if [[ "$MODE" == "local" ]]; then
   }
 }
 DBJSON
-    ok "  config/db.json written (wlmonitor DB)"
+    ok "  config/db.json written"
 
-    # For local, APP_ENV defaults to 'local' in initialize.php (no .htaccess needed).
-    # Remove a stale production .htaccess if present.
-    if [[ -f "$LOCAL_DEST/web/.htaccess" ]]; then
-        rm "$LOCAL_DEST/web/.htaccess"
-    fi
+    # Drop app.prod sentinel so initialize.php selects the prod config block.
+    touch "$LOCAL_DEST/app.prod"
+    ok "  app.prod written"
 
     echo
     ok "Local deploy complete."
-    info "  Target:   $LOCAL_DEST"
-    info "  APP_ENV:  local (default — no .htaccess written)"
+    info "  Target:  $LOCAL_DEST"
+    info "  Env:     prod (app.prod sentinel present)"
 
 # ── Production deploy ─────────────────────────────────────────────────────────
 
@@ -165,10 +182,9 @@ elif [[ "$MODE" == "production" ]]; then
         "$REPO_DIR/" \
         "${PROD_SSH_USER}@${PROD_SSH_HOST}:${PROD_REMOTE_PATH}"
 
-    # Write .htaccess on the remote to set APP_ENV=production.
-    # Requires AllowOverride All (or at least FileInfo) in the vhost config.
+    # Drop app.world4you sentinel on the remote so initialize.php selects world4you config.
     ssh "${PROD_SSH_USER}@${PROD_SSH_HOST}" \
-        "printf 'SetEnv APP_ENV production\n' > '${PROD_REMOTE_PATH}web/.htaccess'"
+        "touch '${PROD_REMOTE_PATH}app.world4you'"
 
     # Ensure runtime directories exist on remote
     ssh "${PROD_SSH_USER}@${PROD_SSH_HOST}" \
@@ -176,8 +192,8 @@ elif [[ "$MODE" == "production" ]]; then
 
     echo
     ok "Production deploy complete."
-    info "  Target:   ${PROD_SSH_USER}@${PROD_SSH_HOST}:${PROD_REMOTE_PATH}"
-    info "  APP_ENV:  production (written to web/.htaccess)"
+    info "  Target:  ${PROD_SSH_USER}@${PROD_SSH_HOST}:${PROD_REMOTE_PATH}"
+    info "  Env:     world4you (app.world4you sentinel written)"
     info
     info "  Reminder: run the DB migration if this is a first deploy:"
     info "    php ${PROD_REMOTE_PATH}scripts/migrate_diva.php"
