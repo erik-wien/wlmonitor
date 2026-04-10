@@ -13,8 +13,9 @@ $root = dirname(__DIR__);
 // ── Detect environment (same logic as inc/initialize.php) ─────────────────────
 
 $cfg = json_decode(file_get_contents($root . '/config/db.json'), true);
-$env = file_exists($root . '/app.world4you') ? 'world4you'
-     : (file_exists($root . '/app.prod')     ? 'prod' : 'dev');
+$env = $argv[1]
+     ?? (file_exists($root . '/app.world4you') ? 'world4you'
+     :  (file_exists($root . '/app.prod')      ? 'prod' : 'dev'));
 $db  = $cfg[$env] ?? $cfg['dev'];
 
 echo "Environment : $env\n";
