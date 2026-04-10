@@ -20,6 +20,7 @@ $_dbConfigFile = __DIR__ . '/../config/db.json';
 $_dbConfig     = json_decode(file_get_contents($_dbConfigFile), true);
 $_dbEnv        = file_exists(__DIR__ . '/../app.world4you') ? 'world4you'
                : (file_exists(__DIR__ . '/../app.prod') ? 'prod' : 'dev');
+define('APP_ENV', $_dbEnv);
 $_db           = $_dbConfig[$_dbEnv] ?? $_dbConfig['dev'];
 
 define('SCRIPT_PATH',    '/home/.sites/765/site679/web/jardyx.com/wlmonitor/');
@@ -28,7 +29,7 @@ define('AVATAR_DIR',     'img/user/');
 define('APIKEY',         'tVqqssNTeDyFb35');
 define('MAX_DEPARTURES', 2);
 define('APP_VERSION',    '3.0');
-define('APP_BUILD',      20);
+define('APP_BUILD',      21);
 
 define('DATABASE_HOST',     $_db['host']);
 define('DATABASE_USER',     $_db['user']);
