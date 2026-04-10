@@ -40,7 +40,7 @@ $_ftLoggedIn = !empty($_SESSION['loggedin']);
 
     <small class="text-muted">&copy; 2026 Erik R. Huemer</small>
 
-    <small class="text-muted">v<?= APP_VERSION ?>.<?= APP_BUILD ?></small>
+    <small class="text-muted">v<?= APP_VERSION ?>.<?= APP_BUILD ?> · <?= APP_ENV ?></small>
 
   </div>
 </footer>
