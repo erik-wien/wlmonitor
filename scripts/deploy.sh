@@ -163,6 +163,11 @@ DBJSON
     touch "$LOCAL_DEST/app.prod"
     ok "  app.prod written"
 
+    # Run pending DB migrations
+    echo
+    info "Running migrations ..."
+    php "$LOCAL_DEST/scripts/migrate.php"
+
     echo
     ok "Local deploy complete."
     info "  Target:  $LOCAL_DEST"
@@ -189,6 +194,11 @@ elif [[ "$MODE" == "production" ]]; then
     # Ensure runtime directories exist on remote
     ssh "${PROD_SSH_USER}@${PROD_SSH_HOST}" \
         "mkdir -p '${PROD_REMOTE_PATH}data'"
+
+    # Run pending DB migrations on remote
+    echo
+    info "Running migrations ..."
+    ssh "${PROD_SSH_USER}@${PROD_SSH_HOST}" "php '${PROD_REMOTE_PATH}scripts/migrate.php'"
 
     echo
     ok "Production deploy complete."
