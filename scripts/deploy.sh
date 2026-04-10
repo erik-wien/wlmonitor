@@ -186,9 +186,6 @@ elif [[ "$MODE" == "world4you" ]]; then
     info "Uploading via FTP ..."
     php "$REPO_DIR/scripts/ftp_deploy.php" world4you
 
-    info "Running migrations on world4you DB ..."
-    php "$REPO_DIR/scripts/migrate.php" world4you
-
     echo
     ok "world4you deploy complete."
     info "  Env:  world4you (app.world4you sentinel uploaded)"
