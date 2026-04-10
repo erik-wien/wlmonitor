@@ -29,24 +29,26 @@ ask()   { printf '\033[0;33m%s\033[0m ' "$*"; }
 echo
 echo "  WL Monitor — Deploy"
 echo "  ─────────────────────────────────────────"
-echo "  l) Local test    →  $LOCAL_DEST"
+echo "  l) Local prod    →  $LOCAL_DEST"
+echo "  w) world4you     →  FTP (ftp.world4you.com)"
 if [[ -n "$PROD_SSH_USER" && -n "$PROD_SSH_HOST" ]]; then
-    echo "  p) Production    →  ${PROD_SSH_USER}@${PROD_SSH_HOST}:${PROD_REMOTE_PATH}"
+    echo "  p) SSH prod      →  ${PROD_SSH_USER}@${PROD_SSH_HOST}:${PROD_REMOTE_PATH}"
 else
-    echo "  p) Production    →  (configure PROD_SSH_USER / PROD_SSH_HOST first)"
+    echo "  p) SSH prod      →  (configure PROD_SSH_USER / PROD_SSH_HOST first)"
 fi
 echo
 
-ask "Choice [l/p]:"
+ask "Choice [l/w/p]:"
 read -r CHOICE
 
 case "$CHOICE" in
     l|L) MODE="local"      ;;
+    w|W) MODE="world4you"  ;;
     p|P) MODE="production" ;;
     *)   err "Unknown choice '${CHOICE}'. Aborted." ;;
 esac
 
-# ── Validate production config ────────────────────────────────────────────────
+# ── Validate config ───────────────────────────────────────────────────────────
 
 if [[ "$MODE" == "production" ]]; then
     [[ -z "$PROD_SSH_USER" ]] && err "PROD_SSH_USER is not set. Edit this script first."
@@ -173,7 +175,25 @@ DBJSON
     info "  Target:  $LOCAL_DEST"
     info "  Env:     prod (app.prod sentinel present)"
 
-# ── Production deploy ─────────────────────────────────────────────────────────
+# ── world4you deploy (FTP) ───────────────────────────────────────────────────
+
+elif [[ "$MODE" == "world4you" ]]; then
+    echo
+    ask "Deploy to world4you via FTP? This is the live site. [yes/no]:"
+    read -r CONFIRM
+    [[ "$CONFIRM" != "yes" ]] && { info "Aborted."; exit 0; }
+
+    info "Uploading via FTP ..."
+    php "$REPO_DIR/scripts/ftp_deploy.php" world4you
+
+    info "Running migrations on world4you DB ..."
+    php "$REPO_DIR/scripts/migrate.php" world4you
+
+    echo
+    ok "world4you deploy complete."
+    info "  Env:  world4you (app.world4you sentinel uploaded)"
+
+# ── Production SSH deploy ─────────────────────────────────────────────────────
 
 elif [[ "$MODE" == "production" ]]; then
     echo
