@@ -20,7 +20,7 @@ $_isAdmin  = (($_SESSION['rights'] ?? '') === 'Admin');
 $_uid      = (int)($_SESSION['id'] ?? 0);
 ?>
 <!DOCTYPE html>
-<html lang="de" data-theme="<?= htmlspecialchars($_theme, ENT_QUOTES) ?>">
+<html lang="de"<?= $_theme !== 'auto' ? ' data-theme="' . htmlspecialchars($_theme, ENT_QUOTES) . '"' : '' ?>>
 <head>
   <title>Wiener Linien Abfahrtsmonitor</title>
   <meta charset="utf-8">
