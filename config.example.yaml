@@ -1,0 +1,23 @@
+# Config template — copy to config.yaml and fill in your values
+
+db:
+  host: localhost
+  name: wlmonitor
+  user: wlmonitor
+  password: your_password
+auth_db:
+  host: localhost
+  name: jardyx_auth
+  user: wlmonitor
+  password: your_password
+smtp:
+  host: smtp.world4you.com
+  port: 587
+  user: catchall@jardyx.com
+  password: your_password
+  from: wlmonitor@jardyx.com
+  from_name: WL Monitor
+slack:
+  bot_token: your_bot_token
+app:
+  base_url: http://localhost/wlmonitor.test
