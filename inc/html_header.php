@@ -84,8 +84,7 @@ unset($_spritePath);
         <button class="user-btn" type="button">
             <img src="avatar.php?id=<?= $_uid ?>" class="avatar" width="26" height="26" alt="">
             <span><?= $_username ?></span>
-            <svg class="chevron" viewBox="0 0 10 6" fill="none" stroke="currentColor"
-                 stroke-width="1.5" stroke-linecap="round"><path d="M1 1l4 4 4-4"/></svg>
+            <?= icon("chevron-down") ?>
         </button>
         <div class="user-dropdown">
             <span class="dropdown-username"><?= $_username ?></span>
@@ -135,7 +134,7 @@ unset($_spritePath);
             // Apply immediately
             if (theme === 'dark' || theme === 'light') {
                 document.documentElement.dataset.theme = theme;
-            } else {
+            } else if (theme === 'auto') {
                 delete document.documentElement.dataset.theme;
             }
             // Update active state
