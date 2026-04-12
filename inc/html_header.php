@@ -51,13 +51,13 @@ unset($_spritePath);
 ?>
 <header class="app-header">
     <a class="brand" href="index.php">
-        <img src="img/wl-logo.svg" class="header-logo" width="28" height="28" alt="">
+        <?= icon("subway", "brand-logo") ?>
         <span class="header-appname">WL Monitor</span>
     </a>
     <?php if ($show_search): ?>
     <div class="header-search" id="stationSearchWrap">
         <div class="search-row">
-            <input type="search" id="s" class="form-control"
+            <input type="search" id="s"
                    placeholder="Station suchen …" autocomplete="off">
             <button class="btn-icon" id="stationListToggle" type="button"
                     tabindex="-1" title="Alle Stationen">
