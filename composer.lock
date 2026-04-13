@@ -12,7 +12,7 @@
             "dist": {
                 "type": "path",
                 "url": "../auth",
-                "reference": "673601399b018105c966bfb3d97a7ce7a724e7ba"
+                "reference": "b88d4b70aa41daef223ac90f00ec829f2f7fb4a8"
             },
             "require": {
                 "php": ">=8.2",
@@ -28,6 +28,8 @@
                     "src/csrf.php",
                     "src/auth.php",
                     "src/mailer.php",
+                    "src/invite.php",
+                    "src/admin.php",
                     "src/bootstrap.php"
                 ]
             },
