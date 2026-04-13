@@ -10,7 +10,7 @@ header('Content-Type: text/html; charset=utf-8');
 
 $page   = max(1, (int) ($_GET['page'] ?? 1));
 $filter = htmlspecialchars($_GET['filter'] ?? '', ENT_QUOTES, 'UTF-8');
-$data   = admin_list_users($con, $page, 25, $filter);
+$data   = wl_admin_list_users($con, $page, 25, $filter);
 $users  = $data['users'];
 $total  = $data['total'];
 $pages  = (int) ceil($total / 25);
@@ -81,6 +81,12 @@ $csrfToken = csrf_token();
 </div>
 
 <div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <button class="btn btn-sm btn-success" data-modal-open="createModal">
+      <?= icon("user-plus", "me-1") ?> Benutzer anlegen
+    </button>
+  </div>
+
   <form class="d-flex gap-2 mb-3" method="get">
     <input type="text" name="filter" class="form-control form-control-sm w-auto"
            placeholder="Username suchen" value="<?= $filter ?>">
@@ -191,6 +197,44 @@ $csrfToken = csrf_token();
   </div>
 </div>
 
+<!-- Create User Modal -->
+<div class="modal fade" id="createModal" tabindex="-1" aria-labelledby="createModalLabel">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="createModalLabel">Benutzer anlegen</h5>
+        <button type="button" class="btn-close" data-modal-close></button>
+      </div>
+      <form id="createForm">
+        <div class="modal-body">
+          <input type="hidden" name="csrf_token"
+                 value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+          <div class="mb-2">
+            <label class="form-label" for="createUsername">Benutzername</label>
+            <input type="text" name="username" id="createUsername"
+                   class="form-control" required autocomplete="off">
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="createEmail">E-Mail</label>
+            <input type="email" name="email" id="createEmail" class="form-control" required>
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="createRights">Rechte</label>
+            <select name="rights" id="createRights" class="form-select">
+              <option value="User">User</option>
+              <option value="Admin">Admin</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-modal-close>Abbrechen</button>
+          <button type="submit" class="btn btn-success">Einladung senden</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script nonce="<?= $_cspNonce ?>">
 const CSRF = <?= json_encode($csrfToken) ?>;
 
@@ -244,14 +288,27 @@ document.getElementById('editForm').addEventListener('submit', async e => {
 
 document.querySelectorAll('.btn-reset').forEach(btn => {
   btn.addEventListener('click', async () => {
-    if (!confirm('Passwort fur Benutzer #' + btn.dataset.id + ' zurucksetzen?')) return;
+    if (!confirm('Passwort-Reset-E-Mail an Benutzer #' + btn.dataset.id + ' senden?')) return;
     const res = await adminPost('admin_user_reset', { id: btn.dataset.id });
-    if (res.password) {
-      showAlert('Neues Passwort: ' + res.password, 'warning');
+    if (res.ok) {
+      showAlert('E-Mail versandt.', 'success');
     } else {
-      showAlert('Fehler beim Zurucksetzen.', 'danger');
+      showAlert('Fehler beim Zurucksenden.', 'danger');
     }
   });
+});
+
+document.getElementById('createForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fd  = new FormData(e.target);
+  const res = await adminPost('admin_user_create', Object.fromEntries(fd));
+  if (res.ok) {
+    showAlert('Einladung versandt an ' + fd.get('email') + '.', 'success');
+    closeModal('createModal');
+    e.target.reset();
+  } else {
+    showAlert('Fehler: ' + (res.error ?? 'Unbekannt'), 'danger');
+  }
 });
 
 document.getElementById('btnOgdUpdate').addEventListener('click', async () => {
