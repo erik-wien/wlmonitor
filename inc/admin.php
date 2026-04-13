@@ -69,13 +69,16 @@ function wl_admin_edit_user(
 ): bool {
     $ok = admin_edit_user($con, $targetId, $email, $rights, $disabled, $debug);
 
-    $stmt = $con->prepare(
-        'INSERT INTO wl_preferences (user_id, departures) VALUES (?, ?)
-         ON DUPLICATE KEY UPDATE departures = VALUES(departures)'
-    );
-    $stmt->bind_param('ii', $targetId, $departures);
-    $stmt->execute();
-    $stmt->close();
+    if ($ok) {
+        $departures = max(1, min($departures, MAX_DEPARTURES));
+        $stmt       = $con->prepare(
+            'INSERT INTO wl_preferences (user_id, departures) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE departures = VALUES(departures)'
+        );
+        $stmt->bind_param('ii', $targetId, $departures);
+        $stmt->execute();
+        $stmt->close();
+    }
 
     return $ok;
 }
