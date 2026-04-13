@@ -36,10 +36,11 @@
  *
  * Admin only (Admin role + CSRF for writes):
  *   admin_ogd_update  POST  (CSRF)   Download & reload WL station data
- *   admin_users       GET  ?page&filter  Paginated user list
- *   admin_user_edit   POST  … (CSRF) Edit user account
- *   admin_user_reset  POST  id= (CSRF)  Reset password
- *   admin_user_delete POST  id= (CSRF)  Delete user
+ *   admin_users        GET  ?page&filter      Paginated user list
+ *   admin_user_create  POST  … (CSRF)        Create user + send invite email
+ *   admin_user_edit    POST  … (CSRF)        Edit user account
+ *   admin_user_reset   POST  id= (CSRF)      Send password reset invite email
+ *   admin_user_delete  POST  id= (CSRF)      Delete user
  */
 
 require_once(__DIR__ . '/../inc/initialize.php');
@@ -271,12 +272,12 @@ try {
             api_require_admin();
             $page   = max(1, (int) ($_GET['page'] ?? 1));
             $filter = $_GET['filter'] ?? '';
-            api_json(admin_list_users($con, $page, 25, $filter));
+            api_json(wl_admin_list_users($con, $page, 25, $filter));
 
         case 'admin_user_edit':
             api_require_admin();
             api_require_csrf();
-            $ok = admin_edit_user(
+            $ok = wl_admin_edit_user(
                 $con,
                 (int) ($_POST['id']         ?? 0),
                 $_POST['email']             ?? '',
@@ -290,8 +291,24 @@ try {
         case 'admin_user_reset':
             api_require_admin();
             api_require_csrf();
-            $newPass = admin_reset_password($con, (int) ($_POST['id'] ?? 0));
-            api_json(['password' => $newPass]);
+            $ok = admin_reset_password($con, (int) ($_POST['id'] ?? 0), APP_BASE_URL);
+            api_json(['ok' => $ok]);
+
+        case 'admin_user_create':
+            api_require_admin();
+            api_require_csrf();
+            $username = trim($_POST['username'] ?? '');
+            $email    = trim($_POST['email']    ?? '');
+            $rights   = $_POST['rights']        ?? 'User';
+            if ($username === '' || $email === '') {
+                api_json(['ok' => false, 'error' => 'Benutzername und E-Mail sind erforderlich.'], 400);
+            }
+            try {
+                admin_create_user($con, $username, $email, $rights, APP_BASE_URL);
+                api_json(['ok' => true]);
+            } catch (\mysqli_sql_exception $e) {
+                api_json(['ok' => false, 'error' => 'Benutzername oder E-Mail bereits vergeben.'], 409);
+            }
 
         case 'admin_user_delete':
             api_require_admin();
