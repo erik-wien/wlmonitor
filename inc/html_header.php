@@ -63,19 +63,19 @@ unset($_spritePath);
                     tabindex="-1" title="Alle Stationen">
                 <?= icon("chevron-down") ?>
             </button>
-        </div>
-        <div id="stationDropdown" class="station-dropdown" style="display:none;">
-            <div class="station-dropdown-header">
-                <div class="sort-btn-group">
-                    <input type="radio" name="stationSort" id="sortAlpha"
-                           value="alpha" autocomplete="off" checked>
-                    <label for="sortAlpha"><?= icon("sort-alpha") ?> A–Z</label>
-                    <input type="radio" name="stationSort" id="sortDist"
-                           value="dist" autocomplete="off">
-                    <label for="sortDist"><?= icon("map-marker") ?> Nähe</label>
+            <div id="stationDropdown" class="station-dropdown" style="display:none;">
+                <div class="station-dropdown-header">
+                    <div class="sort-btn-group">
+                        <input type="radio" name="stationSort" id="sortAlpha"
+                               value="alpha" autocomplete="off" checked>
+                        <label for="sortAlpha"><?= icon("sort-alpha") ?> A–Z</label>
+                        <input type="radio" name="stationSort" id="sortDist"
+                               value="dist" autocomplete="off">
+                        <label for="sortDist"><?= icon("map-marker") ?> Nähe</label>
+                    </div>
                 </div>
+                <ul id="stationList" style="list-style:none;padding:0;margin:0;"></ul>
             </div>
-            <ul id="stationList" style="list-style:none;padding:0;margin:0;"></ul>
         </div>
     </div>
     <?php endif; ?>

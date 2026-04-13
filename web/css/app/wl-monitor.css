@@ -120,6 +120,7 @@
   display: flex;
   gap: 4px;
   width: 100%;
+  position: relative;
 }
 .header-search #s {
   flex: 1;
