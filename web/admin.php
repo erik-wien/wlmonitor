@@ -276,6 +276,7 @@ document.querySelectorAll('.btn-edit').forEach(btn => {
 document.getElementById('editForm').addEventListener('submit', async e => {
   e.preventDefault();
   const fd  = new FormData(e.target);
+  fd.delete('csrf_token');
   const res = await adminPost('admin_user_edit', Object.fromEntries(fd));
   if (res.ok) {
     showAlert('Gespeichert.', 'success');
@@ -301,6 +302,7 @@ document.querySelectorAll('.btn-reset').forEach(btn => {
 document.getElementById('createForm').addEventListener('submit', async e => {
   e.preventDefault();
   const fd  = new FormData(e.target);
+  fd.delete('csrf_token');
   const res = await adminPost('admin_user_create', Object.fromEntries(fd));
   if (res.ok) {
     showAlert('Einladung versandt an ' + fd.get('email') + '.', 'success');
