@@ -299,7 +299,9 @@ try {
             api_require_csrf();
             $username = trim($_POST['username'] ?? '');
             $email    = trim($_POST['email']    ?? '');
-            $rights   = $_POST['rights']        ?? 'User';
+            $rights   = in_array($_POST['rights'] ?? '', ['Admin', 'User'], true)
+                        ? $_POST['rights']
+                        : 'User';
             if ($username === '' || $email === '') {
                 api_json(['ok' => false, 'error' => 'Benutzername und E-Mail sind erforderlich.'], 400);
             }
@@ -307,7 +309,10 @@ try {
                 admin_create_user($con, $username, $email, $rights, APP_BASE_URL);
                 api_json(['ok' => true]);
             } catch (\mysqli_sql_exception $e) {
-                api_json(['ok' => false, 'error' => 'Benutzername oder E-Mail bereits vergeben.'], 409);
+                if ($e->getCode() === 1062) {
+                    api_json(['ok' => false, 'error' => 'Benutzername oder E-Mail bereits vergeben.'], 409);
+                }
+                throw $e;
             }
 
         case 'admin_user_delete':
