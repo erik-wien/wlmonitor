@@ -186,6 +186,11 @@ $csrfToken = csrf_token();
                    id="editDebug" value="1">
             <label class="form-check-label" for="editDebug">Debug</label>
           </div>
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" name="totp_reset"
+                   id="editTotpReset" value="1">
+            <label class="form-check-label" for="editTotpReset">2FA zurücksetzen</label>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary"
@@ -293,6 +298,7 @@ document.querySelectorAll('.btn-edit').forEach(btn => {
     document.getElementById('editDisabled').checked  = btn.dataset.disabled === '1';
     document.getElementById('editDepartures').value  = btn.dataset.departures;
     document.getElementById('editDebug').checked     = btn.dataset.debug === '1';
+    document.getElementById('editTotpReset').checked = false;
   });
 });
 
