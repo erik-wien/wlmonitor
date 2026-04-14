@@ -31,10 +31,10 @@ $_uid      = (int)($_SESSION['id'] ?? 0);
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="WL Monitor">
   <meta name="theme-color" content="#000000">
-  <link rel="icon" type="image/x-icon" href="img/favicon.ico">
-  <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="img/favicon-16x16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="img/apple-touch-icon.png">
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="manifest" href="img/manifest.json">
   <link rel="stylesheet" href="css/shared/theme.css">
   <link rel="stylesheet" href="css/shared/reset.css">
@@ -51,7 +51,7 @@ unset($_spritePath);
 ?>
 <header class="app-header">
     <a class="brand" href="index.php">
-        <?= icon("subway", "brand-logo") ?>
+        <img src="assets/jardyx.svg" class="brand-logo" alt="">
         <span class="header-appname">WL Monitor</span>
     </a>
     <?php if ($show_search): ?>
@@ -82,14 +82,15 @@ unset($_spritePath);
     <?php if ($_loggedIn): ?>
     <div class="user-menu">
         <button class="user-btn" type="button">
-            <img src="avatar.php?id=<?= $_uid ?>" class="avatar" width="26" height="26" alt="">
             <span><?= $_username ?></span>
+            <img src="avatar.php?id=<?= $_uid ?>" class="avatar" width="26" height="26" alt="">
             <?= icon("chevron-down") ?>
         </button>
         <div class="user-dropdown">
             <span class="dropdown-username"><?= $_username ?></span>
             <div class="dropdown-divider"></div>
             <a href="preferences.php" class="dropdown-link-btn">Einstellungen</a>
+            <a href="security.php" class="dropdown-link-btn">Passwort &amp; 2FA</a>
             <?php if ($_isAdmin): ?>
             <a href="admin.php" class="dropdown-link-btn">Admin</a>
             <?php endif; ?>
