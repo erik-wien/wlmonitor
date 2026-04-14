@@ -13,6 +13,11 @@ if (!csrf_verify()) {
 
 $result = auth_login($con, $_POST['login-username'], $_POST['login-password']);
 
+if ($result['ok'] && !empty($result['totp_required'])) {
+    session_write_close();
+    header('Location: totp_verify.php'); exit;
+}
+
 if ($result['ok']) {
     // Load wlmonitor-specific preferences
     $pref = $con->prepare('SELECT departures FROM wl_preferences WHERE user_id = ?');
@@ -22,25 +27,28 @@ if ($result['ok']) {
     $pref->close();
     $_SESSION['departures'] = (int) ($prefRow['departures'] ?? MAX_DEPARTURES);
 
+    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+               || (int) ($_SERVER['SERVER_PORT'] ?? 80) === 443;
     if (!empty($_POST['rememberName'])) {
         setcookie('wlmonitor_username', $_POST['login-username'], [
             'expires'  => time() + 10 * 24 * 60 * 60,
             'path'     => '/',
             'httponly' => true,
-            'secure'   => true,
-            'samesite' => 'Strict',
+            'secure'   => $isHttps,
+            'samesite' => 'Lax',
         ]);
     } else {
         setcookie('wlmonitor_username', '', [
             'expires'  => time() - 3600,
             'path'     => '/',
             'httponly' => true,
-            'secure'   => true,
-            'samesite' => 'Strict',
+            'secure'   => $isHttps,
+            'samesite' => 'Lax',
         ]);
     }
     addAlert('info', 'Hallo ' . htmlspecialchars($result['username'], ENT_QUOTES, 'UTF-8') . '.');
-    header('Location: index.php'); exit;
+    session_write_close();
+    header('Location: ./'); exit;
 } else {
     addAlert('danger', $result['error']);
     header('Location: login.php'); exit;
