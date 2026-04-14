@@ -65,9 +65,10 @@ function wl_admin_edit_user(
     string $rights,
     int    $disabled,
     int    $departures,
-    int    $debug
+    int    $debug,
+    bool   $totp_reset = false
 ): bool {
-    $ok = admin_edit_user($con, $targetId, $email, $rights, $disabled, $debug);
+    $ok = admin_edit_user($con, $targetId, $email, $rights, $disabled, $debug, $totp_reset);
 
     if ($ok) {
         $departures = max(1, min($departures, MAX_DEPARTURES));

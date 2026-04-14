@@ -284,7 +284,8 @@ try {
                 $_POST['rights']            ?? 'User',
                 (int) ($_POST['disabled']   ?? 0),
                 (int) ($_POST['departures'] ?? MAX_DEPARTURES),
-                (int) ($_POST['debug']      ?? 0)
+                (int) ($_POST['debug']      ?? 0),
+                (bool) ($_POST['totp_reset'] ?? false)
             );
             api_json(['ok' => $ok]);
 
