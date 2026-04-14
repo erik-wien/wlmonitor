@@ -238,6 +238,29 @@ $csrfToken = csrf_token();
 <script nonce="<?= $_cspNonce ?>">
 const CSRF = <?= json_encode($csrfToken) ?>;
 
+function openModal(id) {
+  const m = document.getElementById(id);
+  if (m) m.classList.add('show');
+}
+function closeModal(id) {
+  const m = document.getElementById(id);
+  if (m) m.classList.remove('show');
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-modal-open]').forEach(btn =>
+    btn.addEventListener('click', () => openModal(btn.dataset.modalOpen))
+  );
+  document.querySelectorAll('[data-modal-close]').forEach(btn =>
+    btn.addEventListener('click', () => {
+      const m = btn.closest('.modal');
+      if (m) m.classList.remove('show');
+    })
+  );
+  document.querySelectorAll('.modal').forEach(m =>
+    m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); })
+  );
+});
+
 function showAlert(msg, type) {
   const container = document.getElementById('adminAlerts');
   const div = document.createElement('div');
