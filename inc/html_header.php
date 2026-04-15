@@ -50,69 +50,74 @@ if (file_exists($_spritePath)) { readfile($_spritePath); }
 unset($_spritePath);
 ?>
 <header class="app-header">
-    <a class="brand" href="index.php">
-        <img src="assets/jardyx.svg" class="brand-logo" alt="">
-        <span class="header-appname">WL Monitor</span>
-    </a>
-    <?php if ($show_search): ?>
-    <div class="header-search" id="stationSearchWrap">
-        <div class="search-row">
-            <input type="search" id="s"
-                   placeholder="Station suchen …" autocomplete="off">
-            <button class="btn-icon" id="stationListToggle" type="button"
-                    tabindex="-1" title="Alle Stationen">
+    <div class="header-left">
+        <a class="brand" href="index.php">
+            <img src="assets/jardyx.svg" class="brand-logo" alt="">
+            <span class="header-appname">WL Monitor</span>
+        </a>
+        <?php if ($show_search): ?>
+        <div class="header-search" id="stationSearchWrap">
+            <div class="search-row">
+                <input type="search" id="s"
+                       placeholder="Station suchen …" autocomplete="off">
+                <button class="btn-icon" id="stationListToggle" type="button"
+                        tabindex="-1" title="Alle Stationen">
+                    <?= icon("chevron-down") ?>
+                </button>
+                <div id="stationDropdown" class="station-dropdown" style="display:none;">
+                    <div class="station-dropdown-header">
+                        <div class="sort-btn-group">
+                            <input type="radio" name="stationSort" id="sortAlpha"
+                                   value="alpha" autocomplete="off" checked>
+                            <label for="sortAlpha"><?= icon("sort-alpha") ?> A–Z</label>
+                            <input type="radio" name="stationSort" id="sortDist"
+                                   value="dist" autocomplete="off">
+                            <label for="sortDist"><?= icon("map-marker") ?> Nähe</label>
+                        </div>
+                    </div>
+                    <ul id="stationList" style="list-style:none;padding:0;margin:0;"></ul>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+    </div>
+    <div class="header-right">
+        <?php if ($_loggedIn): ?>
+        <div class="user-menu">
+            <button class="user-btn" type="button">
+                <span><?= $_username ?></span>
+                <img src="avatar.php?id=<?= $_uid ?>" class="avatar" width="26" height="26" alt="">
                 <?= icon("chevron-down") ?>
             </button>
-            <div id="stationDropdown" class="station-dropdown" style="display:none;">
-                <div class="station-dropdown-header">
-                    <div class="sort-btn-group">
-                        <input type="radio" name="stationSort" id="sortAlpha"
-                               value="alpha" autocomplete="off" checked>
-                        <label for="sortAlpha"><?= icon("sort-alpha") ?> A–Z</label>
-                        <input type="radio" name="stationSort" id="sortDist"
-                               value="dist" autocomplete="off">
-                        <label for="sortDist"><?= icon("map-marker") ?> Nähe</label>
-                    </div>
+            <div class="user-dropdown">
+                <span class="dropdown-username"><?= $_username ?></span>
+                <div class="dropdown-divider"></div>
+                <a href="preferences.php" class="dropdown-link-btn">Einstellungen</a>
+                <a href="security.php" class="dropdown-link-btn">Passwort &amp; 2FA</a>
+                <a href="help.php" class="dropdown-link-btn">Hilfe</a>
+                <?php if ($_isAdmin): ?>
+                <a href="admin.php" class="dropdown-link-btn">Admin</a>
+                <?php endif; ?>
+                <div class="dropdown-divider"></div>
+                <div class="theme-row">
+                    <button class="theme-btn<?= $_theme === 'light' ? ' active' : '' ?>"
+                            data-theme="light" title="Hell">☀</button>
+                    <button class="theme-btn<?= $_theme === 'auto'  ? ' active' : '' ?>"
+                            data-theme="auto"  title="Auto">⬤</button>
+                    <button class="theme-btn<?= $_theme === 'dark'  ? ' active' : '' ?>"
+                            data-theme="dark"  title="Dunkel">🌙</button>
                 </div>
-                <ul id="stationList" style="list-style:none;padding:0;margin:0;"></ul>
+                <div class="dropdown-divider"></div>
+                <form method="post" action="logout.php" style="margin:0">
+                    <?= csrf_input() ?>
+                    <button type="submit" class="dropdown-link-btn">Abmelden</button>
+                </form>
             </div>
         </div>
+        <?php else: ?>
+        <a href="login.php" class="user-btn" style="text-decoration:none">Anmelden</a>
+        <?php endif; ?>
     </div>
-    <?php endif; ?>
-    <?php if ($_loggedIn): ?>
-    <div class="user-menu">
-        <button class="user-btn" type="button">
-            <span><?= $_username ?></span>
-            <img src="avatar.php?id=<?= $_uid ?>" class="avatar" width="26" height="26" alt="">
-            <?= icon("chevron-down") ?>
-        </button>
-        <div class="user-dropdown">
-            <span class="dropdown-username"><?= $_username ?></span>
-            <div class="dropdown-divider"></div>
-            <a href="preferences.php" class="dropdown-link-btn">Einstellungen</a>
-            <a href="security.php" class="dropdown-link-btn">Passwort &amp; 2FA</a>
-            <?php if ($_isAdmin): ?>
-            <a href="admin.php" class="dropdown-link-btn">Admin</a>
-            <?php endif; ?>
-            <div class="dropdown-divider"></div>
-            <div class="theme-row">
-                <button class="theme-btn<?= $_theme === 'light' ? ' active' : '' ?>"
-                        data-theme="light" title="Hell">☀</button>
-                <button class="theme-btn<?= $_theme === 'auto'  ? ' active' : '' ?>"
-                        data-theme="auto"  title="Auto">⬤</button>
-                <button class="theme-btn<?= $_theme === 'dark'  ? ' active' : '' ?>"
-                        data-theme="dark"  title="Dunkel">🌙</button>
-            </div>
-            <div class="dropdown-divider"></div>
-            <form method="post" action="logout.php" style="margin:0">
-                <?= csrf_input() ?>
-                <button type="submit" class="dropdown-link-btn">Abmelden</button>
-            </form>
-        </div>
-    </div>
-    <?php else: ?>
-    <a href="login.php" class="user-btn" style="text-decoration:none;margin-left:auto">Anmelden</a>
-    <?php endif; ?>
 </header>
 <?php if ($_loggedIn): ?>
 <script<?= $_csp ? ' nonce="' . htmlspecialchars($_csp, ENT_QUOTES) . '"' : '' ?>>
