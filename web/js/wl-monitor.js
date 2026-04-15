@@ -635,7 +635,14 @@ async function setTheme(t) {
     btn.classList.toggle('active', btn.dataset.themeBtn === t);
   });
   if (window.wlConfig?.loggedIn) {
-    try { await apiPost('theme_save', { theme: t }); } catch (e) { console.error(e); }
+    try {
+      const fd = new FormData();
+      fd.append('action', 'change_theme');
+      fd.append('theme', t);
+      const csrfInput = document.querySelector('input[name="csrf_token"]');
+      if (csrfInput) fd.append('csrf_token', csrfInput.value);
+      await fetch('preferences.php', { method: 'POST', body: fd });
+    } catch (e) { console.error(e); }
   }
 }
 
