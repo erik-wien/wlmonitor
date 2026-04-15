@@ -1,12 +1,17 @@
 # Config template — copy to config.yaml and fill in your values
 
+target: local
 db:
   host: localhost
   name: wlmonitor
   user: wlmonitor
   password: your_password
+deploy:
+  web_root: /Library/WebServer/Documents
+  dest: /Library/WebServer/Documents/wlmonitor
 auth_db:
   host: localhost
+  socket: /tmp/mysql.sock
   name: jardyx_auth
   user: wlmonitor
   password: your_password
