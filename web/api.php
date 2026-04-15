@@ -35,12 +35,14 @@
  *   log              GET  ?page&limit Activity log entries
  *
  * Admin only (Admin role + CSRF for writes):
- *   admin_ogd_update  POST  (CSRF)   Download & reload WL station data
- *   admin_users        GET  ?page&filter      Paginated user list
- *   admin_user_create  POST  … (CSRF)        Create user + send invite email
- *   admin_user_edit    POST  … (CSRF)        Edit user account
- *   admin_user_reset   POST  id= (CSRF)      Send password reset invite email
- *   admin_user_delete  POST  id= (CSRF)      Delete user
+ *   admin_ogd_update   POST  (CSRF)               Download & reload WL station data
+ *   admin_users         GET  ?page&filter         Paginated user list
+ *   admin_user_create  POST  … (CSRF)             Create user + send invite email
+ *   admin_user_edit    POST  … (CSRF)             Edit user account
+ *   admin_user_reset   POST  id= (CSRF)           Send password reset invite email
+ *   admin_user_delete  POST  id= (CSRF)           Delete user
+ *   admin_colors        GET                       List wl_colors rows
+ *   admin_color_edit   POST  color= farbe= (CSRF) Rename a color label
  */
 
 require_once(__DIR__ . '/../inc/initialize.php');
@@ -48,6 +50,7 @@ require_once(__DIR__ . '/../inc/monitor.php');
 require_once(__DIR__ . '/../inc/stations.php');
 require_once(__DIR__ . '/../inc/favorites.php');
 require_once(__DIR__ . '/../inc/admin.php');
+require_once(__DIR__ . '/../inc/colors.php');
 require_once(__DIR__ . '/../inc/ogd.php');
 
 header('Content-Type: application/json; charset=utf-8');
@@ -320,6 +323,23 @@ try {
             api_require_admin();
             api_require_csrf();
             $ok = admin_delete_user($con, (int) ($_POST['id'] ?? 0), (int) $_SESSION['id']);
+            api_json(['ok' => $ok]);
+
+        // ── Color labels (admin) ──────────────────────────────────────────────
+
+        case 'admin_colors':
+            api_require_admin();
+            api_json(['colors' => array_values(wl_colors_list($con))]);
+
+        case 'admin_color_edit':
+            api_require_admin();
+            api_require_csrf();
+            $color = $_POST['color'] ?? '';
+            $farbe = $_POST['farbe'] ?? '';
+            if ($color === '' || $farbe === '') {
+                api_json(['ok' => false, 'error' => 'color und farbe sind erforderlich.'], 400);
+            }
+            $ok = wl_color_edit($con, $color, $farbe);
             api_json(['ok' => $ok]);
 
         default:
