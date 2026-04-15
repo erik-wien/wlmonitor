@@ -33,6 +33,24 @@ There is no build system. The app runs directly on a PHP web host. All files in 
    - `?action=log` — paginated activity log
    - `?action=theme_save` / `position_save` — preference updates
 
+### User-facing settings pages
+
+Settings and account management are split across three pages, reached from the
+user-menu dropdown in `inc/html_header.php`:
+
+- **`preferences.php`** — display / app preferences only: avatar upload, theme
+  (light/dark/auto), number of departures per line, e-mail address. No password
+  handling lives here.
+- **`security.php`** — password change and TOTP 2FA setup. This is the single
+  canonical place for account-security actions; do not re-introduce password
+  forms into `preferences.php`.
+- **`help.php`** — public FAQ + privacy (Cookies & Datenschutz) page. Accessible
+  without login (the shared header renders "Anmelden" instead of the user menu
+  when anonymous). Linked from the user-menu dropdown as "Hilfe".
+
+The user-menu order in `inc/html_header.php` is: Einstellungen → Passwort & 2FA
+→ Hilfe → Admin (conditional) → theme row → Abmelden (POST+CSRF form).
+
 ### Station Identifiers
 
 The Wiener Linien API uses **DIVA numbers** to identify stations. DIVA is a station-level 8-digit identifier from `ogd_haltestellen.DIVA` (e.g. `60200103`). The `api.php?action=monitor` endpoint accepts comma-separated DIVA numbers. The `wl_favorites.diva` column stores these values.
