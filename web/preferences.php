@@ -5,10 +5,8 @@ if (empty($_SESSION['loggedin'])) {
     header('Location: login.php'); exit;
 }
 
-$userId    = (int) $_SESSION['id'];
-$uname     = htmlspecialchars($_SESSION['username'] ?? '', ENT_QUOTES, 'UTF-8');
-$theme     = htmlspecialchars($_SESSION['theme'] ?? ($_COOKIE['theme'] ?? 'auto'), ENT_QUOTES, 'UTF-8');
-$hasAvatar = !empty($_SESSION['has_avatar']);
+$userId     = (int) $_SESSION['id'];
+$theme      = htmlspecialchars($_SESSION['theme'] ?? ($_COOKIE['theme'] ?? 'auto'), ENT_QUOTES, 'UTF-8');
 $departures = (int) ($_SESSION['departures'] ?? MAX_DEPARTURES);
 
 // Reload email fresh from DB (avoids stale session value)
@@ -129,49 +127,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // ── Change password ───────────────────────────────────────────────────────
-    if ($action === 'change_password') {
-        $old  = $_POST['oldPassword']  ?? '';
-        $new1 = $_POST['newPassword1'] ?? '';
-        $new2 = $_POST['newPassword2'] ?? '';
-
-        if ($old === '' || $new1 === '' || $new2 === '') {
-            $errors['password'] = 'Bitte alle Felder ausfüllen.';
-        } elseif (strlen($new1) < 8) {
-            $errors['password'] = 'Das neue Kennwort muss mindestens 8 Zeichen lang sein.';
-        } elseif ($new1 !== $new2) {
-            $errors['password'] = 'Die neuen Kennwörter stimmen nicht überein.';
-        } else {
-            $stmt = $con->prepare('SELECT password FROM jardyx_auth.auth_accounts WHERE id = ?');
-            $stmt->bind_param('i', $userId);
-            $stmt->execute();
-            $row = $stmt->get_result()->fetch_assoc();
-            $stmt->close();
-
-            if (!$row || !password_verify($old, $row['password'])) {
-                $upd = $con->prepare(
-                    'UPDATE jardyx_auth.auth_accounts SET invalidLogins = invalidLogins + 1 WHERE id = ?'
-                );
-                $upd->bind_param('i', $userId);
-                $upd->execute();
-                $upd->close();
-                appendLog($con, 'npw', 'Failed: wrong old password for ' . ($_SESSION['username'] ?? ''), 'web');
-                $errors['password'] = 'Das alte Kennwort ist falsch.';
-            } else {
-                $hash = password_hash($new1, PASSWORD_BCRYPT, ['cost' => 13]);
-                $upd  = $con->prepare(
-                    'UPDATE jardyx_auth.auth_accounts SET password = ?, invalidLogins = 0 WHERE id = ?'
-                );
-                $upd->bind_param('si', $hash, $userId);
-                $upd->execute();
-                $upd->close();
-                appendLog($con, 'npw', 'Success: password changed for ' . ($_SESSION['username'] ?? ''), 'web');
-                addAlert('success', 'Kennwort erfolgreich geändert.');
-                header('Location: preferences.php'); exit;
-            }
-        }
-    }
-
     // ── Change theme ─────────────────────────────────────────────────────────
     if ($action === 'change_theme') {
         $t = $_POST['theme'] ?? '';
@@ -188,7 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'expires'  => time() + 60 * 60 * 24 * 365,
                 'path'     => '/',
                 'httponly' => false,
-                'samesite' => 'Strict',
+                'samesite' => 'Lax',
             ]);
             appendLog($con, 'prefs', 'Theme set to ' . $t, 'web');
             addAlert('success', 'Design gespeichert.');
@@ -218,10 +173,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Re-read flag after a potential upload in this request
-$hasAvatar  = !empty($_SESSION['has_avatar']);
-$departures = (int) ($_SESSION['departures'] ?? MAX_DEPARTURES);
-$avatarUrl  = 'avatar.php?id=' . $userId;
+$avatarUrl = 'avatar.php?id=' . $userId;
 ?>
 <?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
 <script nonce="<?= $_cspNonce ?>">
@@ -230,23 +182,6 @@ $avatarUrl  = 'avatar.php?id=' . $userId;
   if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
 })();
 </script>
-
-<nav class="navbar" id="mainNav">
-  <div class="container-fluid">
-    <a class="navbar-brand fw-semibold" href="index.php">
-      <?= icon("subway", "me-1") ?> WL Monitor
-    </a>
-    <div class="navbar-nav ms-auto align-items-center gap-2">
-      <span class="nav-link d-flex align-items-center gap-2">
-        <img src="<?= $avatarUrl ?>" class="nav-avatar" alt="">
-        <?= $uname ?>
-      </span>
-      <a class="nav-link" href="index.php" title="Zurück zur Übersicht">
-        <?= icon("arrow-left") ?>
-      </a>
-    </div>
-  </div>
-</nav>
 
 <div class="container-md mt-4">
   <h4 class="mb-4"><?= icon("user-cog", "me-2") ?>Einstellungen</h4>
@@ -387,43 +322,6 @@ $avatarUrl  = 'avatar.php?id=' . $userId;
         </div>
         <button type="submit" class="btn btn-primary">
           <?= icon("paper-plane", "me-1") ?> Bestätigungslink senden
-        </button>
-      </form>
-    </div>
-  </div>
-
-  <!-- ── Kennwort ────────────────────────────────────────────────────────── -->
-  <div class="card mb-4">
-    <div class="card-header"><?= icon("key", "me-1") ?> Kennwort ändern</div>
-    <div class="card-body">
-      <?php if (!empty($errors['password'])): ?>
-        <div class="alert alert-danger py-2">
-          <?= htmlspecialchars($errors['password'], ENT_QUOTES, 'UTF-8') ?>
-        </div>
-      <?php endif; ?>
-
-      <form method="post" action="preferences.php">
-        <?= csrf_input() ?>
-        <input type="hidden" name="action" value="change_password">
-        <div class="mb-3">
-          <label class="form-label" for="oldPassword">Altes Kennwort</label>
-          <input type="password" id="oldPassword" name="oldPassword"
-                 class="form-control" autocomplete="current-password" required>
-        </div>
-        <div class="mb-3">
-          <label class="form-label" for="newPassword1">Neues Kennwort</label>
-          <input type="password" id="newPassword1" name="newPassword1"
-                 class="form-control" autocomplete="new-password"
-                 minlength="8" required>
-        </div>
-        <div class="mb-3">
-          <label class="form-label" for="newPassword2">Neues Kennwort bestätigen</label>
-          <input type="password" id="newPassword2" name="newPassword2"
-                 class="form-control" autocomplete="new-password"
-                 minlength="8" required>
-        </div>
-        <button type="submit" class="btn btn-primary">
-          <?= icon("save", "me-1") ?> Speichern
         </button>
       </form>
     </div>
