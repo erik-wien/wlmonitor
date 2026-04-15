@@ -11,7 +11,7 @@ if ($token !== '') {
         'SELECT pr.id, pr.user_id, a.username
          FROM jardyx_auth.password_resets pr
          JOIN jardyx_auth.auth_accounts a ON a.id = pr.user_id
-         WHERE pr.token = ? AND pr.used = 0 AND pr.expires_at > NOW()'
+         WHERE pr.token = ? AND pr.used = 0 AND pr.expires_at > UTC_TIMESTAMP()'
     );
     $stmt->bind_param('s', $token);
     $stmt->execute();
