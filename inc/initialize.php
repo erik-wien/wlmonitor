@@ -13,15 +13,17 @@
  */
 
 require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/yaml.php';
 
 // ── Load config ───────────────────────────────────────────────────────────────
+//
+// config.yaml is generated per-target by mcp/generate.py and is the single
+// source of truth at runtime. To switch environments, regenerate with
+//   python3 ../mcp/generate.py --app wlmonitor --target <local|akadbrain|world4you>
 
-$_dbConfigFile = __DIR__ . '/../config/db.json';
-$_dbConfig     = json_decode(file_get_contents($_dbConfigFile), true);
-$_dbEnv        = file_exists(__DIR__ . '/../app.world4you') ? 'world4you'
-               : (file_exists(__DIR__ . '/../app.prod') ? 'prod' : 'dev');
-define('APP_ENV', $_dbEnv);
-$_db           = $_dbConfig[$_dbEnv] ?? $_dbConfig['dev'];
+$_cfg = wl_yaml_load(__DIR__ . '/../config.yaml');
+
+define('APP_ENV', $_cfg['target'] ?? 'local');
 
 define('SCRIPT_PATH',    '/home/.sites/765/site679/web/jardyx.com/wlmonitor/');
 define('CURRENT_PATH',   __FILE__);
@@ -29,27 +31,28 @@ define('AVATAR_DIR',     'img/user/');
 define('APIKEY',         'tVqqssNTeDyFb35');
 define('MAX_DEPARTURES', 2);
 define('APP_VERSION',    '3.0');
-define('APP_BUILD',      28);
+define('APP_BUILD',      31);
 
+$_db = $_cfg['db'];
 define('DATABASE_HOST',     $_db['host']);
 define('DATABASE_USER',     $_db['user']);
-define('DATABASE_PASS',     $_db['pass']);
+define('DATABASE_PASS',     $_db['password']);
 define('DATABASE_NAME',     $_db['name']);
-define('AUTH_DATABASE_NAME',$_db['auth_name'] ?? 'jardyx_auth');
-define('APP_BASE_URL',      rtrim($_db['base_url'] ?? '', '/'));
+define('AUTH_DATABASE_NAME',$_cfg['auth_db']['name'] ?? 'jardyx_auth');
+define('APP_BASE_URL',      rtrim($_cfg['app']['base_url'] ?? '', '/'));
 
 /** Prefix for all cross-DB auth table references (e.g. 'jardyx_auth.'). */
 define('AUTH_DB_PREFIX', AUTH_DATABASE_NAME . '.');
 
-$_smtp = $_dbConfig['smtp_' . $_dbEnv] ?? $_dbConfig['smtp_dev'];
+$_smtp = $_cfg['smtp'];
 define('SMTP_HOST',      $_smtp['host']);
 define('SMTP_PORT',      (int) $_smtp['port']);
 define('SMTP_USER',      $_smtp['user']);
-define('SMTP_PASS',      $_smtp['pass']);
+define('SMTP_PASS',      $_smtp['password']);
 define('SMTP_FROM',      $_smtp['from']);
 define('SMTP_FROM_NAME', $_smtp['from_name']);
 
-unset($_dbConfigFile, $_dbConfig, $_dbEnv, $_db, $_smtp);
+unset($_cfg, $_db, $_smtp);
 
 date_default_timezone_set('Europe/Vienna');
 

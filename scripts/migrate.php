@@ -9,14 +9,11 @@
  */
 
 $root = dirname(__DIR__);
+require_once $root . '/inc/yaml.php';
 
-// ── Detect environment (same logic as inc/initialize.php) ─────────────────────
-
-$cfg = json_decode(file_get_contents($root . '/config/db.json'), true);
-$env = $argv[1]
-     ?? (file_exists($root . '/app.world4you') ? 'world4you'
-     :  (file_exists($root . '/app.prod')      ? 'prod' : 'dev'));
-$db  = $cfg[$env] ?? $cfg['dev'];
+$cfg = wl_yaml_load($root . '/config.yaml');
+$env = $cfg['target'] ?? 'local';
+$db  = $cfg['db'];
 
 echo "Environment : $env\n";
 echo "Database    : {$db['name']} @ {$db['host']}\n\n";
@@ -24,7 +21,7 @@ echo "Database    : {$db['name']} @ {$db['host']}\n\n";
 // ── Connect ───────────────────────────────────────────────────────────────────
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
-$con = mysqli_connect($db['host'], $db['user'], $db['pass'], $db['name']);
+$con = mysqli_connect($db['host'], $db['user'], $db['password'], $db['name']);
 mysqli_set_charset($con, 'utf8');
 
 // ── Ensure tracking table exists ──────────────────────────────────────────────

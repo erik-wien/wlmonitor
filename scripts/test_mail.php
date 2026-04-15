@@ -13,15 +13,15 @@ if (!$to || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
 }
 
 require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../inc/yaml.php';
 
-$config = json_decode(file_get_contents(__DIR__ . '/../config/db.json'), true);
-$env    = getenv('APP_ENV') ?: 'local';
-$smtp   = $config['smtp_' . $env] ?? $config['smtp_local'];
+$cfg  = wl_yaml_load(__DIR__ . '/../config.yaml');
+$smtp = $cfg['smtp'];
 
 define('SMTP_HOST',      $smtp['host']);
 define('SMTP_PORT',      (int) $smtp['port']);
 define('SMTP_USER',      $smtp['user']);
-define('SMTP_PASS',      $smtp['pass']);
+define('SMTP_PASS',      $smtp['password']);
 define('SMTP_FROM',      $smtp['from']);
 define('SMTP_FROM_NAME', $smtp['from_name']);
 
