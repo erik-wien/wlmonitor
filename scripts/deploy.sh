@@ -10,6 +10,11 @@ set -euo pipefail
 
 LOCAL_DEST="/Library/WebServer/Documents/wlmonitor"
 
+AKADBRAIN_SSH_USER="erik"
+AKADBRAIN_SSH_HOST="akadbrain.local"
+AKADBRAIN_SSH_KEY="$HOME/.ssh/id_rsa"
+AKADBRAIN_REMOTE_PATH="/Library/WebServer/Documents/wlmonitor/"
+
 # Fill these in before using production deploy:
 PROD_SSH_USER=""          # e.g.  user12345
 PROD_SSH_HOST=""          # e.g.  ssh.jardyx.com  or  jardyx.com
@@ -30,6 +35,7 @@ echo
 echo "  WL Monitor — Deploy"
 echo "  ─────────────────────────────────────────"
 echo "  l) Local prod    →  $LOCAL_DEST"
+echo "  a) akadbrain     →  ${AKADBRAIN_SSH_USER}@${AKADBRAIN_SSH_HOST}:${AKADBRAIN_REMOTE_PATH}"
 echo "  w) world4you     →  FTP (ftp.world4you.com)"
 if [[ -n "$PROD_SSH_USER" && -n "$PROD_SSH_HOST" ]]; then
     echo "  p) SSH prod      →  ${PROD_SSH_USER}@${PROD_SSH_HOST}:${PROD_REMOTE_PATH}"
@@ -38,11 +44,12 @@ else
 fi
 echo
 
-ask "Choice [l/w/p]:"
+ask "Choice [l/a/w/p]:"
 read -r CHOICE
 
 case "$CHOICE" in
     l|L) MODE="local"      ;;
+    a|A) MODE="akadbrain"  ;;
     w|W) MODE="world4you"  ;;
     p|P) MODE="production" ;;
     *)   err "Unknown choice '${CHOICE}'. Aborted." ;;
@@ -174,6 +181,53 @@ DBJSON
     ok "Local deploy complete."
     info "  Target:  $LOCAL_DEST"
     info "  Env:     prod (app.prod sentinel present)"
+
+# ── akadbrain deploy ─────────────────────────────────────────────────────────
+
+elif [[ "$MODE" == "akadbrain" ]]; then
+    REMOTE="${AKADBRAIN_SSH_USER}@${AKADBRAIN_SSH_HOST}"
+    SSH_CMD="ssh -i ${AKADBRAIN_SSH_KEY} -o IdentitiesOnly=yes"
+
+    info "Syncing to ${REMOTE}:${AKADBRAIN_REMOTE_PATH} ..."
+    rsync "${RSYNC_OPTS[@]}" \
+        -e "${SSH_CMD}" \
+        "$REPO_DIR/" \
+        "${REMOTE}:${AKADBRAIN_REMOTE_PATH}"
+
+    # Ensure runtime directories exist on remote
+    ${SSH_CMD} "$REMOTE" "mkdir -p '${AKADBRAIN_REMOTE_PATH}data' '${AKADBRAIN_REMOTE_PATH}config'"
+    ok "  runtime dirs ensured"
+
+    # Write config/db.json on remote (local MariaDB on akadbrain)
+    ${SSH_CMD} "$REMOTE" "cat > '${AKADBRAIN_REMOTE_PATH}config/db.json'" << 'DBJSON'
+{
+  "prod": {
+    "host": "localhost",
+    "user": "wlmonitor",
+    "pass": "sopdi9-nyKnyb-zyqpyh",
+    "name": "wlmonitor",
+    "auth_name": "jardyx_auth",
+    "base_url": "http://akadbrain.local/wlmonitor"
+  },
+  "smtp_prod": {
+    "host": "smtp.world4you.com",
+    "port": 587,
+    "user": "catchall@jardyx.com",
+    "pass": "rtuk4cy5gu",
+    "from": "wlmonitor@jardyx.com",
+    "from_name": "WL Monitor"
+  }
+}
+DBJSON
+    ok "  config/db.json written"
+
+    # Drop app.prod sentinel
+    ${SSH_CMD} "$REMOTE" "touch '${AKADBRAIN_REMOTE_PATH}app.prod'"
+    ok "  app.prod written"
+
+    echo
+    ok "akadbrain deploy complete."
+    info "  Target:  ${REMOTE}:${AKADBRAIN_REMOTE_PATH}"
 
 # ── world4you deploy (FTP) ───────────────────────────────────────────────────
 
