@@ -107,6 +107,16 @@
 
 .brand .brand-logo { width: 28px; height: 28px; }
 
+/* ── Footer: three-column left / center / right ─────────────────────────────── */
+
+.app-footer {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+}
+.app-footer > *:first-child { text-align: left; }
+.app-footer > *:nth-child(2) { text-align: center; }
+.app-footer > *:last-child   { text-align: right; }
+
 /* ── Station search inside .app-header ──────────────────────────────────────── */
 
 .header-search {
@@ -194,8 +204,11 @@
   display: none;
 }
 
+/* Fixed .app-header is ~60px (0.85rem padding + 28px logo + 1px border);
+   fixed .app-footer is ~32px. Reserve space so content isn't hidden under them. */
 body {
-  padding-bottom: 48px; /* prevent footer overlap */
+  padding-top: 60px;
+  padding-bottom: 48px;
 }
 
 #stationList { cursor: default; }
