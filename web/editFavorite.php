@@ -2,6 +2,7 @@
 require_once(__DIR__ . '/../inc/initialize.php');
 require_once(__DIR__ . '/../inc/stations.php');
 require_once(__DIR__ . '/../inc/favorites.php');
+require_once(__DIR__ . '/../inc/colors.php');
 
 if (empty($_SESSION['loggedin'])) {
     header('Location: index.php'); exit;
@@ -98,16 +99,12 @@ $initialPillsJson = json_encode($initialPills, JSON_HEX_TAG | JSON_HEX_AMP);
 $theme = htmlspecialchars($_SESSION['theme'] ?? ($_COOKIE['theme'] ?? 'auto'), ENT_QUOTES, 'UTF-8');
 $uname = htmlspecialchars($_SESSION['username'] ?? '', ENT_QUOTES, 'UTF-8');
 
-$bclassOptions = [
-    'btn-outline-default'   => 'Standard',
-    'btn-outline-primary'   => 'Blau',
-    'btn-outline-success'   => 'Grün',
-    'btn-outline-info'      => 'Cyan',
-    'btn-outline-warning'   => 'Orange',
-    'btn-outline-danger'    => 'Rot',
-    'btn-outline-secondary' => 'Grau',
-    'btn-outline-dark'      => 'Dunkel',
-];
+// Load color labels from wl_colors (admin-editable in admin.php). The
+// favorite button uses the outline variant for display.
+$bclassOptions = [];
+foreach (wl_colors_list($con) as $c) {
+    $bclassOptions[$c['outline']] = $c['farbe'];
+}
 ?>
 <?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
 <script nonce="<?= $_cspNonce ?>">
