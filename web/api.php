@@ -4,8 +4,9 @@
  *
  * Unified JSON API dispatcher.
  *
- * All AJAX requests from wl-monitor.js are routed through this single file.
- * The action to perform is passed as the `action` parameter (GET or POST).
+ * All AJAX requests from wl-monitor.js and admin.php are routed through this
+ * single file. The action to perform is passed as the `action` parameter
+ * (GET or POST).
  *
  * Authentication / authorisation model
  * ─────────────────────────────────────
@@ -13,36 +14,36 @@
  * - api_require_admin()  : aborts with HTTP 403 if the role is not 'Admin'.
  * - api_require_csrf()   : aborts with HTTP 403 if the CSRF token is invalid.
  *
- * State-changing actions always require CSRF.
- * Read-only actions that expose personal data require login but not CSRF.
- * The monitor and stations actions are public (no authentication needed).
+ * Admin actions prefixed `admin_*` are handled by
+ * \Erikr\Chrome\Admin\Dispatch::handle() (POST + CSRF + Admin-role enforced
+ * inside the dispatcher). wlmonitor-specific admin actions are intercepted
+ * BEFORE delegation, so departures/debug/OGD/colours stay owned here.
  *
  * Action inventory
  * ────────────────
  * Public (no auth):
- *   monitor          GET  ?diva=   Realtime departure data
- *   stations         GET  ?lat&lon | (none)  Station list by distance or A–Z
+ *   monitor          GET   ?diva=            Realtime departure data
+ *   stations         GET   ?lat&lon | (none) Station list by distance or A–Z
  *
  * Authenticated (login required):
- *   theme_save       POST  theme=     Save theme preference to DB
- *   position_save    POST  lat= lon=  Save geolocation to session (CSRF)
- *   favorites        GET              List current user's favorites
- *   favorites_check  GET  ?diva=      Check if DIVA is already a favorite
- *   favorites_add    POST  …          Create favorite (CSRF)
- *   favorites_edit   POST  …          Update favorite (CSRF)
- *   favorites_delete POST  id=        Delete favorite (CSRF)
- *   favorites_sort   POST  JSON body  Reorder favorites (CSRF)
- *   log              GET  ?page&limit Activity log entries
+ *   theme_save       POST  theme=            Save theme preference to DB
+ *   position_save    POST  lat= lon=         Save geolocation to session (CSRF)
+ *   favorites        GET                     List current user's favorites
+ *   favorites_check  GET   ?diva=            Check if DIVA is already a favorite
+ *   favorites_add    POST  …                 Create favorite (CSRF)
+ *   favorites_edit   POST  …                 Update favorite (CSRF)
+ *   favorites_delete POST  id=               Delete favorite (CSRF)
+ *   favorites_sort   POST  JSON body         Reorder favorites (CSRF)
+ *   log              GET   ?page&limit       Activity log for the current user
  *
  * Admin only (Admin role + CSRF for writes):
- *   admin_ogd_update   POST  (CSRF)               Download & reload WL station data
- *   admin_users         GET  ?page&filter         Paginated user list
- *   admin_user_create  POST  … (CSRF)             Create user + send invite email
- *   admin_user_edit    POST  … (CSRF)             Edit user account
- *   admin_user_reset   POST  id= (CSRF)           Send password reset invite email
- *   admin_user_delete  POST  id= (CSRF)           Delete user
- *   admin_colors        GET                       List wl_colors rows
- *   admin_color_edit   POST  color= farbe= (CSRF) Rename a color label
+ *   admin_ogd_update   POST  (CSRF)          Download & reload WL station data
+ *   admin_user_edit    POST  … (CSRF)        Edit user (departures + debug)
+ *   admin_color_edit   POST  color= farbe=   Rename a color label
+ *   admin_user_list / admin_user_create / admin_user_delete /
+ *   admin_user_reset / admin_user_toggle_disabled / admin_user_revoke_totp /
+ *   admin_user_reset_invalid / admin_log_list
+ *                      POST  (CSRF)          Handled by Chrome\Admin\Dispatch.
  */
 
 require_once(__DIR__ . '/../inc/initialize.php');
@@ -258,7 +259,7 @@ try {
             $stmt->close();
             api_json($rows);
 
-        // ── OGD station data update (admin) ───────────────────────────────────
+        // ── OGD station data update (admin, wlmonitor-specific) ──────────────
 
         case 'admin_ogd_update':
             api_require_admin();
@@ -269,13 +270,7 @@ try {
             appendLog($con, 'admin', 'OGD update ' . ($result['ok'] ? 'OK' : 'FAILED: ' . $result['error']), 'web');
             api_json($result, $result['ok'] ? 200 : 500);
 
-        // ── User management (admin) ───────────────────────────────────────────
-
-        case 'admin_users':
-            api_require_admin();
-            $page   = max(1, (int) ($_GET['page'] ?? 1));
-            $filter = $_GET['filter'] ?? '';
-            api_json(wl_admin_list_users($con, $page, 25, $filter));
+        // ── User edit (admin, overrides Dispatch to carry departures + debug) ─
 
         case 'admin_user_edit':
             api_require_admin();
@@ -292,44 +287,7 @@ try {
             );
             api_json(['ok' => $ok]);
 
-        case 'admin_user_reset':
-            api_require_admin();
-            api_require_csrf();
-            $ok = admin_reset_password($con, (int) ($_POST['id'] ?? 0), APP_BASE_URL);
-            api_json(['ok' => $ok]);
-
-        case 'admin_user_create':
-            api_require_admin();
-            api_require_csrf();
-            $username = trim($_POST['username'] ?? '');
-            $email    = trim($_POST['email']    ?? '');
-            $rights   = in_array($_POST['rights'] ?? '', ['Admin', 'User'], true)
-                        ? $_POST['rights']
-                        : 'User';
-            if ($username === '' || $email === '') {
-                api_json(['ok' => false, 'error' => 'Benutzername und E-Mail sind erforderlich.'], 400);
-            }
-            try {
-                admin_create_user($con, $username, $email, $rights, APP_BASE_URL);
-                api_json(['ok' => true]);
-            } catch (\mysqli_sql_exception $e) {
-                if ($e->getCode() === 1062) {
-                    api_json(['ok' => false, 'error' => 'Benutzername oder E-Mail bereits vergeben.'], 409);
-                }
-                throw $e;
-            }
-
-        case 'admin_user_delete':
-            api_require_admin();
-            api_require_csrf();
-            $ok = admin_delete_user($con, (int) ($_POST['id'] ?? 0), (int) $_SESSION['id']);
-            api_json(['ok' => $ok]);
-
-        // ── Color labels (admin) ──────────────────────────────────────────────
-
-        case 'admin_colors':
-            api_require_admin();
-            api_json(['colors' => array_values(wl_colors_list($con))]);
+        // ── Color labels (admin, wlmonitor-specific) ─────────────────────────
 
         case 'admin_color_edit':
             api_require_admin();
@@ -342,7 +300,16 @@ try {
             $ok = wl_color_edit($con, $color, $farbe);
             api_json(['ok' => $ok]);
 
+        // ── All remaining admin_* actions: Chrome Dispatch ───────────────────
+
         default:
+            if (str_starts_with($action, 'admin_')) {
+                \Erikr\Chrome\Admin\Dispatch::handle($con, $action, [
+                    'baseUrl' => APP_BASE_URL,
+                    'selfId'  => (int) ($_SESSION['id'] ?? 0),
+                ]);
+                exit;
+            }
             api_json(['error' => 'Unknown action'], 400);
     }
 } catch (Throwable $e) {
