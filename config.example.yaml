@@ -3,7 +3,7 @@
 target: local
 db:
   host: localhost
-  name: wlmonitor
+  name: wlmonitor_dev
   user: wlmonitor
   password: your_password
 deploy:

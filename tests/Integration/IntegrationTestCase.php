@@ -46,9 +46,6 @@ abstract class IntegrationTestCase extends TestCase
             'disabled'        => '0',
             'rights'          => 'User',
             'debug'           => '0',
-            'img'             => 'user-md-grey.svg',
-            'img_type'        => '',
-            'img_size'        => 0,
             'newMail'         => '',
             'lastLogin'       => date('Y-m-d H:i:s'),
             'invalidLogins'   => 0,
@@ -57,15 +54,14 @@ abstract class IntegrationTestCase extends TestCase
         $stmt = $this->con->prepare(
             'INSERT INTO ' . AUTH_DB_PREFIX . 'auth_accounts
                 (username, email, password, activation_code, disabled, rights,
-                 debug, img, img_type, img_size, newMail, lastLogin, invalidLogins)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
+                 debug, newMail, lastLogin, invalidLogins)
+             VALUES (?,?,?,?,?,?,?,?,?,?)'
         );
         $stmt->bind_param(
-            'sssssssssiisi',
+            'sssssssssi',
             $d['username'], $d['email'], $d['password'], $d['activation_code'],
             $d['disabled'], $d['rights'], $d['debug'],
-            $d['img'], $d['img_type'], $d['img_size'], $d['newMail'],
-            $d['lastLogin'], $d['invalidLogins']
+            $d['newMail'], $d['lastLogin'], $d['invalidLogins']
         );
         $stmt->execute();
         $id = (int) $this->con->insert_id;

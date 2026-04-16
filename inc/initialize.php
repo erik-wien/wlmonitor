@@ -27,7 +27,6 @@ define('APP_ENV', $_cfg['target'] ?? 'local');
 
 define('SCRIPT_PATH',    '/home/.sites/765/site679/web/jardyx.com/wlmonitor/');
 define('CURRENT_PATH',   __FILE__);
-define('AVATAR_DIR',     'img/user/');
 define('APIKEY',         'tVqqssNTeDyFb35');
 define('MAX_DEPARTURES', 2);
 define('APP_VERSION',    '3.0');
@@ -73,14 +72,33 @@ define('RATE_LIMIT_FILE', __DIR__ . '/../data/ratelimit.json');
 
 // ── Bootstrap (security headers + session + CSRF) ─────────────────────────────
 
-auth_bootstrap([]);
+// img-src blob: is required by the Cropper.js avatar editor in preferences.php,
+// which previews the selected file via URL.createObjectURL() before upload.
+auth_bootstrap(['img-src' => 'blob:']);
+
+// ── Cross-DB cleanup hooks for admin_delete_user() ────────────────────────────
+//
+// wl_favorites and wl_preferences live in the wlmonitor DB, not in jardyx_auth,
+// so they cannot use FK ON DELETE CASCADE against auth_accounts.
+// admin_delete_user() invokes these callables inside its DELETE transaction.
+
+admin_register_delete_cleanup(static function (mysqli $authCon, int $userId): void {
+    global $con;
+    $stmt = $con->prepare('DELETE FROM wl_favorites WHERE idUser = ?');
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $stmt->close();
+
+    $stmt = $con->prepare('DELETE FROM wl_preferences WHERE user_id = ?');
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $stmt->close();
+});
 
 // ── Session globals ───────────────────────────────────────────────────────────
 
 $loggedIn  = $_SESSION['loggedin'] ?? 0;
 $username  = $loggedIn ? $_SESSION['username'] : '';
-$img       = $_SESSION['img'] = $_SESSION['img'] ?? 'user-md-grey.svg';
-$avatarDir = $loggedIn ? AVATAR_DIR . $_SESSION['img'] : '';
 
 // ── wlmonitor-specific utilities ──────────────────────────────────────────────
 

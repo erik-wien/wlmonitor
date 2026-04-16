@@ -69,7 +69,7 @@ Authentication is handled by the `erikr/auth` Composer library (`/Users/erikr/Gi
 
 ### Database Tables
 
-- `jardyx_auth.auth_accounts` — user accounts (id, username, email, password hash, img_blob, img_type, rights, debug, theme)
+- `jardyx_auth.auth_accounts` — user accounts (id, username, email, password hash, img_blob (205×205 JPEG), rights, debug, theme)
 - `jardyx_auth.auth_log` — activity log (user actions, logins, errors)
 - `wl_preferences` — wlmonitor-specific user preferences (user_id, departures)
 - `wl_favorites` — saved favourites (id, idUser, title, diva, bclass, sort, filter_json)

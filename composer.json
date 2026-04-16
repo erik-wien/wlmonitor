@@ -9,10 +9,12 @@
         }
     ],
     "repositories": [
-        {"type": "path", "url": "../auth"}
+        {"type": "path", "url": "../auth"},
+        {"type": "path", "url": "../chrome"}
     ],
     "require": {
-        "erikr/auth": "*"
+        "erikr/auth": "*",
+        "erikr/chrome": "*"
     },
     "minimum-stability": "dev",
     "prefer-stable": true,

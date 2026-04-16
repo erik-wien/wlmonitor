@@ -97,7 +97,6 @@ foreach ($existingDivas as $d) {
 $initialPillsJson = json_encode($initialPills, JSON_HEX_TAG | JSON_HEX_AMP);
 
 $theme = htmlspecialchars($_SESSION['theme'] ?? ($_COOKIE['theme'] ?? 'auto'), ENT_QUOTES, 'UTF-8');
-$uname = htmlspecialchars($_SESSION['username'] ?? '', ENT_QUOTES, 'UTF-8');
 
 // Load color labels from wl_colors (admin-editable in admin.php). The
 // favorite button uses the outline variant for display.
@@ -113,16 +112,6 @@ foreach (wl_colors_list($con) as $c) {
   if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
 })();
 </script>
-
-<nav class="navbar">
-  <div class="container-fluid">
-    <a class="navbar-brand fw-semibold" href="index.php"><?= icon("subway", "me-1") ?> WL Monitor</a>
-    <div class="navbar-nav ms-auto align-items-center gap-1">
-      <span class="nav-link"><?= $uname ?></span>
-      <a class="nav-link" href="index.php" title="Zurück"><?= icon("arrow-left") ?></a>
-    </div>
-  </div>
-</nav>
 
 <div class="container-md mt-4">
   <h4 class="mb-3">Favorit bearbeiten</h4>
@@ -398,8 +387,10 @@ foreach (wl_colors_list($con) as $c) {
   }
   renderPills();
 
-  // Write per-station filters into filterHidden on submit
-  document.querySelector('form')?.addEventListener('submit', () => {
+  // Write per-station filters into filterHidden on submit.
+  // Use filterHidden.form to target the edit form directly — Chrome\Header
+  // renders a logout form earlier in the DOM which would otherwise match.
+  filterHidden.form?.addEventListener('submit', () => {
     const relevant = {};
     for (const p of pills) {
       if (perStationFilter[p.diva]?.length) relevant[p.diva] = perStationFilter[p.diva];
