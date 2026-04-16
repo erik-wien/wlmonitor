@@ -5,7 +5,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 $_SERVER['REMOTE_ADDR'] ??= '127.0.0.1';
 
-require_once __DIR__ . '/../include/initialize.php';
+require_once __DIR__ . '/../inc/initialize.php';
 
 // Load wlmonitor business-logic modules
 require_once __DIR__ . '/../inc/favorites.php';

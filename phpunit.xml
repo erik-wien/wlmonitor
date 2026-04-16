@@ -15,7 +15,6 @@
     <source>
         <include>
             <directory>inc</directory>
-            <directory>include</directory>
         </include>
     </source>
 </phpunit>
