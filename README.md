@@ -76,9 +76,6 @@ This README is a landing page. The real documentation lives in `docs/`:
   source-of-truth. Read this when onboarding or restructuring.
 - **[`docs/wienerlinien-api.md`](docs/wienerlinien-api.md)** — Wiener Linien Realtime
   API V1.4 reference (endpoints, response schemas, error codes).
-- **[`CLAUDE.md`](CLAUDE.md)** — guidance for AI-assisted work in this repo. Worth
-  skimming as a fast-path overview of conventions.
-
 ## Repository layout (one-line summary)
 
 ```
@@ -97,9 +94,9 @@ docs/                specification, architecture, API docs
 ## Conventions
 
 - Auth, session, CSRF, bcrypt, TOTP, invite/reset tokens — all live in `erikr/auth`.
-  Never reimplement in this repo. See `~/.claude/rules/auth-rules.md`.
-- UI tokens, dark-mode pattern, header/footer chrome — all live in `~/Git/css` and
-  `erikr/chrome`. See `~/.claude/rules/ui-design-rules.md`.
+  Never reimplement in this repo. See [`auth/docs/conventions.md`](https://github.com/erik-wien/auth/blob/main/docs/conventions.md).
+- UI tokens, dark-mode pattern, header/footer chrome — all live in `erikr/css` and
+  `erikr/chrome`. See [`css/docs/design-rules.md`](https://github.com/erik-wien/css/blob/main/docs/design-rules.md).
 - Every state-changing POST verifies CSRF; logout is POST + CSRF.
 - App-specific tables use the `wl_` prefix (`wl_favorites`, `wl_preferences`).
 - `getUserIpAddr()` reads `REMOTE_ADDR` only — no proxy headers.
