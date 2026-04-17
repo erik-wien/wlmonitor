@@ -45,22 +45,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ins->execute();
                 $ins->close();
 
-                $resetUrl  = APP_BASE_URL . '/executeReset.php?token=' . urlencode($token);
-                $username  = htmlspecialchars($row['username'], ENT_QUOTES, 'UTF-8');
-                $bodyHtml  = "<p>Hallo {$username},</p>"
-                    . "<p>wir haben eine Anfrage für ein neues Kennwort für Ihr Konto erhalten.</p>"
-                    . "<p><a href=\"{$resetUrl}\">Kennwort zurücksetzen</a></p>"
-                    . "<p>Dieser Link ist eine Stunde gültig. Wenn Sie keine Zurücksetzung beantragt haben, können Sie diese E-Mail ignorieren.</p>"
-                    . "<p>WL Monitor</p>";
-                $bodyText  = "Hallo {$row['username']},\n\n"
-                    . "Kennwort zurücksetzen: {$resetUrl}\n\n"
-                    . "Dieser Link ist eine Stunde gültig.\n\nWL Monitor";
-
-                try {
-                    send_mail($email, $row['username'], 'Kennwort zurücksetzen – WL Monitor', $bodyHtml, $bodyText);
+                $resetUrl = APP_BASE_URL . '/executeReset.php?token=' . urlencode($token);
+                if (mail_send_password_reset($email, $row['username'], $resetUrl)) {
                     appendLog($con, 'pwd_reset', 'Reset mail sent: ' . $row['username']);
-                } catch (Throwable $e) {
-                    error_log('Password reset mail failed: ' . $e->getMessage());
+                } else {
+                    appendLog($con, 'pwd_reset', 'Reset mail failed: ' . $row['username']);
                 }
             }
 

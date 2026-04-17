@@ -38,21 +38,15 @@ define('DATABASE_HOST',     $_db['host']);
 define('DATABASE_USER',     $_db['user']);
 define('DATABASE_PASS',     $_db['password']);
 define('DATABASE_NAME',     $_db['name']);
-define('AUTH_DATABASE_NAME',$_cfg['auth_db']['name'] ?? 'jardyx_auth');
-define('APP_BASE_URL',      rtrim($_cfg['app']['base_url'] ?? '', '/'));
+define('AUTH_DATABASE_NAME', $_cfg['auth_db']['name'] ?? 'jardyx_auth');
+define('APP_BASE_URL',       rtrim($_cfg['app']['base_url'] ?? '', '/'));
+define('APP_NAME',           $_cfg['app']['name']          ?? 'WL Monitor');
+define('APP_SUPPORT_EMAIL',  $_cfg['app']['support_email'] ?? 'contact@eriks.cloud');
 
 /** Prefix for all cross-DB auth table references (e.g. 'jardyx_auth.'). */
 define('AUTH_DB_PREFIX', AUTH_DATABASE_NAME . '.');
 
-$_smtp = $_cfg['smtp'];
-define('SMTP_HOST',      $_smtp['host']);
-define('SMTP_PORT',      (int) $_smtp['port']);
-define('SMTP_USER',      $_smtp['user']);
-define('SMTP_PASS',      $_smtp['password']);
-define('SMTP_FROM',      $_smtp['from']);
-define('SMTP_FROM_NAME', $_smtp['from_name']);
-
-unset($_cfg, $_db, $_smtp);
+unset($_cfg, $_db);
 
 date_default_timezone_set('Europe/Vienna');
 
