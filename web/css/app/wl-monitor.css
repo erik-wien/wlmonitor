@@ -204,11 +204,11 @@
   display: none;
 }
 
-/* Fixed .app-header is ~60px (0.85rem padding + 28px logo + 1px border);
-   fixed .app-footer is ~32px. Reserve space so content isn't hidden under them. */
+/* Reserve space for fixed .app-header / .app-footer via the custom properties
+   declared on :root in shared layout.css (rule §12/§12a/§13). */
 body {
-  padding-top: 60px;
-  padding-bottom: 48px;
+  padding-top:    var(--app-header-height);
+  padding-bottom: var(--app-footer-height);
 }
 
 #stationList { cursor: default; }
