@@ -15,15 +15,10 @@ auth_db:
   name: jardyx_auth
   user: wlmonitor
   password: your_password
-smtp:
-  host: smtp.world4you.com
-  port: 587
-  user: catchall@jardyx.com
-  password: your_password
-  from: wlmonitor@jardyx.com
-  from_name: WL Monitor
 slack:
   bot_token: your_bot_token
 app:
+  name: WL Monitor
+  support_email: contact@eriks.cloud
   base_url: http://wlmonitor.test
 APP_CODE: wlm
