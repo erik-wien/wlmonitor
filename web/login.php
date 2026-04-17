@@ -66,6 +66,11 @@ unset($_SESSION['alerts']);
                  <?= $remembered !== '' ? 'checked' : '' ?>>
           <label class="form-check-label" for="rememberName">Benutzername merken</label>
         </div>
+        <div class="mb-3 form-check">
+          <input type="checkbox" class="form-check-input" id="remember_me"
+                 name="remember_me" value="1">
+          <label class="form-check-label" for="remember_me">Angemeldet bleiben (8&nbsp;Tage)</label>
+        </div>
 
         <button type="submit" class="btn btn-primary w-100 mb-3">
           <?= icon("sign-in", "me-1") ?> Anmelden

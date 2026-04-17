@@ -22,7 +22,7 @@ class PasswordResetTest extends IntegrationTestCase
         $token = $this->insertToken($this->userId);
 
         $stmt = $this->con->prepare(
-            'SELECT used, expires_at FROM password_resets WHERE token = ?'
+            'SELECT used, expires_at FROM ' . AUTH_DB_PREFIX . 'password_resets WHERE token = ?'
         );
         $stmt->bind_param('s', $token);
         $stmt->execute();
@@ -83,7 +83,7 @@ class PasswordResetTest extends IntegrationTestCase
         $newPw  = 'NewSecurePass99!';
         $hash   = password_hash($newPw, PASSWORD_BCRYPT, ['cost' => 4]);
 
-        $upd = $this->con->prepare('UPDATE auth_accounts SET password = ? WHERE id = ?');
+        $upd = $this->con->prepare('UPDATE ' . AUTH_DB_PREFIX . 'auth_accounts SET password = ? WHERE id = ?');
         $upd->bind_param('si', $hash, $this->userId);
         $upd->execute();
         $upd->close();
@@ -91,7 +91,7 @@ class PasswordResetTest extends IntegrationTestCase
         $this->markTokenUsed($token);
 
         // Verify password changed
-        $stmt = $this->con->prepare('SELECT password FROM auth_accounts WHERE id = ?');
+        $stmt = $this->con->prepare('SELECT password FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
         $stmt->bind_param('i', $this->userId);
         $stmt->execute();
         $stored = $stmt->get_result()->fetch_assoc()['password'];
@@ -105,7 +105,7 @@ class PasswordResetTest extends IntegrationTestCase
         $token = $this->insertToken($this->userId);
         $this->markTokenUsed($token);
 
-        $stmt = $this->con->prepare('SELECT used FROM password_resets WHERE token = ?');
+        $stmt = $this->con->prepare('SELECT used FROM ' . AUTH_DB_PREFIX . 'password_resets WHERE token = ?');
         $stmt->bind_param('s', $token);
         $stmt->execute();
         $used = (int) $stmt->get_result()->fetch_assoc()['used'];
@@ -131,7 +131,7 @@ class PasswordResetTest extends IntegrationTestCase
         $old = $this->insertToken($this->userId);
 
         // Simulate the "delete old tokens then insert new" logic from forgotPassword.php
-        $del = $this->con->prepare('DELETE FROM password_resets WHERE user_id = ?');
+        $del = $this->con->prepare('DELETE FROM ' . AUTH_DB_PREFIX . 'password_resets WHERE user_id = ?');
         $del->bind_param('i', $this->userId);
         $del->execute();
         $del->close();
@@ -139,7 +139,7 @@ class PasswordResetTest extends IntegrationTestCase
         $new = $this->insertToken($this->userId);
 
         // Old token must be gone
-        $stmt = $this->con->prepare('SELECT id FROM password_resets WHERE token = ?');
+        $stmt = $this->con->prepare('SELECT id FROM ' . AUTH_DB_PREFIX . 'password_resets WHERE token = ?');
         $stmt->bind_param('s', $old);
         $stmt->execute();
         $stmt->get_result(); // consume
@@ -155,7 +155,7 @@ class PasswordResetTest extends IntegrationTestCase
     public function test_email_lookup_finds_activated_user(): void
     {
         $stmt = $this->con->prepare(
-            'SELECT id, username FROM auth_accounts
+            'SELECT id, username FROM ' . AUTH_DB_PREFIX . 'auth_accounts
              WHERE email = ? AND activation_code = "activated" AND disabled = "0"'
         );
         $stmt->bind_param('s', $this->email);
@@ -169,13 +169,13 @@ class PasswordResetTest extends IntegrationTestCase
 
     public function test_email_lookup_excludes_disabled_user(): void
     {
-        $upd = $this->con->prepare('UPDATE auth_accounts SET disabled = "1" WHERE id = ?');
+        $upd = $this->con->prepare('UPDATE ' . AUTH_DB_PREFIX . 'auth_accounts SET disabled = "1" WHERE id = ?');
         $upd->bind_param('i', $this->userId);
         $upd->execute();
         $upd->close();
 
         $stmt = $this->con->prepare(
-            'SELECT id FROM auth_accounts
+            'SELECT id FROM ' . AUTH_DB_PREFIX . 'auth_accounts
              WHERE email = ? AND activation_code = "activated" AND disabled = "0"'
         );
         $stmt->bind_param('s', $this->email);
@@ -188,13 +188,13 @@ class PasswordResetTest extends IntegrationTestCase
 
     public function test_email_lookup_excludes_unactivated_user(): void
     {
-        $upd = $this->con->prepare('UPDATE auth_accounts SET activation_code = "pending" WHERE id = ?');
+        $upd = $this->con->prepare('UPDATE ' . AUTH_DB_PREFIX . 'auth_accounts SET activation_code = "pending" WHERE id = ?');
         $upd->bind_param('i', $this->userId);
         $upd->execute();
         $upd->close();
 
         $stmt = $this->con->prepare(
-            'SELECT id FROM auth_accounts
+            'SELECT id FROM ' . AUTH_DB_PREFIX . 'auth_accounts
              WHERE email = ? AND activation_code = "activated" AND disabled = "0"'
         );
         $stmt->bind_param('s', $this->email);
@@ -215,7 +215,7 @@ class PasswordResetTest extends IntegrationTestCase
             : date('Y-m-d H:i:s', time() + 3600);
 
         $stmt = $this->con->prepare(
-            'INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?)'
+            'INSERT INTO ' . AUTH_DB_PREFIX . 'password_resets (user_id, token, expires_at) VALUES (?, ?, ?)'
         );
         $stmt->bind_param('iss', $userId, $token, $expiresAt);
         $stmt->execute();
@@ -227,8 +227,8 @@ class PasswordResetTest extends IntegrationTestCase
     {
         $stmt = $this->con->prepare(
             'SELECT pr.id, pr.user_id, a.username
-             FROM password_resets pr
-             JOIN auth_accounts a ON a.id = pr.user_id
+             FROM ' . AUTH_DB_PREFIX . 'password_resets pr
+             JOIN ' . AUTH_DB_PREFIX . 'auth_accounts a ON a.id = pr.user_id
              WHERE pr.token = ? AND pr.used = 0 AND pr.expires_at > NOW()'
         );
         $stmt->bind_param('s', $token);
@@ -240,7 +240,7 @@ class PasswordResetTest extends IntegrationTestCase
 
     private function markTokenUsed(string $token): void
     {
-        $stmt = $this->con->prepare('UPDATE password_resets SET used = 1 WHERE token = ?');
+        $stmt = $this->con->prepare('UPDATE ' . AUTH_DB_PREFIX . 'password_resets SET used = 1 WHERE token = ?');
         $stmt->bind_param('s', $token);
         $stmt->execute();
         $stmt->close();

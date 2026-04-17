@@ -11,7 +11,8 @@ if (!csrf_verify()) {
     header('Location: login.php'); exit;
 }
 
-$result = auth_login($con, $_POST['login-username'], $_POST['login-password']);
+$remember = !empty($_POST['remember_me']);
+$result   = auth_login($con, $_POST['login-username'], $_POST['login-password'], $remember);
 
 if ($result['ok'] && !empty($result['totp_required'])) {
     session_write_close();

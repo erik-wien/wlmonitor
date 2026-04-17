@@ -102,26 +102,33 @@ class AdminTest extends IntegrationTestCase
     public function test_edit_updates_email_and_rights(): void
     {
         $uid  = $this->createUser(['email' => 'old@example.com', 'rights' => 'User']);
-        $ok   = admin_edit_user($this->con, $uid, 'new@example.com', 'Admin', 0, 3, 0);
+        // wl_admin_edit_user(con, id, email, rights, disabled, departures, debug, totp_reset)
+        $ok   = wl_admin_edit_user($this->con, $uid, 'new@example.com', 'Admin', 0, MAX_DEPARTURES, 0, false);
 
-        $stmt = $this->con->prepare('SELECT email, rights, departures FROM auth_accounts WHERE id = ?');
+        $stmt = $this->con->prepare('SELECT email, rights FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
         $stmt->bind_param('i', $uid);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
+        $pref = $this->con->prepare('SELECT departures FROM wl_preferences WHERE user_id = ?');
+        $pref->bind_param('i', $uid);
+        $pref->execute();
+        $departures = (int) $pref->get_result()->fetch_assoc()['departures'];
+        $pref->close();
+
         $this->assertTrue($ok);
         $this->assertSame('new@example.com', $row['email']);
         $this->assertSame('Admin', $row['rights']);
-        $this->assertSame(3, (int) $row['departures']);
+        $this->assertSame(MAX_DEPARTURES, $departures);
     }
 
     public function test_edit_rejects_invalid_rights_value(): void
     {
         $uid = $this->createUser(['rights' => 'User']);
-        admin_edit_user($this->con, $uid, 'x@example.com', 'Superuser', 0, 2, 0);
+        admin_edit_user($this->con, $uid, 'x@example.com', 'Superuser', 0, 0, false);
 
-        $stmt = $this->con->prepare('SELECT rights FROM auth_accounts WHERE id = ?');
+        $stmt = $this->con->prepare('SELECT rights FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
         $stmt->bind_param('i', $uid);
         $stmt->execute();
         $rights = $stmt->get_result()->fetch_assoc()['rights'];
@@ -132,28 +139,32 @@ class AdminTest extends IntegrationTestCase
     }
 
     // --- admin_reset_password ------------------------------------------------
+    // New signature (email-based reset, not plaintext return):
+    //   admin_reset_password(mysqli $con, int $targetId, string $baseUrl): bool
 
-    public function test_reset_password_returns_plaintext(): void
+    public function test_reset_password_returns_false_for_nonexistent_user(): void
     {
-        $uid      = $this->createUser();
-        $newPass  = admin_reset_password($this->con, $uid);
-
-        $this->assertNotEmpty($newPass);
-        $this->assertSame(16, strlen($newPass)); // bin2hex(8 bytes) = 16 hex chars
+        $ok = admin_reset_password($this->con, 999999999, 'http://localhost/app');
+        $this->assertFalse($ok);
     }
 
-    public function test_reset_password_hash_verifies(): void
+    public function test_reset_password_creates_invite_token_for_existing_user(): void
     {
-        $uid     = $this->createUser();
-        $newPass = admin_reset_password($this->con, $uid);
+        $uid = $this->createUser();
 
-        $stmt = $this->con->prepare('SELECT password FROM auth_accounts WHERE id = ?');
+        // mail_send_invite() will fail in test env (no SMTP) and return false,
+        // but the invite token must still have been created in auth_invite_tokens.
+        @admin_reset_password($this->con, $uid, 'http://localhost/app');
+
+        $stmt = $this->con->prepare(
+            'SELECT COUNT(*) AS c FROM ' . AUTH_DB_PREFIX . 'auth_invite_tokens WHERE user_id = ?'
+        );
         $stmt->bind_param('i', $uid);
         $stmt->execute();
-        $hash = $stmt->get_result()->fetch_assoc()['password'];
+        $count = (int) $stmt->get_result()->fetch_assoc()['c'];
         $stmt->close();
 
-        $this->assertTrue(password_verify($newPass, $hash));
+        $this->assertGreaterThanOrEqual(1, $count);
     }
 
     // --- admin_delete_user ---------------------------------------------------
@@ -163,7 +174,7 @@ class AdminTest extends IntegrationTestCase
         $uid = $this->createUser();
         $ok  = admin_delete_user($this->con, $uid, $this->adminId);
 
-        $stmt = $this->con->prepare('SELECT id FROM auth_accounts WHERE id = ?');
+        $stmt = $this->con->prepare('SELECT id FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
         $stmt->bind_param('i', $uid);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();

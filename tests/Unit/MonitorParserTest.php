@@ -220,6 +220,7 @@ class MonitorParserTest extends TestCase
  */
 class MockHttpWrapper
 {
+    public $context;
     private static string $response = '';
     private int $pos = 0;
 
