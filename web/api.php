@@ -267,7 +267,7 @@ try {
             set_time_limit(120);    // CSV downloads can be slow
             ignore_user_abort(true); // Run to completion even if browser disconnects
             $result = ogd_update($con);
-            appendLog($con, 'admin', 'OGD update ' . ($result['ok'] ? 'OK' : 'FAILED: ' . $result['error']), 'web');
+            appendLog($con, 'admin', 'OGD update ' . ($result['ok'] ? 'OK' : 'FAILED: ' . $result['error']));
             api_json($result, $result['ok'] ? 200 : 500);
 
         // ── User edit (admin, overrides Dispatch to carry departures + debug) ─
@@ -313,6 +313,6 @@ try {
             api_json(['error' => 'Unknown action'], 400);
     }
 } catch (Throwable $e) {
-    appendLog($con, 'api', 'Error: ' . $e->getMessage(), 'web');
+    appendLog($con, 'api', 'Error: ' . $e->getMessage());
     api_json(['error' => 'Internal server error'], 500);
 }

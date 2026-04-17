@@ -1309,7 +1309,7 @@ A starter template lives in `config.example.yaml`. Never commit a populated
 |---|---|---|
 | `APP_ENV` | `config.yaml` `target:` | `local` / `akadbrain` / `world4you` |
 | `APP_VERSION` | hardcoded | `3.0` |
-| `APP_BUILD` | hardcoded | Increment on each code-changing session (currently 31) |
+| `APP_BUILD` | hardcoded | Integer, incremented on major updates only (not a date, not per session) |
 | `APP_BASE_URL` | `config.yaml` `app.base_url` | Used by chrome / mailers / link generators |
 | `APIKEY` | hardcoded | Wiener Linien sender key |
 | `MAX_DEPARTURES` | hardcoded | `2` — per-user override in `wl_preferences.departures` |

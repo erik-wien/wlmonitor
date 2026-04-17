@@ -83,7 +83,7 @@ $show_search = true;  // show station search in the shared .app-header
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-modal-close>Abbrechen</button>
-        <button type="button" class="btn btn-primary" id="addFavSubmit"><?= icon("save", "me-1") ?> Speichern</button>
+        <button type="button" class="btn btn-outline-success" id="addFavSubmit"><?= icon("save", "me-1") ?> Speichern</button>
       </div>
     </div>
   </div>

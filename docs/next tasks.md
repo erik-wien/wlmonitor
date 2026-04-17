@@ -55,7 +55,7 @@ Ask me if you don't know where to find that information about incoming and outgo
 
 Ad a central version number. The current version number is 3.0. make the version number in the footer accordingly dynamic.
 
-Ad a build number to the version number. Update the bulidnumber on every edit by you.
+Ad a build number to the version number. `APP_BUILD` is an integer that is incremented on major updates only (not a date, not per session).
 
 # selecting a favorite or a station
 

@@ -122,7 +122,7 @@ require_once(__DIR__ . '/../inc/initialize.php');
       </p>
 
       <p class="text-muted small">
-        Verantwortlich: siehe <a href="impressum.html">Impressum</a>.
+        Verantwortlich: siehe <a href="impressum.php">Impressum</a>.
       </p>
 
     </div>

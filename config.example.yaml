@@ -26,3 +26,4 @@ slack:
   bot_token: your_bot_token
 app:
   base_url: http://wlmonitor.test
+APP_CODE: wlm

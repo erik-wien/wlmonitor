@@ -141,5 +141,5 @@ function diva_info(mysqli $con, array $divas): array {
 function stations_save_position(mysqli $con, float $lat, float $lon): void {
     $_SESSION['lat'] = $lat;
     $_SESSION['lon'] = $lon;
-    appendLog($con, 'pos', "Position saved: $lat, $lon", 'web');
+    appendLog($con, 'pos', "Position saved: $lat, $lon");
 }

@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 try {
                     send_mail($email, $row['username'], 'Kennwort zurücksetzen – WL Monitor', $bodyHtml, $bodyText);
-                    appendLog($con, 'pwd_reset', 'Reset mail sent: ' . $row['username'], 'web');
+                    appendLog($con, 'pwd_reset', 'Reset mail sent: ' . $row['username']);
                 } catch (Throwable $e) {
                     error_log('Password reset mail failed: ' . $e->getMessage());
                 }

@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $chk->close();
 
     if (!$found) {
-        appendLog($con, 'edf', 'Unauthorized edit attempt on fav #' . $favID, 'web');
+        appendLog($con, 'edf', 'Unauthorized edit attempt on fav #' . $favID);
         $_SESSION['alerts'][] = ['danger', 'Favorit nicht gefunden.'];
         header('Location: index.php'); exit;
     }
@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->execute();
     $stmt->close();
 
-    appendLog($con, 'edf', 'Favourite #' . $favID . ' updated.', 'web');
+    appendLog($con, 'edf', 'Favourite #' . $favID . ' updated.');
     $_SESSION['alerts'][]  = ['success', 'Der Favorit wurde gespeichert.'];
     $_SESSION['loadFavId'] = $favID;
     header('Location: index.php'); exit;
@@ -77,7 +77,7 @@ $res->free();
 $stmt->close();
 
 if (!$row) {
-    appendLog($con, 'edf', 'Favourite #' . $favID . ' not found for user #' . $userID, 'web');
+    appendLog($con, 'edf', 'Favourite #' . $favID . ' not found for user #' . $userID);
     $_SESSION['alerts'][] = ['danger', 'Favorit #' . $favID . ' nicht gefunden.'];
     header('Location: index.php'); exit;
 }
@@ -168,7 +168,7 @@ foreach (wl_colors_list($con) as $c) {
         <div id="filterLines" class="d-flex flex-column gap-1 mb-2"
              style="max-height:220px;overflow-y:auto;min-height:1.5rem"></div>
         <div class="form-text mb-2">Keine Auswahl = alle Linien dieser Haltestelle.</div>
-        <button type="button" id="stationEditorOk" class="btn btn-sm btn-primary">OK</button>
+        <button type="button" id="stationEditorOk" class="btn btn-sm btn-outline-success">OK</button>
       </div>
 
       <div class="form-text mt-1">Mindestens eine Haltestelle erforderlich.</div>
@@ -180,7 +180,7 @@ foreach (wl_colors_list($con) as $c) {
              value="<?= (int) $row['sort'] ?>" min="0">
     </div>
 
-    <button type="submit" class="btn btn-primary"><?= icon("save", "me-1") ?> Speichern</button>
+    <button type="submit" class="btn btn-outline-success"><?= icon("save", "me-1") ?> Speichern</button>
     <a href="index.php" class="btn btn-secondary ms-2">Abbrechen</a>
   </form>
 </div>

@@ -57,12 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($new !== $confirm) {
             $error = 'Kennwörter stimmen nicht überein.';
         } else {
-            $hash = password_hash($new, PASSWORD_BCRYPT, ['cost' => 13]);
-            $upd  = $con->prepare("UPDATE {$table} SET password = ? WHERE id = ?");
-            $upd->bind_param('si', $hash, $userId);
-            $upd->execute();
-            $upd->close();
-            appendLog($con, 'auth', $username . ' changed password.', 'web');
+            auth_change_password($con, $userId, $new);
             $success = 'Kennwort geändert.';
         }
     }
@@ -87,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $ok   = auth_totp_confirm($con, $userId, $setupData['secret'], $code);
             if ($ok) {
                 unset($_SESSION['totp_setup_secret']);
-                appendLog($con, 'auth', $username . ' enabled 2FA.', 'web');
+                appendLog($con, 'auth', $username . ' enabled 2FA.');
                 $success = '2FA ist jetzt aktiv.';
                 $has2fa  = true;
             } else {
@@ -100,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     elseif ($action === 'totp_disable') {
         auth_totp_disable($con, $userId);
         unset($_SESSION['totp_setup_secret']);
-        appendLog($con, 'auth', $username . ' disabled 2FA.', 'web');
+        appendLog($con, 'auth', $username . ' disabled 2FA.');
         $success = '2FA wurde deaktiviert.';
         $has2fa  = false;
     }
@@ -173,7 +168,7 @@ $csrfToken = csrf_token();
           <input type="password" name="confirm_password" id="confirm_password"
                  class="form-control" required minlength="8" autocomplete="new-password">
         </div>
-        <button type="submit" class="btn btn-primary">Kennwort speichern</button>
+        <button type="submit" class="btn btn-outline-success">Kennwort speichern</button>
       </form>
     </div>
   </div>
@@ -213,7 +208,7 @@ $csrfToken = csrf_token();
                    required autofocus autocomplete="one-time-code"
                    style="max-width:160px;">
           </div>
-          <button type="submit" class="btn btn-primary">Bestätigen</button>
+          <button type="submit" class="btn btn-outline-success">Bestätigen</button>
         </form>
 
       <?php else: ?>

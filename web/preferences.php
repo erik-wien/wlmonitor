@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $res = \Erikr\Chrome\AvatarUpload::handle($con, $userId, $_FILES['avatar'] ?? null);
         header('Content-Type: application/json; charset=utf-8');
         if ($res['ok']) {
-            appendLog($con, 'prefs', 'Avatar updated (' . $res['size'] . ' bytes).', 'web');
+            appendLog($con, 'prefs', 'Avatar updated (' . $res['size'] . ' bytes).');
             echo json_encode(['ok' => true]);
             exit;
         }
@@ -103,10 +103,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     try {
                         send_mail($newEmail, $_SESSION['username'] ?? '', 'E-Mail-Adresse bestätigen', $htmlBody, $textBody);
-                        appendLog($con, 'prefs', 'Email change requested for ' . ($_SESSION['username'] ?? ''), 'web');
+                        appendLog($con, 'prefs', 'Email change requested for ' . ($_SESSION['username'] ?? ''));
                         addAlert('info', 'Bestätigungslink wurde an die neue E-Mail-Adresse gesendet. Bitte prüfen Sie Ihren Posteingang.');
                     } catch (Throwable $e) {
-                        appendLog($con, 'prefs', 'Email send failed: ' . $e->getMessage(), 'web');
+                        appendLog($con, 'prefs', 'Email send failed: ' . $e->getMessage());
                         $errors['email'] = 'Die Bestätigungs-E-Mail konnte nicht gesendet werden. Bitte versuchen Sie es später erneut.';
                     }
 
@@ -136,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'httponly' => false,
                 'samesite' => 'Lax',
             ]);
-            appendLog($con, 'prefs', 'Theme set to ' . $t, 'web');
+            appendLog($con, 'prefs', 'Theme set to ' . $t);
             addAlert('success', 'Design gespeichert.');
             header('Location: preferences.php'); exit;
         }
@@ -157,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $upd->close();
             $_SESSION['departures'] = $dep;
             $departures = $dep;
-            appendLog($con, 'prefs', 'Departures set to ' . $dep, 'web');
+            appendLog($con, 'prefs', 'Departures set to ' . $dep);
             addAlert('success', 'Anzahl der Abfahrten aktualisiert.');
             header('Location: preferences.php'); exit;
         }
@@ -262,7 +262,7 @@ $avatarUrl = 'avatar.php?id=' . $userId;
             </label>
           <?php endforeach; ?>
         </div>
-        <button type="submit" class="btn btn-primary">
+        <button type="submit" class="btn btn-outline-success">
           <?= icon("save", "me-1") ?> Speichern
         </button>
       </form>
@@ -297,7 +297,7 @@ $avatarUrl = 'avatar.php?id=' . $userId;
             <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
           </div>
         </div>
-        <button type="submit" class="btn btn-primary">
+        <button type="submit" class="btn btn-outline-success">
           <?= icon("save", "me-1") ?> Speichern
         </button>
       </form>
@@ -337,7 +337,7 @@ $avatarUrl = 'avatar.php?id=' . $userId;
           <input type="password" id="emailPassword" name="email_password"
                  class="form-control" autocomplete="current-password" required>
         </div>
-        <button type="submit" class="btn btn-primary">
+        <button type="submit" class="btn btn-outline-success">
           <?= icon("paper-plane", "me-1") ?> Bestätigungslink senden
         </button>
       </form>

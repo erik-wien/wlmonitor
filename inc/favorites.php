@@ -132,7 +132,7 @@ function favorites_add(mysqli $con, int $idUser, string $title, string $diva, st
     $stmt->execute();
     $newId = (int) $con->insert_id;
     $stmt->close();
-    appendLog($con, 'favAdd', "Favorite #$newId ($title) added.", 'web');
+    appendLog($con, 'favAdd', "Favorite #$newId ($title) added.");
     return $newId;
 }
 
@@ -166,7 +166,7 @@ function favorites_edit(mysqli $con, int $idUser, int $favId, string $title, str
     $stmt->execute();
     $affected = $stmt->affected_rows;
     $stmt->close();
-    appendLog($con, 'favEdit', "Favorite #$favId updated.", 'web');
+    appendLog($con, 'favEdit', "Favorite #$favId updated.");
     return $affected > 0;
 }
 
@@ -186,7 +186,7 @@ function favorites_delete(mysqli $con, int $idUser, int $favId): bool {
     $stmt->execute();
     $affected = $stmt->affected_rows;
     $stmt->close();
-    appendLog($con, 'favDel', "Favorite #$favId deleted.", 'web');
+    appendLog($con, 'favDel', "Favorite #$favId deleted.");
     return $affected > 0;
 }
 
@@ -212,5 +212,5 @@ function favorites_save_sort(mysqli $con, int $idUser, array $items): void {
         $stmt->execute();
     }
     $stmt->close();
-    appendLog($con, 'favSort', 'Sort order saved.', 'web');
+    appendLog($con, 'favSort', 'Sort order saved.');
 }

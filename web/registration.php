@@ -28,7 +28,7 @@ rate_limit_record($_regKey);
 // ── Field presence ────────────────────────────────────────────────────────────
 if (empty($_POST['username']) || empty($_POST['password']) || empty($_POST['email'])) {
     addAlert('danger', 'Bitte füllen Sie das Registrierungsformular vollständig aus.');
-    appendLog($con, 'reg', 'Unsuccessful: Form incomplete.', 'web');
+    appendLog($con, 'reg', 'Unsuccessful: Form incomplete.');
     header('Location: login.php'); exit;
 }
 
@@ -39,14 +39,14 @@ $email    = trim($_POST['email']);
 // ── Validate e-mail ───────────────────────────────────────────────────────────
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     addAlert('danger', 'Die E-Mail-Adresse hat eine ungültige Form.');
-    appendLog($con, 'reg', 'Unsuccessful: invalid email.', 'web');
+    appendLog($con, 'reg', 'Unsuccessful: invalid email.');
     header('Location: login.php'); exit;
 }
 
 // ── Validate password ─────────────────────────────────────────────────────────
 if (strlen($password) < 8) {
     addAlert('danger', 'Das Kennwort muss mindestens 8 Zeichen lang sein.');
-    appendLog($con, 'reg', 'Unsuccessful: password too short.', 'web');
+    appendLog($con, 'reg', 'Unsuccessful: password too short.');
     header('Location: login.php'); exit;
 }
 
@@ -60,12 +60,12 @@ $chk->close();
 
 if ($exists) {
     addAlert('danger', 'Diese E-Mail-Adresse ist bereits registriert. Bitte melden Sie sich an oder lassen Sie sich ein neues Kennwort zusenden.');
-    appendLog($con, 'reg', 'Unsuccessful: email already exists (' . $email . ').', 'web');
+    appendLog($con, 'reg', 'Unsuccessful: email already exists (' . $email . ').');
     header('Location: login.php'); exit;
 }
 
 // ── Insert account ────────────────────────────────────────────────────────────
-$hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 13]);
+$hash = auth_hash_password($password);
 $code = bin2hex(random_bytes(64));    // 128-char hex activation code
 
 $ins = $con->prepare(
@@ -85,7 +85,7 @@ $pref->bind_param('i', $newId);
 $pref->execute();
 $pref->close();
 
-appendLog($con, 'reg', 'Account created: ' . $username . ' / ' . $email, 'web');
+appendLog($con, 'reg', 'Account created: ' . $username . ' / ' . $email);
 
 // ── Send activation e-mail ────────────────────────────────────────────────────
 $activateUrl  = 'https://' . $_SERVER['HTTP_HOST']
@@ -105,9 +105,9 @@ $textBody = "Hallo $username,\n\nBitte aktivieren Sie Ihr Konto:\n$activateUrl\n
 
 try {
     send_mail($email, $username, 'Bestätigung Ihrer E-Mail-Adresse', $htmlBody, $textBody);
-    appendLog($con, 'reg', 'Activation email sent to ' . $email, 'web');
+    appendLog($con, 'reg', 'Activation email sent to ' . $email);
 } catch (Throwable $e) {
-    appendLog($con, 'reg', 'Email send failed: ' . $e->getMessage(), 'web');
+    appendLog($con, 'reg', 'Email send failed: ' . $e->getMessage());
     // Account was created; user can request another email later (not yet implemented).
 }
 
