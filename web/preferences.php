@@ -268,7 +268,7 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
 
   <?php foreach ($_SESSION['alerts'] ?? [] as [$type, $msg]): ?>
     <div class="alert alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?> alert-dismissible fade show" role="alert">
-      <?= $msg ?>
+      <?= htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') ?>
       <button type="button" class="btn-close" data-dismiss-alert></button>
     </div>
   <?php endforeach; unset($_SESSION['alerts']); ?>
@@ -338,7 +338,7 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
           <?= csrf_input() ?>
           <input type="hidden" name="action" value="change_departures">
           <div class="mb-3">
-            <label class="form-label" name="departuresRange">
+            <label class="form-label" for="departuresRange">
               Anzahl: <strong id="depVal"><?= $departures ?></strong>
             </label>
             <input type="range" class="form-range" id="departuresRange" name="departures"
@@ -490,7 +490,7 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
       <div class="card-header"><?= icon("camera", "me-1") ?> Profilbild</div>
       <div class="card-body">
         <div class="d-flex align-items-center gap-3 mb-3">
-          <img src="<?= $avatarUrl ?>" class="rounded-circle"
+          <img src="<?= htmlspecialchars($avatarUrl, ENT_QUOTES, 'UTF-8') ?>" class="rounded-circle"
                style="width:64px;height:64px;object-fit:cover;" alt="Profilbild">
           <div class="text-muted small">JPEG, PNG, GIF oder WebP &middot; max. 5&thinsp;MB. Nach der Auswahl &ouml;ffnet sich der Zuschnitt.</div>
         </div>
@@ -504,13 +504,14 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
 
 <!-- Avatar crop modal (outside container, position:fixed) -->
 <div class="modal" id="avatarCropModal" aria-hidden="true" role="dialog"
+     aria-modal="true" aria-labelledby="avatarCropTitle"
      style="display:none;position:fixed;inset:0;z-index:1050;background:rgba(0,0,0,.6);
             align-items:center;justify-content:center;padding:1rem">
   <div class="modal-dialog" style="max-width:560px;width:100%;background:var(--color-bg);
        border:1px solid var(--color-border);border-radius:var(--radius);
        box-shadow:var(--shadow-sm);display:flex;flex-direction:column;max-height:90vh">
     <div class="modal-header" style="padding:.75rem 1rem;border-bottom:1px solid var(--color-border)">
-      <strong>Profilbild zuschneiden</strong>
+      <strong id="avatarCropTitle">Profilbild zuschneiden</strong>
     </div>
     <div class="modal-body" style="padding:1rem;overflow:auto;min-height:0">
       <div style="max-height:60vh">
