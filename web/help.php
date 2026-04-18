@@ -9,7 +9,7 @@ require_once(__DIR__ . '/../inc/initialize.php');
 ?>
 <?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
 
-<main class="container-md mt-4 mb-4" id="helpMain">
+<main class="container-md mt-4 mb-4" id="main-content">
 
   <h1 class="mb-3">Hilfe</h1>
 
@@ -84,8 +84,8 @@ require_once(__DIR__ . '/../inc/initialize.php');
       <p>
         Anzeige-Einstellungen (Profilbild, Design, Anzahl Abfahrten, E-Mail)
         finden Sie unter <a href="preferences.php">Einstellungen</a>. Passwort
-        und Zwei-Faktor-Anmeldung werden getrennt davon unter
-        <a href="security.php">Passwort &amp; 2FA</a> verwaltet.
+        und Zwei-Faktor-Anmeldung finden Sie unter
+        <a href="preferences.php#sicherheit">Passwort &amp; 2FA</a>.
       </p>
 
     </div>
