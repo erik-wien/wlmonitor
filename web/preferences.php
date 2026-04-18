@@ -14,7 +14,7 @@ $theme      = htmlspecialchars($_SESSION['theme'] ?? ($_COOKIE['theme'] ?? 'auto
 $departures = (int) ($_SESSION['departures'] ?? MAX_DEPARTURES);
 
 // Reload email fresh from DB
-$stmt = $con->prepare('SELECT email FROM auth.auth_accounts WHERE id = ?');
+$stmt = $con->prepare('SELECT email FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
 $stmt->bind_param('i', $userId);
 $stmt->execute();
 $currentEmail = htmlspecialchars(
@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($emailPass === '') {
             $errors['email'] = 'Bitte Kennwort zur Bestätigung eingeben.';
         } else {
-            $stmt = $con->prepare('SELECT password FROM auth.auth_accounts WHERE id = ?');
+            $stmt = $con->prepare('SELECT password FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
             $stmt->bind_param('i', $userId);
             $stmt->execute();
             $row = $stmt->get_result()->fetch_assoc();
@@ -92,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$row || !password_verify($emailPass, $row['password'])) {
                 $errors['email'] = 'Das Kennwort ist falsch.';
             } else {
-                $chk = $con->prepare('SELECT id FROM auth.auth_accounts WHERE email = ? AND id != ?');
+                $chk = $con->prepare('SELECT id FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE email = ? AND id != ?');
                 $chk->bind_param('si', $newEmail, $userId);
                 $chk->execute();
                 $chk->store_result();
@@ -104,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $code = bin2hex(random_bytes(32));
                     $upd  = $con->prepare(
-                        'UPDATE auth.auth_accounts SET pending_email = ?, email_change_code = ? WHERE id = ?'
+                        'UPDATE ' . AUTH_DB_PREFIX . 'auth_accounts SET pending_email = ?, email_change_code = ? WHERE id = ?'
                     );
                     $upd->bind_param('ssi', $newEmail, $code, $userId);
                     $upd->execute();
@@ -129,7 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!in_array($t, ['light', 'dark', 'auto'], true)) {
             $errors['theme'] = 'Ungültiges Design.';
         } else {
-            $upd = $con->prepare('UPDATE auth.auth_accounts SET theme = ? WHERE id = ?');
+            $upd = $con->prepare('UPDATE ' . AUTH_DB_PREFIX . 'auth_accounts SET theme = ? WHERE id = ?');
             $upd->bind_param('si', $t, $userId);
             $upd->execute();
             $upd->close();
@@ -180,7 +180,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pwRow = $rowStmt->get_result()->fetch_assoc();
         $rowStmt->close();
 
-        if (!password_verify($current, $pwRow['password'])) {
+        if (!$pwRow || !password_verify($current, $pwRow['password'])) {
             $errors['password'] = 'Aktuelles Kennwort ist falsch.';
         } elseif (strlen($new) < 8 || strlen($new) > 1000) {
             $errors['password'] = 'Neues Kennwort muss zwischen 8 und 1000 Zeichen lang sein.';
