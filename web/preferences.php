@@ -1,16 +1,20 @@
 <?php
 require_once(__DIR__ . '/../inc/initialize.php');
 
+use chillerlan\QRCode\QRCode;
+use chillerlan\QRCode\QROptions;
+
 if (empty($_SESSION['loggedin'])) {
     header('Location: login.php'); exit;
 }
 
 $userId     = (int) $_SESSION['id'];
+$username   = $_SESSION['username'] ?? '';
 $theme      = htmlspecialchars($_SESSION['theme'] ?? ($_COOKIE['theme'] ?? 'auto'), ENT_QUOTES, 'UTF-8');
 $departures = (int) ($_SESSION['departures'] ?? MAX_DEPARTURES);
 
-// Reload email fresh from DB (avoids stale session value)
-$stmt = $con->prepare('SELECT email FROM jardyx_auth.auth_accounts WHERE id = ?');
+// Reload email fresh from DB
+$stmt = $con->prepare('SELECT email FROM auth.auth_accounts WHERE id = ?');
 $stmt->bind_param('i', $userId);
 $stmt->execute();
 $currentEmail = htmlspecialchars(
@@ -18,9 +22,17 @@ $currentEmail = htmlspecialchars(
 );
 $stmt->close();
 
-$errors = [];
+// 2FA status
+$table   = AUTH_DB_PREFIX . 'auth_accounts';
+$stmt    = $con->prepare("SELECT totp_secret FROM {$table} WHERE id = ?");
+$stmt->bind_param('i', $userId);
+$stmt->execute();
+$acctRow = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+$has2fa  = ($acctRow['totp_secret'] ?? null) !== null;
 
-// ── POST handler ─────────────────────────────────────────────────────────────
+$errors    = [];
+$activeTab = 'design';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_verify()) {
@@ -30,7 +42,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $action = $_POST['action'] ?? '';
 
-    // ── Profile picture upload ────────────────────────────────────────────────
+    $activeTab = match(true) {
+        in_array($action, ['change_password', 'totp_start', 'totp_confirm', 'totp_disable'], true) => 'sicherheit',
+        $action === 'change_email'      => 'email',
+        $action === 'change_departures' => 'abfahrten',
+        $action === 'upload_avatar'     => 'profilbild',
+        default                         => 'design',
+    };
+
+    // ── Avatar upload (AJAX) ──────────────────────────────────────────────
     if ($action === 'upload_avatar') {
         $res = \Erikr\Chrome\AvatarUpload::handle($con, $userId, $_FILES['avatar'] ?? null);
         header('Content-Type: application/json; charset=utf-8');
@@ -53,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    // ── Change e-mail (sends confirmation to the new address) ─────────────────
+    // ── Change e-mail ─────────────────────────────────────────────────────
     if ($action === 'change_email') {
         $newEmail  = trim($_POST['email'] ?? '');
         $emailPass = $_POST['email_password'] ?? '';
@@ -63,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($emailPass === '') {
             $errors['email'] = 'Bitte Kennwort zur Bestätigung eingeben.';
         } else {
-            $stmt = $con->prepare('SELECT password FROM jardyx_auth.auth_accounts WHERE id = ?');
+            $stmt = $con->prepare('SELECT password FROM auth.auth_accounts WHERE id = ?');
             $stmt->bind_param('i', $userId);
             $stmt->execute();
             $row = $stmt->get_result()->fetch_assoc();
@@ -72,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$row || !password_verify($emailPass, $row['password'])) {
                 $errors['email'] = 'Das Kennwort ist falsch.';
             } else {
-                $chk = $con->prepare('SELECT id FROM jardyx_auth.auth_accounts WHERE email = ? AND id != ?');
+                $chk = $con->prepare('SELECT id FROM auth.auth_accounts WHERE email = ? AND id != ?');
                 $chk->bind_param('si', $newEmail, $userId);
                 $chk->execute();
                 $chk->store_result();
@@ -84,32 +104,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $code = bin2hex(random_bytes(32));
                     $upd  = $con->prepare(
-                        'UPDATE jardyx_auth.auth_accounts SET pending_email = ?, email_change_code = ? WHERE id = ?'
+                        'UPDATE auth.auth_accounts SET pending_email = ?, email_change_code = ? WHERE id = ?'
                     );
                     $upd->bind_param('ssi', $newEmail, $code, $userId);
                     $upd->execute();
                     $upd->close();
 
                     $confirmUrl = APP_BASE_URL . '/confirm_email.php?code=' . urlencode($code);
-                    if (mail_send_email_change_confirmation($newEmail, $_SESSION['username'] ?? '', $confirmUrl)) {
-                        appendLog($con, 'prefs', 'Email change requested for ' . ($_SESSION['username'] ?? ''));
+                    if (mail_send_email_change_confirmation($newEmail, $username, $confirmUrl)) {
+                        appendLog($con, 'prefs', 'Email change requested for ' . $username);
                         addAlert('info', 'Bestätigungslink wurde an die neue E-Mail-Adresse gesendet. Bitte prüfen Sie Ihren Posteingang.');
-                        header('Location: preferences.php'); exit;
+                        header('Location: preferences.php#email'); exit;
                     }
-                    appendLog($con, 'prefs', 'Email send failed for ' . ($_SESSION['username'] ?? ''));
+                    appendLog($con, 'prefs', 'Email send failed for ' . $username);
                     $errors['email'] = 'Die Bestätigungs-E-Mail konnte nicht gesendet werden. Bitte versuchen Sie es später erneut.';
                 }
             }
         }
     }
 
-    // ── Change theme ─────────────────────────────────────────────────────────
+    // ── Change theme ──────────────────────────────────────────────────────
     if ($action === 'change_theme') {
         $t = $_POST['theme'] ?? '';
         if (!in_array($t, ['light', 'dark', 'auto'], true)) {
             $errors['theme'] = 'Ungültiges Design.';
         } else {
-            $upd = $con->prepare('UPDATE jardyx_auth.auth_accounts SET theme = ? WHERE id = ?');
+            $upd = $con->prepare('UPDATE auth.auth_accounts SET theme = ? WHERE id = ?');
             $upd->bind_param('si', $t, $userId);
             $upd->execute();
             $upd->close();
@@ -123,11 +143,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             appendLog($con, 'prefs', 'Theme set to ' . $t);
             addAlert('success', 'Design gespeichert.');
-            header('Location: preferences.php'); exit;
+            header('Location: preferences.php#design'); exit;
         }
     }
 
-    // ── Change max. departures ────────────────────────────────────────────────
+    // ── Change max. departures ────────────────────────────────────────────
     if ($action === 'change_departures') {
         $dep = (int) ($_POST['departures'] ?? 0);
         if ($dep < 1 || $dep > 5) {
@@ -144,12 +164,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $departures = $dep;
             appendLog($con, 'prefs', 'Departures set to ' . $dep);
             addAlert('success', 'Anzahl der Abfahrten aktualisiert.');
-            header('Location: preferences.php'); exit;
+            header('Location: preferences.php#abfahrten'); exit;
         }
+    }
+
+    // ── Change password ───────────────────────────────────────────────────
+    if ($action === 'change_password') {
+        $current = $_POST['current_password'] ?? '';
+        $new     = $_POST['new_password']     ?? '';
+        $confirm = $_POST['confirm_password'] ?? '';
+
+        $rowStmt = $con->prepare("SELECT password FROM {$table} WHERE id = ?");
+        $rowStmt->bind_param('i', $userId);
+        $rowStmt->execute();
+        $pwRow = $rowStmt->get_result()->fetch_assoc();
+        $rowStmt->close();
+
+        if (!password_verify($current, $pwRow['password'])) {
+            $errors['password'] = 'Aktuelles Kennwort ist falsch.';
+        } elseif (strlen($new) < 8 || strlen($new) > 1000) {
+            $errors['password'] = 'Neues Kennwort muss zwischen 8 und 1000 Zeichen lang sein.';
+        } elseif ($new !== $confirm) {
+            $errors['password'] = 'Kennwörter stimmen nicht überein.';
+        } else {
+            auth_change_password($con, $userId, $new);
+            addAlert('success', 'Kennwort geändert.');
+            header('Location: preferences.php#sicherheit'); exit;
+        }
+    }
+
+    // ── Enable 2FA step 1: generate secret ───────────────────────────────
+    if ($action === 'totp_start') {
+        $secret = auth_totp_enable($con, $userId);
+        if ($secret !== null) {
+            $_SESSION['totp_setup_secret'] = ['secret' => $secret, 'until' => time() + 300];
+        }
+        header('Location: preferences.php#sicherheit'); exit;
+    }
+
+    // ── Enable 2FA step 2: confirm code ──────────────────────────────────
+    if ($action === 'totp_confirm') {
+        $setupData = $_SESSION['totp_setup_secret'] ?? null;
+        if ($setupData === null || time() > $setupData['until']) {
+            unset($_SESSION['totp_setup_secret']);
+            $errors['totp'] = 'Sitzung abgelaufen. Bitte erneut starten.';
+        } else {
+            $code = trim($_POST['totp_code'] ?? '');
+            $ok   = auth_totp_confirm($con, $userId, $setupData['secret'], $code);
+            if ($ok) {
+                unset($_SESSION['totp_setup_secret']);
+                appendLog($con, 'auth', $username . ' enabled 2FA.');
+                addAlert('success', '2FA ist jetzt aktiv.');
+                header('Location: preferences.php#sicherheit'); exit;
+            } else {
+                $errors['totp'] = 'Code ungültig. Bitte erneut versuchen.';
+            }
+        }
+    }
+
+    // ── Disable 2FA ───────────────────────────────────────────────────────
+    if ($action === 'totp_disable') {
+        auth_totp_disable($con, $userId);
+        unset($_SESSION['totp_setup_secret']);
+        appendLog($con, 'auth', $username . ' disabled 2FA.');
+        addAlert('success', '2FA wurde deaktiviert.');
+        header('Location: preferences.php#sicherheit'); exit;
     }
 }
 
+// QR code for 2FA setup in progress
+$setupSecret = null;
+$setupQrHtml = '';
+$setupData   = $_SESSION['totp_setup_secret'] ?? null;
+if ($setupData !== null && time() <= $setupData['until']) {
+    $setupSecret = $setupData['secret'];
+    $appName     = 'WL Monitor';
+    $uri         = auth_totp_uri($setupSecret, $username . '@' . $appName, $appName);
+    $options     = new QROptions(['outputType' => 'svg', 'imageBase64' => false]);
+    $svg         = (new QRCode($options))->render($uri);
+    $setupQrHtml = '<img src="data:image/svg+xml;base64,' . base64_encode($svg)
+                 . '" width="200" height="200" alt="QR Code">';
+}
+
 $avatarUrl = 'avatar.php?id=' . $userId;
+$csrfToken = csrf_token();
 ?>
 <?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
 <script nonce="<?= $_cspNonce ?>">
