@@ -256,177 +256,331 @@ $csrfToken = csrf_token();
   if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
 })();
 </script>
+<script nonce="<?= $_cspNonce ?>">
+window.wlPrefsTab      = <?= json_encode($activeTab) ?>;
+window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') ?>;
+</script>
+
+<link rel="stylesheet" href="css/shared/js/vendor/cropperjs/cropper.min.css">
 
 <div class="container-md mt-4">
-  <h4 class="mb-4"><?= icon("user-cog", "me-2") ?>Einstellungen</h4>
+  <h4 class="mb-3"><?= icon("user-cog", "me-2") ?>Einstellungen</h4>
 
   <?php foreach ($_SESSION['alerts'] ?? [] as [$type, $msg]): ?>
-    <div class="alert alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?> alert-dismissible fade show">
+    <div class="alert alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?> alert-dismissible fade show" role="alert">
       <?= $msg ?>
       <button type="button" class="btn-close" data-dismiss-alert></button>
     </div>
   <?php endforeach; unset($_SESSION['alerts']); ?>
 
-  <!-- ── Profilbild ──────────────────────────────────────────────────────── -->
-  <link rel="stylesheet" href="css/shared/js/vendor/cropperjs/cropper.min.css">
-  <div class="card mb-3">
-    <div class="card-header"><?= icon("camera", "me-1") ?> Profilbild</div>
-    <div class="card-body">
-      <div class="d-flex align-items-center gap-3 mb-3">
-        <img src="<?= $avatarUrl ?>" class="rounded-circle"
-             style="width:64px;height:64px;object-fit:cover;" alt="Profilbild">
-        <div class="text-muted small">JPEG, PNG, GIF oder WebP &middot; max. 5&thinsp;MB. Nach der Auswahl &ouml;ffnet sich der Zuschnitt.</div>
-      </div>
-
-      <input type="file" class="form-control" id="avatarFile"
-             accept="image/jpeg,image/png,image/gif,image/webp">
-    </div>
-  </div>
-
-  <div class="modal" id="avatarCropModal" aria-hidden="true" role="dialog"
-       style="display:none;position:fixed;inset:0;z-index:1050;background:rgba(0,0,0,.6);
-              align-items:center;justify-content:center;padding:1rem">
-    <div class="modal-dialog" style="max-width:560px;width:100%;background:var(--color-bg);
-         border:1px solid var(--color-border);border-radius:var(--radius);
-         box-shadow:var(--shadow-sm);display:flex;flex-direction:column;max-height:90vh">
-      <div class="modal-header" style="padding:.75rem 1rem;border-bottom:1px solid var(--color-border)">
-        <strong>Profilbild zuschneiden</strong>
-      </div>
-      <div class="modal-body" style="padding:1rem;overflow:auto;min-height:0">
-        <div style="max-height:60vh">
-          <img id="avatarCropImage" alt="" style="display:block;max-width:100%">
-        </div>
-      </div>
-      <div class="modal-footer" style="padding:.75rem 1rem;border-top:1px solid var(--color-border);display:flex;gap:.5rem;justify-content:flex-end">
-        <button type="button" class="btn" id="avatarCropCancel">Abbrechen</button>
-        <button type="button" class="btn btn-outline-success" id="avatarCropConfirm">Speichern</button>
-      </div>
-    </div>
-  </div>
-  <script nonce="<?= $_cspNonce ?>" src="css/shared/js/vendor/cropperjs/cropper.min.js"></script>
-  <script nonce="<?= $_cspNonce ?>" src="css/shared/js/avatar-cropper.js"></script>
-  <script nonce="<?= $_cspNonce ?>">
-  (function () {
-    const modal = document.getElementById('avatarCropModal');
-    new MutationObserver(function () {
-      modal.style.display = modal.classList.contains('show') ? 'flex' : 'none';
-    }).observe(modal, { attributes: true, attributeFilter: ['class'] });
-    initAvatarCropper({
-      fileInputId: 'avatarFile',
-      modalId:     'avatarCropModal',
-      imageId:     'avatarCropImage',
-      confirmId:   'avatarCropConfirm',
-      cancelId:    'avatarCropCancel',
-      formAction:  'preferences.php',
-      csrfToken:   <?= json_encode(csrf_token()) ?>,
-    });
-  })();
-  </script>
+  <nav class="tab-bar mb-3" role="tablist" aria-label="Einstellungen">
+    <button class="tab-btn" role="tab" id="tab-design"
+            aria-controls="panel-design" aria-selected="true"
+            data-tab="design">Design</button>
+    <button class="tab-btn" role="tab" id="tab-abfahrten"
+            aria-controls="panel-abfahrten" aria-selected="false"
+            data-tab="abfahrten">Abfahrten</button>
+    <button class="tab-btn" role="tab" id="tab-email"
+            aria-controls="panel-email" aria-selected="false"
+            data-tab="email">E-Mail</button>
+    <button class="tab-btn" role="tab" id="tab-sicherheit"
+            aria-controls="panel-sicherheit" aria-selected="false"
+            data-tab="sicherheit">Sicherheit</button>
+    <button class="tab-btn" role="tab" id="tab-profilbild"
+            aria-controls="panel-profilbild" aria-selected="false"
+            data-tab="profilbild">Profilbild</button>
+  </nav>
 
   <!-- ── Design ───────────────────────────────────────────────────────────── -->
-  <div class="card mb-3">
-    <div class="card-header"><?= icon("palette", "me-1") ?> Design</div>
-    <div class="card-body">
-      <?php if (!empty($errors['theme'])): ?>
-        <div class="alert alert-danger py-2">
-          <?= htmlspecialchars($errors['theme'], ENT_QUOTES, 'UTF-8') ?>
-        </div>
-      <?php endif; ?>
-
-      <form method="post" action="preferences.php">
-        <?= csrf_input() ?>
-        <input type="hidden" name="action" value="change_theme">
-        <div class="btn-group w-100 mb-3" role="group" aria-label="Farbschema">
-          <?php foreach (['light' => ['sun', 'Hell'], 'auto' => ['adjust', 'Automatisch'], 'dark' => ['moon', 'Dunkel']] as $val => [$iconId, $label]): ?>
-            <input type="radio" class="btn-check" name="theme" id="theme_<?= $val ?>"
-                   value="<?= $val ?>" autocomplete="off" <?= $theme === $val ? 'checked' : '' ?>>
-            <label class="btn btn-outline-secondary" for="theme_<?= $val ?>">
-              <?= icon($iconId, 'me-1') ?><?= $label ?>
-            </label>
-          <?php endforeach; ?>
-        </div>
-        <button type="submit" class="btn btn-outline-success">
-          <?= icon("save", "me-1") ?> Speichern
-        </button>
-      </form>
-    </div>
-  </div>
-
-  <!-- ── Abfahrten ──────────────────────────────────────────────────────── -->
-  <div class="card mb-3">
-    <div class="card-header"><?= icon("list-ol", "me-1") ?> Abfahrten pro Linie</div>
-    <div class="card-body">
-      <p class="text-muted small mb-3">
-        Wie viele Abfahrten pro Linie und Richtung werden angezeigt (1–5)?
-      </p>
-
-      <?php if (!empty($errors['departures'])): ?>
-        <div class="alert alert-danger py-2">
-          <?= htmlspecialchars($errors['departures'], ENT_QUOTES, 'UTF-8') ?>
-        </div>
-      <?php endif; ?>
-
-      <form method="post" action="preferences.php">
-        <?= csrf_input() ?>
-        <input type="hidden" name="action" value="change_departures">
-        <div class="mb-3">
-          <label class="form-label" for="departuresRange">
-            Anzahl: <strong id="depVal"><?= $departures ?></strong>
-          </label>
-          <input type="range" class="form-range" id="departuresRange" name="departures"
-                 min="1" max="5" value="<?= $departures ?>"
-                 oninput="document.getElementById('depVal').textContent=this.value">
-          <div class="d-flex justify-content-between small text-muted">
-            <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+  <div id="panel-design" role="tabpanel" aria-labelledby="tab-design">
+    <div class="card mb-3">
+      <div class="card-header"><?= icon("palette", "me-1") ?> Design</div>
+      <div class="card-body">
+        <?php if (!empty($errors['theme'])): ?>
+          <div class="alert alert-danger py-2" role="alert">
+            <?= htmlspecialchars($errors['theme'], ENT_QUOTES, 'UTF-8') ?>
           </div>
-        </div>
-        <button type="submit" class="btn btn-outline-success">
-          <?= icon("save", "me-1") ?> Speichern
-        </button>
-      </form>
+        <?php endif; ?>
+        <form method="post" action="preferences.php">
+          <?= csrf_input() ?>
+          <input type="hidden" name="action" value="change_theme">
+          <div class="btn-group w-100 mb-3" role="group" aria-label="Farbschema">
+            <?php foreach (['light' => ['sun', 'Hell'], 'auto' => ['adjust', 'Automatisch'], 'dark' => ['moon', 'Dunkel']] as $val => [$iconId, $label]): ?>
+              <input type="radio" class="btn-check" name="theme" id="theme_<?= $val ?>"
+                     value="<?= $val ?>" autocomplete="off" <?= $theme === $val ? 'checked' : '' ?>>
+              <label class="btn btn-outline-secondary" for="theme_<?= $val ?>">
+                <?= icon($iconId, 'me-1') ?><?= $label ?>
+              </label>
+            <?php endforeach; ?>
+          </div>
+          <button type="submit" class="btn btn-outline-success">
+            <?= icon("save", "me-1") ?> Speichern
+          </button>
+        </form>
+      </div>
     </div>
   </div>
 
-  <!-- ── E-Mail ──────────────────────────────────────────────────────────── -->
-  <div class="card mb-3">
-    <div class="card-header"><?= icon("envelope", "me-1") ?> E-Mail-Adresse</div>
-    <div class="card-body">
-      <p class="text-muted small mb-3">
-        Aktuelle Adresse: <strong><?= $currentEmail ?></strong>
-      </p>
-      <p class="text-muted small mb-3">
-        Nach dem Speichern erhalten Sie einen Bestätigungslink an die neue Adresse.
-        Die Änderung wird erst nach Bestätigung aktiv.
-      </p>
-
-      <?php if (!empty($errors['email'])): ?>
-        <div class="alert alert-danger py-2">
-          <?= htmlspecialchars($errors['email'], ENT_QUOTES, 'UTF-8') ?>
-        </div>
-      <?php endif; ?>
-
-      <form method="post" action="preferences.php">
-        <?= csrf_input() ?>
-        <input type="hidden" name="action" value="change_email">
-        <div class="mb-3">
-          <label class="form-label" for="newEmail">Neue E-Mail-Adresse</label>
-          <input type="email" id="newEmail" name="email" class="form-control"
-                 value="<?= isset($errors['email'])
-                     ? htmlspecialchars($_POST['email'] ?? '', ENT_QUOTES, 'UTF-8') : '' ?>"
-                 autocomplete="email" required>
-        </div>
-        <div class="mb-3">
-          <label class="form-label" for="emailPassword">Kennwort zur Bestätigung</label>
-          <input type="password" id="emailPassword" name="email_password"
-                 class="form-control" autocomplete="current-password" required>
-        </div>
-        <button type="submit" class="btn btn-outline-success">
-          <?= icon("paper-plane", "me-1") ?> Bestätigungslink senden
-        </button>
-      </form>
+  <!-- ── Abfahrten ────────────────────────────────────────────────────────── -->
+  <div id="panel-abfahrten" role="tabpanel" aria-labelledby="tab-abfahrten" hidden>
+    <div class="card mb-3">
+      <div class="card-header"><?= icon("list-ol", "me-1") ?> Abfahrten pro Linie</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Wie viele Abfahrten pro Linie und Richtung werden angezeigt (1–5)?
+        </p>
+        <?php if (!empty($errors['departures'])): ?>
+          <div class="alert alert-danger py-2" role="alert">
+            <?= htmlspecialchars($errors['departures'], ENT_QUOTES, 'UTF-8') ?>
+          </div>
+        <?php endif; ?>
+        <form method="post" action="preferences.php">
+          <?= csrf_input() ?>
+          <input type="hidden" name="action" value="change_departures">
+          <div class="mb-3">
+            <label class="form-label" name="departuresRange">
+              Anzahl: <strong id="depVal"><?= $departures ?></strong>
+            </label>
+            <input type="range" class="form-range" id="departuresRange" name="departures"
+                   min="1" max="5" value="<?= $departures ?>"
+                   oninput="document.getElementById('depVal').textContent=this.value">
+            <div class="d-flex justify-content-between small text-muted">
+              <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-outline-success">
+            <?= icon("save", "me-1") ?> Speichern
+          </button>
+        </form>
+      </div>
     </div>
   </div>
 
+  <!-- ── E-Mail ───────────────────────────────────────────────────────────── -->
+  <div id="panel-email" role="tabpanel" aria-labelledby="tab-email" hidden>
+    <div class="card mb-3">
+      <div class="card-header"><?= icon("envelope", "me-1") ?> E-Mail-Adresse</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Aktuelle Adresse: <strong><?= $currentEmail ?></strong>
+        </p>
+        <p class="text-muted small mb-3">
+          Nach dem Speichern erhalten Sie einen Bestätigungslink an die neue Adresse.
+          Die Änderung wird erst nach Bestätigung aktiv.
+        </p>
+        <?php if (!empty($errors['email'])): ?>
+          <div class="alert alert-danger py-2" role="alert">
+            <?= htmlspecialchars($errors['email'], ENT_QUOTES, 'UTF-8') ?>
+          </div>
+        <?php endif; ?>
+        <form method="post" action="preferences.php">
+          <?= csrf_input() ?>
+          <input type="hidden" name="action" value="change_email">
+          <div class="mb-3">
+            <label class="form-label" for="newEmail">Neue E-Mail-Adresse</label>
+            <input type="email" id="newEmail" name="email" class="form-control"
+                   value="<?= !empty($errors['email'])
+                       ? htmlspecialchars($_POST['email'] ?? '', ENT_QUOTES, 'UTF-8') : '' ?>"
+                   autocomplete="email" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="emailPassword">Kennwort zur Bestätigung</label>
+            <input type="password" id="emailPassword" name="email_password"
+                   class="form-control" autocomplete="current-password" required>
+          </div>
+          <button type="submit" class="btn btn-outline-success">
+            <?= icon("paper-plane", "me-1") ?> Bestätigungslink senden
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Sicherheit ───────────────────────────────────────────────────────── -->
+  <div id="panel-sicherheit" role="tabpanel" aria-labelledby="tab-sicherheit" hidden>
+
+    <div class="card mb-3">
+      <div class="card-header"><?= icon("key", "me-1") ?> Kennwort ändern</div>
+      <div class="card-body">
+        <?php if (!empty($errors['password'])): ?>
+          <div class="alert alert-danger py-2" role="alert">
+            <?= htmlspecialchars($errors['password'], ENT_QUOTES, 'UTF-8') ?>
+          </div>
+        <?php endif; ?>
+        <form method="post" action="preferences.php">
+          <?= csrf_input() ?>
+          <input type="hidden" name="action" value="change_password">
+          <div class="mb-2">
+            <label class="form-label" for="current_password">Aktuelles Kennwort</label>
+            <input type="password" name="current_password" id="current_password"
+                   class="form-control" required autocomplete="current-password">
+          </div>
+          <div class="mb-2">
+            <label class="form-label" for="new_password">Neues Kennwort</label>
+            <input type="password" name="new_password" id="new_password"
+                   class="form-control" required minlength="8" autocomplete="new-password">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="confirm_password">Kennwort bestätigen</label>
+            <input type="password" name="confirm_password" id="confirm_password"
+                   class="form-control" required minlength="8" autocomplete="new-password">
+          </div>
+          <button type="submit" class="btn btn-outline-success">Kennwort speichern</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><?= icon("shield", "me-1") ?> Zwei-Faktor-Authentifizierung</div>
+      <div class="card-body">
+        <?php if (!empty($errors['totp'])): ?>
+          <div class="alert alert-danger py-2" role="alert">
+            <?= htmlspecialchars($errors['totp'], ENT_QUOTES, 'UTF-8') ?>
+          </div>
+        <?php endif; ?>
+
+        <?php if ($has2fa): ?>
+          <p>
+            <span class="badge bg-success">2FA aktiv</span>
+            Dein Konto ist mit einem TOTP-Authenticator gesichert.
+          </p>
+          <form method="post" action="preferences.php"
+                onsubmit="return confirm('2FA wirklich deaktivieren?')">
+            <?= csrf_input() ?>
+            <input type="hidden" name="action" value="totp_disable">
+            <button type="submit" class="btn btn-outline-danger">2FA deaktivieren</button>
+          </form>
+
+        <?php elseif ($setupSecret !== null): ?>
+          <p>Scanne den QR-Code mit deiner Authenticator-App:</p>
+          <div class="mb-3"><?= $setupQrHtml ?></div>
+          <p class="small text-muted">
+            Oder gib den Code manuell ein:
+            <code><?= htmlspecialchars($setupSecret, ENT_QUOTES, 'UTF-8') ?></code>
+          </p>
+          <form method="post" action="preferences.php">
+            <?= csrf_input() ?>
+            <input type="hidden" name="action" value="totp_confirm">
+            <div class="mb-2">
+              <label class="form-label" for="totp_code">6-stelliger Code zur Bestätigung</label>
+              <input type="text" name="totp_code" id="totp_code"
+                     class="form-control" inputmode="numeric" maxlength="6"
+                     required autofocus autocomplete="one-time-code"
+                     style="max-width:160px;">
+            </div>
+            <button type="submit" class="btn btn-outline-success">Bestätigen</button>
+          </form>
+
+        <?php else: ?>
+          <p>2FA ist nicht aktiviert.</p>
+          <form method="post" action="preferences.php">
+            <?= csrf_input() ?>
+            <input type="hidden" name="action" value="totp_start">
+            <button type="submit" class="btn btn-outline-success">2FA aktivieren</button>
+          </form>
+        <?php endif; ?>
+      </div>
+    </div>
+
+  </div><!-- /panel-sicherheit -->
+
+  <!-- ── Profilbild ───────────────────────────────────────────────────────── -->
+  <div id="panel-profilbild" role="tabpanel" aria-labelledby="tab-profilbild" hidden>
+    <div class="card mb-3">
+      <div class="card-header"><?= icon("camera", "me-1") ?> Profilbild</div>
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-3 mb-3">
+          <img src="<?= $avatarUrl ?>" class="rounded-circle"
+               style="width:64px;height:64px;object-fit:cover;" alt="Profilbild">
+          <div class="text-muted small">JPEG, PNG, GIF oder WebP &middot; max. 5&thinsp;MB. Nach der Auswahl &ouml;ffnet sich der Zuschnitt.</div>
+        </div>
+        <input type="file" class="form-control" id="avatarFile"
+               accept="image/jpeg,image/png,image/gif,image/webp">
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container-md -->
+
+<!-- Avatar crop modal (outside container, position:fixed) -->
+<div class="modal" id="avatarCropModal" aria-hidden="true" role="dialog"
+     style="display:none;position:fixed;inset:0;z-index:1050;background:rgba(0,0,0,.6);
+            align-items:center;justify-content:center;padding:1rem">
+  <div class="modal-dialog" style="max-width:560px;width:100%;background:var(--color-bg);
+       border:1px solid var(--color-border);border-radius:var(--radius);
+       box-shadow:var(--shadow-sm);display:flex;flex-direction:column;max-height:90vh">
+    <div class="modal-header" style="padding:.75rem 1rem;border-bottom:1px solid var(--color-border)">
+      <strong>Profilbild zuschneiden</strong>
+    </div>
+    <div class="modal-body" style="padding:1rem;overflow:auto;min-height:0">
+      <div style="max-height:60vh">
+        <img id="avatarCropImage" alt="" style="display:block;max-width:100%">
+      </div>
+    </div>
+    <div class="modal-footer" style="padding:.75rem 1rem;border-top:1px solid var(--color-border);display:flex;gap:.5rem;justify-content:flex-end">
+      <button type="button" class="btn" id="avatarCropCancel">Abbrechen</button>
+      <button type="button" class="btn btn-outline-success" id="avatarCropConfirm">Speichern</button>
+    </div>
+  </div>
 </div>
+
+<script nonce="<?= $_cspNonce ?>" src="css/shared/js/vendor/cropperjs/cropper.min.js"></script>
+<script nonce="<?= $_cspNonce ?>" src="css/shared/js/avatar-cropper.js"></script>
+<script nonce="<?= $_cspNonce ?>">
+(function () {
+  const modal = document.getElementById('avatarCropModal');
+  new MutationObserver(function () {
+    modal.style.display = modal.classList.contains('show') ? 'flex' : 'none';
+  }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+  initAvatarCropper({
+    fileInputId: 'avatarFile',
+    modalId:     'avatarCropModal',
+    imageId:     'avatarCropImage',
+    confirmId:   'avatarCropConfirm',
+    cancelId:    'avatarCropCancel',
+    formAction:  'preferences.php',
+    csrfToken:   <?= json_encode($csrfToken) ?>,
+  });
+})();
+</script>
+
+<script nonce="<?= $_cspNonce ?>">
+(function () {
+  var TABS = ['design', 'abfahrten', 'email', 'sicherheit', 'profilbild'];
+
+  function activateTab(name) {
+    if (!TABS.includes(name)) name = 'design';
+    TABS.forEach(function (t) {
+      var btn   = document.getElementById('tab-' + t);
+      var panel = document.getElementById('panel-' + t);
+      var active = t === name;
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      btn.classList.toggle('active', active);
+      if (active) panel.removeAttribute('hidden');
+      else        panel.setAttribute('hidden', '');
+    });
+    if (location.hash.slice(1) !== name) {
+      history.replaceState(null, '', '#' + name);
+    }
+  }
+
+  TABS.forEach(function (t) {
+    document.getElementById('tab-' + t).addEventListener('click', function () {
+      activateTab(t);
+    });
+  });
+
+  // On POST re-render (always means validation error — success redirects), use the
+  // PHP-derived tab. On GET, use the URL hash so direct links and back-button work.
+  var initial = window.wlPrefsFromPost
+    ? window.wlPrefsTab
+    : (location.hash.slice(1) || 'design');
+  activateTab(initial);
+
+  window.addEventListener('hashchange', function () {
+    activateTab(location.hash.slice(1));
+  });
+})();
+</script>
 
 <?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>

@@ -6,7 +6,7 @@
  *
  * Responsibilities:
  *  1. Load config and define constants.
- *  2. Open $con (MySQLi to wlmonitor DB; auth queries use jardyx_auth. prefix).
+ *  2. Open $con (MySQLi to wlmonitor DB; auth queries use auth. prefix).
  *  3. Define RATE_LIMIT_FILE and AUTH_DB_PREFIX for the auth library.
  *  4. Call auth_bootstrap() — security headers, session, CSRF.
  *  5. Define wlmonitor-specific utility functions.
@@ -31,19 +31,19 @@ define('CURRENT_PATH',   __FILE__);
 define('APIKEY',         'tVqqssNTeDyFb35');
 define('MAX_DEPARTURES', 2);
 define('APP_VERSION',    '3.0');
-define('APP_BUILD',      31);
+define('APP_BUILD',      33);
 
 $_db = $_cfg['db'];
 define('DATABASE_HOST',     $_db['host']);
 define('DATABASE_USER',     $_db['user']);
 define('DATABASE_PASS',     $_db['password']);
 define('DATABASE_NAME',     $_db['name']);
-define('AUTH_DATABASE_NAME', $_cfg['auth_db']['name'] ?? 'jardyx_auth');
+define('AUTH_DATABASE_NAME', $_cfg['auth_db']['name'] ?? 'auth');
 define('APP_BASE_URL',       rtrim($_cfg['app']['base_url'] ?? '', '/'));
 define('APP_NAME',           $_cfg['app']['name']          ?? 'WL Monitor');
 define('APP_SUPPORT_EMAIL',  $_cfg['app']['support_email'] ?? 'contact@eriks.cloud');
 
-/** Prefix for all cross-DB auth table references (e.g. 'jardyx_auth.'). */
+/** Prefix for all cross-DB auth table references (e.g. 'auth.'). */
 define('AUTH_DB_PREFIX', AUTH_DATABASE_NAME . '.');
 
 unset($_cfg, $_db);
@@ -73,7 +73,7 @@ auth_bootstrap(['img-src' => 'blob:'], $con);
 
 // ── Cross-DB cleanup hooks for admin_delete_user() ────────────────────────────
 //
-// wl_favorites and wl_preferences live in the wlmonitor DB, not in jardyx_auth,
+// wl_favorites and wl_preferences live in the wlmonitor DB, not in auth,
 // so they cannot use FK ON DELETE CASCADE against auth_accounts.
 // admin_delete_user() invokes these callables inside its DELETE transaction.
 
