@@ -90,7 +90,7 @@ if ($show_search) {
     'brandLogoSrc'  => 'assets/jardyx.svg',
     'avatarSrc'     => 'avatar.php?id=' . $_uid,
     'prefsHref'     => 'preferences.php',
-    'securityHref'  => 'security.php',
+    'securityHref'  => 'preferences.php#sicherheit',
     'adminHref'     => 'admin.php',
     'helpHref'      => 'help.php',
     'logoutHref'    => 'logout.php',
