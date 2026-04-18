@@ -188,6 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors['password'] = 'Kennwörter stimmen nicht überein.';
         } else {
             auth_change_password($con, $userId, $new);
+            appendLog($con, 'prefs', $username . ' changed password.');
             addAlert('success', 'Kennwort geändert.');
             header('Location: preferences.php#sicherheit'); exit;
         }
@@ -198,6 +199,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $secret = auth_totp_enable($con, $userId);
         if ($secret !== null) {
             $_SESSION['totp_setup_secret'] = ['secret' => $secret, 'until' => time() + 300];
+        } else {
+            addAlert('danger', '2FA konnte nicht aktiviert werden. Bitte versuchen Sie es erneut.');
         }
         header('Location: preferences.php#sicherheit'); exit;
     }
@@ -263,7 +266,7 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
 
 <link rel="stylesheet" href="css/shared/js/vendor/cropperjs/cropper.min.css">
 
-<div class="container-md mt-4">
+<main class="container-md mt-4" id="main-content">
   <h4 class="mb-3"><?= icon("user-cog", "me-2") ?>Einstellungen</h4>
 
   <?php foreach ($_SESSION['alerts'] ?? [] as [$type, $msg]): ?>
@@ -500,7 +503,7 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
     </div>
   </div>
 
-</div><!-- /container-md -->
+</main>
 
 <!-- Avatar crop modal (outside container, position:fixed) -->
 <div class="modal" id="avatarCropModal" aria-hidden="true" role="dialog"
