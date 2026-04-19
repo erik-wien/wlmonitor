@@ -55,4 +55,12 @@ class StatePersistenceTest extends IntegrationTestCase
         $state = state_load($this->con, $this->userId);
         $this->assertSame('60200456', $state['last_diva']);
     }
+
+    public function test_upsert_handles_multi_diva_string(): void
+    {
+        $multiDiva = '60200103,60200456,60200789'; // 26 chars — exceeds old VARCHAR(16)
+        state_upsert($this->con, $this->userId, null, $multiDiva);
+        $state = state_load($this->con, $this->userId);
+        $this->assertSame($multiDiva, $state['last_diva']);
+    }
 }
