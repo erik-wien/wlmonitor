@@ -35,6 +35,7 @@
  *   favorites_delete POST  id=               Delete favorite (CSRF)
  *   favorites_sort   POST  JSON body         Reorder favorites (CSRF)
  *   log              GET   ?page&limit       Activity log for the current user
+ *   state_save       POST  favId= diva=     Persist last-viewed monitor state (CSRF)
  *
  * Admin only (Admin role + CSRF for writes):
  *   admin_ogd_update   POST  (CSRF)          Download & reload WL station data
@@ -53,6 +54,7 @@ require_once(__DIR__ . '/../inc/favorites.php');
 require_once(__DIR__ . '/../inc/admin.php');
 require_once(__DIR__ . '/../inc/colors.php');
 require_once(__DIR__ . '/../inc/ogd.php');
+require_once(__DIR__ . '/../inc/state.php');
 
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
@@ -164,7 +166,7 @@ try {
             if (!in_array($t, ['light', 'dark', 'auto'], true)) {
                 api_json(['error' => 'Invalid theme'], 400);
             }
-            $stmt = $con->prepare('UPDATE jardyx_auth.auth_accounts SET theme = ? WHERE id = ?');
+            $stmt = $con->prepare('UPDATE auth.auth_accounts SET theme = ? WHERE id = ?');
             $stmt->bind_param('si', $t, $_SESSION['id']);
             $stmt->execute();
             $stmt->close();
@@ -182,6 +184,26 @@ try {
                 api_json(['error' => 'Invalid coordinates'], 400);
             }
             stations_save_position($con, $lat, $lon);
+            api_json(['ok' => true]);
+
+        // ── State ─────────────────────────────────────────────────────────────
+
+        case 'state_save':
+            api_require_login();
+            api_require_csrf();
+            // favId arrives as a FormData string ("5") or absent; reject "0" as invalid
+            $favId = (isset($_POST['favId']) && ctype_digit($_POST['favId']) && (int) $_POST['favId'] > 0)
+                ? (int) $_POST['favId'] : null;
+            $diva  = sanitizeDivaInput($_POST['diva'] ?? '') ?: null;
+            if ($favId !== null) {
+                // Ownership check — silently ignore if the fav belongs to another user
+                $chk = $con->prepare('SELECT id FROM wl_favorites WHERE id = ? AND idUser = ?');
+                $chk->bind_param('ii', $favId, $_SESSION['id']);
+                $chk->execute();
+                if (!$chk->get_result()->fetch_row()) $favId = null;
+                $chk->close();
+            }
+            state_upsert($con, (int) $_SESSION['id'], $favId, $diva);
             api_json(['ok' => true]);
 
         // ── Favorites ─────────────────────────────────────────────────────────
