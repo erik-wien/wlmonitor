@@ -25,10 +25,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load favourites first so we can resolve loadFavId if set
   const favs = await loadFavorites();
 
-  const loadFavId = window.wlConfig?.loadFavId;
-  const targetFav = loadFavId ? favs.find(f => f.id === loadFavId) : null;
+  const loadFavId   = window.wlConfig?.loadFavId;
+  const targetFav   = loadFavId ? favs.find(f => f.id === loadFavId) : null;
+  const initialDiva = window.wlConfig?.initialDiva
+    ?? (!window.wlConfig?.loggedIn ? (localStorage.getItem('wl_last_diva') || null) : null);
   if (targetFav) {
     loadMonitor(targetFav.diva, targetFav);
+  } else if (initialDiva) {
+    loadMonitor(initialDiva);
   } else {
     loadMonitor();
   }
@@ -73,6 +77,17 @@ async function loadMonitor(diva, fav = null) {
     const container = document.getElementById('monitor');
     if (container) container.textContent = 'Keine Abfahrtsdaten verfügbar.';
     console.error(e);
+  }
+}
+
+function saveState(diva, favId = null) {
+  if (window.wlConfig?.loggedIn) {
+    const body = {};
+    if (diva)  body.diva  = diva;
+    if (favId) body.favId = favId;
+    apiPost('state_save', body).catch(e => console.error('state_save failed', e));
+  } else if (diva) {
+    localStorage.setItem('wl_last_diva', diva);
   }
 }
 
@@ -149,6 +164,7 @@ async function addFavoriteFromMonitor() {
       currentMonitor.favId = res.id;
       currentMonitor.fav   = { id: res.id, title, diva, bclass, sort: 0, filter: filterJson ? JSON.parse(filterJson) : null };
       updateMonitorToolbar();
+      saveState(diva, res.id);
     }
     await loadFavorites();
     sendAlert('Favorit gespeichert.', 'success');
@@ -453,7 +469,7 @@ function renderFavorites(favs) {
   for (const fav of favs) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'btn ' + fav.bclass + ' d-block w-100 mb-1 text-start';
+    btn.className = 'btn ' + fav.bclass + ' text-start';
     btn.id = 'btnFav-' + fav.id;
     btn.dataset.diva = fav.diva;
 
@@ -466,7 +482,7 @@ function renderFavorites(favs) {
       const allEntries = Object.values(fav.filter).flat();
       if (allEntries.length) {
         const sub = document.createElement('span');
-        sub.className = 'd-block';
+        sub.className = 'd-block fav-filter-sub';
         sub.style.cssText = 'font-size:.7em;opacity:.75;font-weight:400';
         sub.textContent = allEntries.map(f => f.line + '\u00a0' + f.platform).join(' · ');
         btn.appendChild(sub);
@@ -476,6 +492,7 @@ function renderFavorites(favs) {
     btn.addEventListener('click', () => {
       loadMonitor(fav.diva, fav);
       startMonitorTimer();
+      saveState(fav.diva, fav.id);
     });
     container.appendChild(btn);
   }
@@ -543,12 +560,12 @@ function renderStationList(stations) {
       const span = document.createElement('span');
       span.textContent = s.station + ' (' + dist + ')';
       span.style.cursor = 'pointer';
-      span.addEventListener('click', () => { loadMonitor(s.diva); startMonitorTimer(); closeStationDropdown(); });
+      span.addEventListener('click', () => { loadMonitor(s.diva); startMonitorTimer(); closeStationDropdown(); saveState(s.diva); });
       p.appendChild(span);
     } else {
       p.textContent = s.station;
       p.style.cursor = 'pointer';
-      p.addEventListener('click', () => { loadMonitor(s.diva); startMonitorTimer(); closeStationDropdown(); });
+      p.addEventListener('click', () => { loadMonitor(s.diva); startMonitorTimer(); closeStationDropdown(); saveState(s.diva); });
     }
 
     li.appendChild(p);
