@@ -83,8 +83,8 @@ async function loadMonitor(diva, fav = null) {
 function saveState(diva, favId = null) {
   if (window.wlConfig?.loggedIn) {
     const body = {};
-    if (diva)  body.diva  = diva;
-    if (favId) body.favId = favId;
+    if (diva   != null) body.diva  = diva;
+    if (favId  !== null) body.favId = favId;
     apiPost('state_save', body).catch(e => console.error('state_save failed', e));
   } else if (diva) {
     localStorage.setItem('wl_last_diva', diva);
