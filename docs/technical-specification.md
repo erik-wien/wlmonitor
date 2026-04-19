@@ -479,7 +479,7 @@ Input sanitization applied in `favorites_add` and `favorites_edit`:
 | Function | Notes |
 |---|---|
 | `admin_list_users($con, $page, $perPage, $filter)` | Paginates users; escapes LIKE special chars to prevent wildcard injection |
-| `admin_edit_user($con, $targetId, $email, $rights, $disabled, $departures, $debug)` | Validates `$rights` ∈ `['Admin', 'User']`; updates both auth table and wl_preferences |
+| `admin_edit_user($con, $targetId, $email, $rights, $disabled, $departures)` | Validates `$rights` ∈ `['Admin', 'User']`; updates both auth table and wl_preferences |
 | `admin_reset_password($con, $targetId)` | Generates 8 random bytes → 16-char hex plaintext (shown once), stores bcrypt hash |
 | `admin_delete_user($con, $targetId, $requestingUserId)` | Blocks self-deletion |
 
@@ -774,7 +774,6 @@ Primary user record table, owned by the auth library.
 | `img_size` | INT | Blob size in bytes |
 | `img` | VARCHAR | Legacy avatar filename (superseded by blob) |
 | `lastLogin` | TIMESTAMP | |
-| `debug` | TINYINT | Debug flag for admin use |
 | `pending_email` | VARCHAR | New email awaiting confirmation |
 | `email_change_code` | VARCHAR | 64 hex chars confirmation token |
 

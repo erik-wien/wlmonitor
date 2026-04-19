@@ -331,7 +331,6 @@ Thin public endpoint intended for external consumers (e.g. Home Assistant). Requ
 | disabled         | TINYINT      | 1 = blocked                              |
 | activation_code  | VARCHAR(255) | Token or 'activated'                     |
 | departures       | INT          | Per-user override for departure count    |
-| debug            | TINYINT      | 1 = verbose logging                      |
 | theme            | VARCHAR(10)  | 'light' \| 'dark' \| 'auto'              |
 | lastLogin        | DATETIME     |                                          |
 | invalidLogins    | INT          |                                          |

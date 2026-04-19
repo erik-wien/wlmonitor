@@ -17,7 +17,7 @@
  * Admin actions prefixed `admin_*` are handled by
  * \Erikr\Chrome\Admin\Dispatch::handle() (POST + CSRF + Admin-role enforced
  * inside the dispatcher). wlmonitor-specific admin actions are intercepted
- * BEFORE delegation, so departures/debug/OGD/colours stay owned here.
+ * BEFORE delegation, so departures/OGD/colours stay owned here.
  *
  * Action inventory
  * ────────────────
@@ -39,7 +39,7 @@
  *
  * Admin only (Admin role + CSRF for writes):
  *   admin_ogd_update   POST  (CSRF)          Download & reload WL station data
- *   admin_user_edit    POST  … (CSRF)        Edit user (departures + debug)
+ *   admin_user_edit    POST  … (CSRF)        Edit user (departures)
  *   admin_user_list / admin_user_create / admin_user_delete /
  *   admin_user_reset / admin_user_toggle_disabled / admin_user_revoke_totp /
  *   admin_user_reset_invalid / admin_log_list
@@ -291,7 +291,7 @@ try {
             appendLog($con, 'admin', 'OGD update ' . ($result['ok'] ? 'OK' : 'FAILED: ' . $result['error']));
             api_json($result, $result['ok'] ? 200 : 500);
 
-        // ── User edit (admin, overrides Dispatch to carry departures + debug) ─
+        // ── User edit (admin, overrides Dispatch to carry departures) ─────────
 
         case 'admin_user_edit':
             api_require_admin();
@@ -303,7 +303,6 @@ try {
                 $_POST['rights']            ?? 'User',
                 (int) ($_POST['disabled']   ?? 0),
                 (int) ($_POST['departures'] ?? MAX_DEPARTURES),
-                (int) ($_POST['debug']      ?? 0),
                 (bool) ($_POST['totp_reset'] ?? false)
             );
             api_json(['ok' => $ok]);

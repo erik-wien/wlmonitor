@@ -79,14 +79,6 @@ $pageUrl = static function (int $p, string $f): string {
         'pageUrl' => $pageUrl,
         'extraColumns' => [
             ['key' => 'departures', 'label' => 'Abfahrten'],
-            [
-                'key'    => 'debug',
-                'label'  => 'Debug',
-                'render' => static fn(array $u): string =>
-                    ((int) ($u['debug'] ?? 0) === 1)
-                        ? '<span class="badge badge-warning">ja</span>'
-                        : '<span class="text-muted">–</span>',
-            ],
         ],
     ]); ?>
   </section>
@@ -110,12 +102,6 @@ $pageUrl = static function (int $p, string $f): string {
             'min'     => 1,
             'max'     => MAX_DEPARTURES,
             'default' => MAX_DEPARTURES,
-        ],
-        [
-            'key'   => 'debug',
-            'label' => 'Debug-Modus',
-            'type'  => 'checkbox',
-            'help'  => 'Zeigt zusätzliche Diagnose-Ausgaben in der Aktivitätslog an.',
         ],
     ],
 ]); ?>
@@ -155,7 +141,6 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('editRights').value         = btn.dataset.rights;
       document.getElementById('editDisabled').checked     = btn.dataset.disabled === '1';
       document.getElementById('editDepartures').value     = btn.dataset.departures || '<?= MAX_DEPARTURES ?>';
-      document.getElementById('editDebug').checked        = btn.dataset.debug === '1';
     });
   });
 

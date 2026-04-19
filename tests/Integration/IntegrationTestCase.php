@@ -45,7 +45,6 @@ abstract class IntegrationTestCase extends TestCase
             'activation_code' => 'activated',
             'disabled'        => '0',
             'rights'          => 'User',
-            'debug'           => '0',
             'newMail'         => '',
             'lastLogin'       => date('Y-m-d H:i:s'),
             'invalidLogins'   => 0,
@@ -54,13 +53,13 @@ abstract class IntegrationTestCase extends TestCase
         $stmt = $this->con->prepare(
             'INSERT INTO ' . AUTH_DB_PREFIX . 'auth_accounts
                 (username, email, password, activation_code, disabled, rights,
-                 debug, newMail, lastLogin, invalidLogins)
-             VALUES (?,?,?,?,?,?,?,?,?,?)'
+                 newMail, lastLogin, invalidLogins)
+             VALUES (?,?,?,?,?,?,?,?,?)'
         );
         $stmt->bind_param(
-            'sssssssssi',
+            'ssssssssi',
             $d['username'], $d['email'], $d['password'], $d['activation_code'],
-            $d['disabled'], $d['rights'], $d['debug'],
+            $d['disabled'], $d['rights'],
             $d['newMail'], $d['lastLogin'], $d['invalidLogins']
         );
         $stmt->execute();

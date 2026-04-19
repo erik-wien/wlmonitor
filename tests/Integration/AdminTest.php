@@ -102,8 +102,8 @@ class AdminTest extends IntegrationTestCase
     public function test_edit_updates_email_and_rights(): void
     {
         $uid  = $this->createUser(['email' => 'old@example.com', 'rights' => 'User']);
-        // wl_admin_edit_user(con, id, email, rights, disabled, departures, debug, totp_reset)
-        $ok   = wl_admin_edit_user($this->con, $uid, 'new@example.com', 'Admin', 0, MAX_DEPARTURES, 0, false);
+        // wl_admin_edit_user(con, id, email, rights, disabled, departures, totp_reset)
+        $ok   = wl_admin_edit_user($this->con, $uid, 'new@example.com', 'Admin', 0, MAX_DEPARTURES, false);
 
         $stmt = $this->con->prepare('SELECT email, rights FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
         $stmt->bind_param('i', $uid);
@@ -126,7 +126,7 @@ class AdminTest extends IntegrationTestCase
     public function test_edit_rejects_invalid_rights_value(): void
     {
         $uid = $this->createUser(['rights' => 'User']);
-        admin_edit_user($this->con, $uid, 'x@example.com', 'Superuser', 0, 0, false);
+        admin_edit_user($this->con, $uid, 'x@example.com', 'Superuser', 0, false);
 
         $stmt = $this->con->prepare('SELECT rights FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
         $stmt->bind_param('i', $uid);

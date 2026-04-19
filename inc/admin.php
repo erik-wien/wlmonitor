@@ -3,8 +3,8 @@
  * inc/admin.php
  *
  * Thin wrappers around the shared chrome + auth admin APIs that hydrate the
- * wlmonitor-specific per-user fields (wl_preferences.departures and
- * auth_accounts.debug) onto each user row.
+ * wlmonitor-specific per-user fields (wl_preferences.departures) onto each
+ * user row.
  *
  * Authorization boundary
  * ──────────────────────
@@ -13,10 +13,10 @@
  */
 
 /**
- * Paginated user list with wlmonitor extras (departures + debug) merged in.
+ * Paginated user list with wlmonitor extras (departures) merged in.
  *
  * Returns the same shape as \Erikr\Chrome\Admin\Users::listExtended(), plus
- * `departures` and `debug` keys on each user row.
+ * a `departures` key on each user row.
  */
 function wl_admin_list_users(mysqli $con, int $page = 1, int $perPage = 25, string $filter = ''): array
 {
@@ -30,7 +30,7 @@ function wl_admin_list_users(mysqli $con, int $page = 1, int $perPage = 25, stri
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
     $types        = str_repeat('i', count($ids));
 
-    // Departures lives in wlmonitor.wl_preferences (cross-DB from jardyx_auth).
+    // Departures lives in wlmonitor.wl_preferences (cross-DB from auth).
     $stmt = $con->prepare(
         "SELECT user_id, departures FROM wl_preferences WHERE user_id IN ($placeholders)"
     );
@@ -43,22 +43,8 @@ function wl_admin_list_users(mysqli $con, int $page = 1, int $perPage = 25, stri
     }
     $stmt->close();
 
-    // Debug flag lives on auth_accounts itself (not returned by listExtended).
-    $stmt = $con->prepare(
-        'SELECT id, debug FROM ' . AUTH_DB_PREFIX . "auth_accounts WHERE id IN ($placeholders)"
-    );
-    $stmt->bind_param($types, ...$ids);
-    $stmt->execute();
-    $debug = [];
-    $res   = $stmt->get_result();
-    while ($row = $res->fetch_assoc()) {
-        $debug[(int) $row['id']] = (int) $row['debug'];
-    }
-    $stmt->close();
-
     foreach ($data['users'] as &$user) {
         $user['departures'] = $prefs[$user['id']] ?? MAX_DEPARTURES;
-        $user['debug']      = $debug[$user['id']] ?? 0;
     }
     unset($user);
 
@@ -76,10 +62,9 @@ function wl_admin_edit_user(
     string $rights,
     int    $disabled,
     int    $departures,
-    int    $debug,
     bool   $totp_reset = false
 ): bool {
-    $ok = admin_edit_user($con, $targetId, $email, $rights, $disabled, $debug, $totp_reset);
+    $ok = admin_edit_user($con, $targetId, $email, $rights, $disabled, $totp_reset);
 
     if ($ok) {
         $departures = max(1, min($departures, MAX_DEPARTURES));
