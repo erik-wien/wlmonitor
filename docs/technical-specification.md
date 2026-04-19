@@ -520,17 +520,19 @@ initDropdowns()
 initModals()
 initAlerts()
 favs = await loadFavorites()
-if (wlConfig.loadFavId)
-  loadMonitor(targetFav.diva, targetFav)  ← auto-load after editFavorite save
+if (wlConfig.loadFavId)        ← session key (editFavorite.php redirect) or DB last_fav_id
+  loadMonitor(targetFav.diva, targetFav)
+else if (wlConfig.initialDiva) ← DB last_diva (ad-hoc) or anonymous localStorage
+  loadMonitor(initialDiva)
 else
-  loadMonitor()
+  loadMonitor()                ← Karlsplatz default
 startMonitorTimer()     ← 20-second interval
 wireScrollButton()
 wireStationSort()
 wireStationDropdown()
 ```
 
-`wlConfig.loadFavId` is set when `editFavorite.php` stores the saved favourite's ID in `$_SESSION['loadFavId']` before redirecting back to `index.php`.
+`wlConfig.loadFavId` is populated (in priority order) by: (1) `$_SESSION['loadFavId']` set by `editFavorite.php` after a save, or (2) `wl_preferences.last_fav_id` — the last-viewed favorite persisted across sessions. `wlConfig.initialDiva` is set from `wl_preferences.last_diva` for logged-in users (last ad-hoc station), or from `localStorage('wl_last_diva')` for anonymous users.
 
 ### 6.3 API Communication
 
