@@ -75,11 +75,26 @@ if ($show_search) {
 </head>
 <body>
 <?php
+$appMenu = [
+    ['href' => 'https://wlmonitor.jardyx.com', 'label' => 'WL Monitor'],
+    ['href' => 'https://energie.jardyx.com',   'label' => 'Energie'],
+    ['href' => 'https://chat.jardyx.com',      'label' => 'Chat'],
+    ['href' => 'https://zeit.jardyx.com',      'label' => 'Zeit'],
+];
+if (defined('APP_ENV') && APP_ENV === 'local') {
+    $appMenu[] = ['label' => 'Test', 'children' => [
+        ['href' => 'http://wlmonitor.test', 'label' => 'WL Monitor'],
+        ['href' => 'http://energie.test',   'label' => 'Energie'],
+        ['href' => 'http://chat.test',      'label' => 'Chat'],
+        ['href' => 'http://zeit.test',      'label' => 'Zeit'],
+    ]];
+}
 \Erikr\Chrome\Header::render([
     'appName'       => 'WL Monitor',
     'base'          => '',
     'cspNonce'      => $_csp,
     'csrfToken'     => function_exists('csrf_token') ? csrf_token() : '',
+    'appMenu'       => $appMenu,
     'leftExtra'     => $_leftExtra,
     'spritePath'    => __DIR__ . '/../web/css/icons.svg',
     'loggedIn'      => $_loggedIn,
