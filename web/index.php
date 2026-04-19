@@ -113,6 +113,7 @@ window.wlConfig = {
 </script>
 
 <!-- App module -->
+<script src="js/vendor/Sortable.min.js" nonce="<?= $_cspNonce ?>"></script>
 <script type="module" src="js/wl-monitor.js"></script>
 
 <?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>
