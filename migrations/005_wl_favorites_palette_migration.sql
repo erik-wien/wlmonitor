@@ -11,7 +11,7 @@ UPDATE wl_favorites SET bclass = CASE bclass
     WHEN 'btn-outline-success'   THEN 'btn-outline-color-green'
     WHEN 'btn-outline-info'      THEN 'btn-outline-color-blue'
     WHEN 'btn-outline-warning'   THEN 'btn-outline-color-yellow'
-    WHEN 'btn-outline-danger'    THEN 'btn-outline-color-red-dark'
+    WHEN 'btn-outline-danger'    THEN 'btn-outline-color-red'
     WHEN 'btn-outline-secondary' THEN 'btn-outline-color-grey-dark'
     WHEN 'btn-outline-dark'      THEN 'btn-outline-color-grey-dark'
     ELSE bclass
