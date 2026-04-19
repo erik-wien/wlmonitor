@@ -623,7 +623,7 @@ The app spans two databases:
   `auth_log`, `auth_blacklist`, `auth_invite_tokens`, `password_resets`.
 - **`wlmonitor`** (or `wlmonitor_dev`) — app-specific tables defined by the
   numbered migrations in `migrations/` of this repo. These create
-  `wl_preferences`, `wl_favorites`, `wl_colors`, and the OGD tables.
+  `wl_preferences`, `wl_favorites`, and the OGD tables.
 
 ```bash
 # Auth schema (run once per host that hosts auth)
@@ -635,6 +635,8 @@ mysql < ~/Git/auth/db/02_<…>.sql
 mysql wlmonitor < migrations/001_wl_favorites_filter_json.sql
 mysql wlmonitor < migrations/002_wl_userprefs_uuid_char36.sql
 mysql wlmonitor < migrations/003_wl_colors_repopulate.sql
+mysql wlmonitor < migrations/004_wl_preferences_last_state.sql
+mysql wlmonitor < migrations/005_wl_favorites_palette_migration.sql
 ```
 
 The user table (`auth_accounts`) and per-table column shapes are detailed in

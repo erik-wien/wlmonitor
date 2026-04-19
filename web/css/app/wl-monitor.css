@@ -326,22 +326,6 @@ body {
 /* Tabs, tab-btn, tab-panel, and card-header-split are provided by the shared
    components.css library (Rule §15.4) — do not redeclare them here. */
 
-/* Color table: show outline + solid preview side by side, fixed width so all
-   preview buttons align regardless of label text. */
-.admin-page .color-table td,
-.admin-page .color-table th { vertical-align: middle; }
-.admin-page .color-table code {
-  font-family: var(--font-mono);
-  font-size: 0.78em;
-  color: var(--color-muted);
-}
-.admin-page .color-table .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 6.5rem;
-  margin-right: var(--space-1);
-}
 
 .admin-page .user-filter-form {
   display: flex;
