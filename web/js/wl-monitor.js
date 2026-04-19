@@ -512,6 +512,7 @@ function renderFavorites(favs) {
 async function persistFavSort() {
   const order = [...document.querySelectorAll('#buttons .btn[data-fav-id]')]
     .map((btn, i) => ({ id: parseInt(btn.dataset.favId, 10), sort: i }));
+  if (order.length < 2) return;
   const csrfToken = document.querySelector('input[name="csrf_token"]')?.value ?? '';
   try {
     const res = await fetch('api.php?action=favorites_sort', {
@@ -532,7 +533,8 @@ function initSortable() {
   if (!container || !window.wlConfig?.loggedIn) return;
   if (container.querySelectorAll('.btn[data-fav-id]').length < 2) return;
   const mobile = window.matchMedia('(max-width: 767px)').matches;
-  const opts = { animation: 150, ghostClass: 'sortable-ghost', onEnd: persistFavSort };
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const opts = { animation: reducedMotion ? 0 : 150, ghostClass: 'sortable-ghost', onUpdate: persistFavSort };
   if (mobile) {
     opts.delay = 300;
     opts.delayOnTouchOnly = true;
@@ -541,6 +543,12 @@ function initSortable() {
   }
   sortableInstance = new Sortable(container, opts);
 }
+
+// Re-init Sortable when viewport crosses the mobile/desktop breakpoint so the
+// handle vs. delay config stays correct after window resize.
+window.matchMedia('(max-width: 767px)').addEventListener('change', () => {
+  if (window.wlConfig?.loggedIn) initSortable();
+});
 
 // --- Stations ----------------------------------------------------------------
 async function loadStationsByDistance(position) {
@@ -724,6 +732,7 @@ export function sendAlert(message, type) {
   if (!container) return;
   const div = document.createElement('div');
   div.className = 'alert alert-' + type + ' alert-dismissible fade show';
+  div.setAttribute('role', 'alert');
   div.textContent = message;
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';

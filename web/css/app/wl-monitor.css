@@ -215,18 +215,8 @@ body {
 
 /* ── Favorites grid ──────────────────────────────────────────────────────────── */
 
-#buttons {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.375rem;
-}
 @media (max-width: 767px) {
   .fav-filter-sub { display: none; }
-}
-@media (min-width: 768px) {
-  #buttons {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* ── Drag handle ──────────────────────────────────────────────────────────── */
