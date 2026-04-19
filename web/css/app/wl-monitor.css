@@ -213,6 +213,51 @@ body {
 
 #stationList { cursor: default; }
 
+/* ── Favorites grid ──────────────────────────────────────────────────────────── */
+
+#buttons {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.375rem;
+}
+@media (max-width: 767px) {
+  .fav-filter-sub { display: none; }
+}
+@media (min-width: 768px) {
+  #buttons {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Drag handle ──────────────────────────────────────────────────────────── */
+.drag-handle {
+  display: inline-block;
+  opacity: 0.35;
+  cursor: grab;
+  margin-right: 0.4rem;
+  user-select: none;
+  font-size: 0.9em;
+  line-height: 1;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+  opacity: 0.6;
+}
+
+.sortable-ghost {
+  opacity: 0.35;
+}
+
+@media (max-width: 767px) {
+  .drag-handle {
+    display: none;
+  }
+  #buttons .btn {
+    cursor: grab;
+  }
+}
+
 /* ── Monitor card colors ─────────────────────────────────────────────────────── */
 
 #monitor .card {
