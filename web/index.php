@@ -1,6 +1,7 @@
 <?php
 require_once(__DIR__ . '/../inc/initialize.php');
 require_once(__DIR__ . '/../inc/state.php');
+require_once(__DIR__ . '/../inc/colors.php');
 header('Content-Type: text/html; charset=utf-8');
 
 // Flush session alerts for JS to consume
@@ -74,14 +75,11 @@ $show_search = true;  // show station search in the shared .app-header
         <div class="mb-3">
           <label class="form-label" for="addFavColor">Farbe</label>
           <select id="addFavColor" class="form-select">
-            <option value="btn-outline-default">Standard</option>
-            <option value="btn-outline-primary">Blau</option>
-            <option value="btn-outline-success">Grün</option>
-            <option value="btn-outline-info">Cyan</option>
-            <option value="btn-outline-warning">Orange</option>
-            <option value="btn-outline-danger">Rot</option>
-            <option value="btn-outline-secondary">Grau</option>
-            <option value="btn-outline-dark">Dunkel</option>
+            <?php foreach (wl_palette_list() as $entry): ?>
+              <option value="<?= htmlspecialchars($entry['class'], ENT_QUOTES, 'UTF-8') ?>">
+                <?= htmlspecialchars($entry['label'], ENT_QUOTES, 'UTF-8') ?>
+              </option>
+            <?php endforeach; ?>
           </select>
         </div>
         <div id="addFavLinesSection" style="display:none">

@@ -817,7 +817,7 @@ Primary user record table, owned by the auth library.
 | `idUser` | INT | FK → auth_accounts.id |
 | `title` | VARCHAR(100) | User-defined label; sanitized |
 | `diva` | VARCHAR | Comma-separated DIVA station IDs |
-| `bclass` | VARCHAR | Button color class (`btn-outline-success`, etc.) |
+| `bclass` | VARCHAR | Palette button class (`btn-outline-color-*` from `wl_palette_list()`) |
 | `sort` | INT | Display order (lower = first) |
 | `filter_json` | TEXT NULL | Per-station line filter: `{"diva": [{"line":"59A","platform":"1"}, …], …}` |
 | `created` | TIMESTAMP | |
@@ -1071,7 +1071,7 @@ An attacker who guesses another user's `id` value cannot modify or delete their 
 
 ### 12.4 Color classes
 
-`bclass` maps to button outline variants. Validated pattern: `[a-z0-9-]`. Typical values: `btn-outline-primary`, `btn-outline-success`, `btn-outline-danger`, `btn-outline-warning`, `btn-outline-info`, `btn-outline-secondary`.
+`bclass` stores a palette button class. Validated pattern: `[a-z0-9-]`. Valid values are the `btn-outline-color-*` classes returned by `wl_palette_list()` in `inc/colors.php` (e.g. `btn-outline-color-red`, `btn-outline-color-green`, `btn-outline-color-blue`, …). The legacy Bootstrap outline variants (`btn-outline-primary`, `btn-outline-success`, etc.) are no longer valid — use the palette classes.
 
 ---
 

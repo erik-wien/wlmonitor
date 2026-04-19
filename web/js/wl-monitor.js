@@ -103,7 +103,7 @@ function updateMonitorToolbar() {
   if (currentMonitor.favId) {
     const editBtn = document.createElement('a');
     editBtn.href = 'editFavorite.php?favID=' + currentMonitor.favId;
-    editBtn.className = 'btn btn-sm btn-outline-secondary';
+    editBtn.className = 'btn btn-sm';
     editBtn.appendChild(makeSvgIcon('pencil', 'me-1'));
     editBtn.appendChild(document.createTextNode('Bearbeiten'));
     bar.appendChild(editBtn);
@@ -118,7 +118,7 @@ function updateMonitorToolbar() {
   } else {
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
-    addBtn.className = 'btn btn-sm btn-outline-primary';
+    addBtn.className = 'btn btn-sm btn-outline-color-red';
     addBtn.appendChild(makeSvgIcon('star', 'me-1'));
     addBtn.appendChild(document.createTextNode('Als Favorit speichern'));
     addBtn.addEventListener('click', () => {
