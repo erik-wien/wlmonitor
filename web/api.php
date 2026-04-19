@@ -40,7 +40,6 @@
  * Admin only (Admin role + CSRF for writes):
  *   admin_ogd_update   POST  (CSRF)          Download & reload WL station data
  *   admin_user_edit    POST  … (CSRF)        Edit user (departures + debug)
- *   admin_color_edit   POST  color= farbe=   Rename a color label
  *   admin_user_list / admin_user_create / admin_user_delete /
  *   admin_user_reset / admin_user_toggle_disabled / admin_user_revoke_totp /
  *   admin_user_reset_invalid / admin_log_list
@@ -52,7 +51,6 @@ require_once(__DIR__ . '/../inc/monitor.php');
 require_once(__DIR__ . '/../inc/stations.php');
 require_once(__DIR__ . '/../inc/favorites.php');
 require_once(__DIR__ . '/../inc/admin.php');
-require_once(__DIR__ . '/../inc/colors.php');
 require_once(__DIR__ . '/../inc/ogd.php');
 require_once(__DIR__ . '/../inc/state.php');
 
@@ -308,19 +306,6 @@ try {
                 (int) ($_POST['debug']      ?? 0),
                 (bool) ($_POST['totp_reset'] ?? false)
             );
-            api_json(['ok' => $ok]);
-
-        // ── Color labels (admin, wlmonitor-specific) ─────────────────────────
-
-        case 'admin_color_edit':
-            api_require_admin();
-            api_require_csrf();
-            $color = $_POST['color'] ?? '';
-            $farbe = $_POST['farbe'] ?? '';
-            if ($color === '' || $farbe === '') {
-                api_json(['ok' => false, 'error' => 'color und farbe sind erforderlich.'], 400);
-            }
-            $ok = wl_color_edit($con, $color, $farbe);
             api_json(['ok' => $ok]);
 
         // ── All remaining admin_* actions: Chrome Dispatch ───────────────────

@@ -1,8 +1,6 @@
 <?php
 require_once(__DIR__ . '/../inc/initialize.php');
 require_once(__DIR__ . '/../inc/admin.php');
-require_once(__DIR__ . '/../inc/colors.php');
-
 auth_require();
 admin_require();
 
@@ -14,7 +12,6 @@ $listing  = wl_admin_list_users($con, $page, $perPage, $filter);
 $users    = $listing['users'];
 $total    = $listing['total'];
 
-$colors    = wl_colors_list($con);
 $csrfToken = csrf_token();
 
 $pageUrl = static function (int $p, string $f): string {
@@ -25,18 +22,13 @@ $pageUrl = static function (int $p, string $f): string {
 ?>
 <?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
 
-<main>
+<main id="main-content">
 <div id="adminAlerts" class="container"></div>
 
 <div class="container admin-page">
   <nav class="tab-bar" role="tablist" aria-label="Administration">
     <button type="button" class="tab-btn is-active" role="tab"
-            id="tab-colors" aria-controls="panel-colors" aria-selected="true"
-            data-tab="colors">
-      <?= icon("palette") ?> Farben
-    </button>
-    <button type="button" class="tab-btn" role="tab"
-            id="tab-ogd" aria-controls="panel-ogd" aria-selected="false"
+            id="tab-ogd" aria-controls="panel-ogd" aria-selected="true"
             data-tab="ogd">
       <?= icon("database") ?> Stationsdaten
     </button>
@@ -52,61 +44,9 @@ $pageUrl = static function (int $p, string $f): string {
     </button>
   </nav>
 
-  <!-- ── Tab: Farben ─────────────────────────────────────────────────── -->
-  <section id="panel-colors" class="tab-panel is-active"
-           role="tabpanel" aria-labelledby="tab-colors">
-    <div class="card">
-      <div class="card-header">Favorit-Farben</div>
-      <div class="card-body">
-        <p class="form-text">
-          Die Schaltflächenklassen sind fest im Theme verdrahtet, die deutschen
-          Bezeichnungen können hier umbenannt werden. Änderungen wirken sich
-          sofort im Favoriten-Editor aus.
-        </p>
-
-        <table class="table table-sm color-table">
-          <thead>
-            <tr>
-              <th>Vorschau</th>
-              <th>Bezeichnung</th>
-              <th>Klasse (outline)</th>
-              <th>Klasse (voll)</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="colorTableBody">
-          <?php foreach ($colors as $c):
-              $color = htmlspecialchars($c['color'],   ENT_QUOTES, 'UTF-8');
-              $farbe = htmlspecialchars($c['farbe'],   ENT_QUOTES, 'UTF-8');
-              $out   = htmlspecialchars($c['outline'], ENT_QUOTES, 'UTF-8');
-              $full  = htmlspecialchars($c['full'],    ENT_QUOTES, 'UTF-8');
-          ?>
-            <tr data-color="<?= $color ?>">
-              <td>
-                <span class="btn btn-sm <?= $out ?>"><?= $farbe ?></span>
-                <span class="btn btn-sm <?= $full ?>"><?= $farbe ?></span>
-              </td>
-              <td class="color-label"><?= $farbe ?></td>
-              <td><code><?= $out ?></code></td>
-              <td><code><?= $full ?></code></td>
-              <td class="text-right">
-                <button type="button" class="btn btn-sm btn-edit-color"
-                        data-color="<?= $color ?>"
-                        data-farbe="<?= $farbe ?>">
-                  Bearbeiten
-                </button>
-              </td>
-            </tr>
-          <?php endforeach; ?>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
   <!-- ── Tab: Stationsdaten ──────────────────────────────────────────── -->
-  <section id="panel-ogd" class="tab-panel"
-           role="tabpanel" aria-labelledby="tab-ogd" hidden>
+  <section id="panel-ogd" class="tab-panel is-active"
+           role="tabpanel" aria-labelledby="tab-ogd">
     <div class="card">
       <div class="card-header">Stationsdaten (OGD)</div>
       <div class="card-body">
@@ -158,33 +98,6 @@ $pageUrl = static function (int $p, string $f): string {
   </section>
 </div>
 </main>
-
-<!-- ── Colour-edit modal (app-specific) ──────────────────────────────── -->
-<div class="modal" id="colorModal" role="dialog" aria-labelledby="colorModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="colorModalLabel">Farbe bearbeiten</h5>
-        <button type="button" class="btn-close" data-modal-close aria-label="Schließen"></button>
-      </div>
-      <form id="colorForm">
-        <div class="modal-body">
-          <input type="hidden" name="color" id="colorKey">
-          <div class="mb-2">
-            <label class="form-label" for="colorFarbe">Bezeichnung</label>
-            <input type="text" name="farbe" id="colorFarbe"
-                   class="form-control" maxlength="50" required autocomplete="off">
-          </div>
-          <div class="form-text" id="colorClassHint"></div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn" data-modal-close>Abbrechen</button>
-          <button type="submit" class="btn btn-outline-success">Speichern</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
 
 <!-- ── User create/edit modals (shared) ──────────────────────────────── -->
 <?php \Erikr\Chrome\Admin\UserModals::render([
@@ -481,30 +394,6 @@ document.addEventListener('DOMContentLoaded', () => {
   );
   window.addEventListener('hashchange', maybeLoad);
   maybeLoad();
-});
-
-// ── Colour editor (app-specific) ────────────────────────────────────────────
-document.querySelectorAll('.btn-edit-color').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.getElementById('colorKey').value    = btn.dataset.color;
-    document.getElementById('colorFarbe').value  = btn.dataset.farbe;
-    document.getElementById('colorClassHint').textContent =
-      'Schlüssel: ' + btn.dataset.color;
-    openModal('colorModal');
-  });
-});
-
-document.getElementById('colorForm').addEventListener('submit', async e => {
-  e.preventDefault();
-  const fd  = new FormData(e.target);
-  const res = await adminPost('admin_color_edit', Object.fromEntries(fd));
-  if (res.ok) {
-    showAlert('Gespeichert.', 'success');
-    closeModal('colorModal');
-    setTimeout(() => location.reload(), 600);
-  } else {
-    showAlert('Fehler beim Speichern.', 'danger');
-  }
 });
 
 // ── OGD updater (app-specific) ──────────────────────────────────────────────

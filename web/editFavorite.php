@@ -98,11 +98,9 @@ $initialPillsJson = json_encode($initialPills, JSON_HEX_TAG | JSON_HEX_AMP);
 
 $theme = htmlspecialchars($_SESSION['theme'] ?? ($_COOKIE['theme'] ?? 'auto'), ENT_QUOTES, 'UTF-8');
 
-// Load color labels from wl_colors (admin-editable in admin.php). The
-// favorite button uses the outline variant for display.
 $bclassOptions = [];
-foreach (wl_colors_list($con) as $c) {
-    $bclassOptions[$c['outline']] = $c['farbe'];
+foreach (wl_palette_list() as $entry) {
+    $bclassOptions[$entry['class']] = $entry['label'];
 }
 ?>
 <?php include_once(__DIR__ . '/../inc/html_header.php'); ?>

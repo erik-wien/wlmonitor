@@ -31,7 +31,7 @@ define('CURRENT_PATH',   __FILE__);
 define('APIKEY',         'tVqqssNTeDyFb35');
 define('MAX_DEPARTURES', 2);
 define('APP_VERSION',    '3.0');
-define('APP_BUILD',      36);
+define('APP_BUILD',      37);
 
 $_db = $_cfg['db'];
 define('DATABASE_HOST',     $_db['host']);
