@@ -1,5 +1,6 @@
 <?php
 require_once(__DIR__ . '/../inc/initialize.php');
+require_once(__DIR__ . '/../inc/state.php');
 header('Content-Type: text/html; charset=utf-8');
 
 // Flush session alerts for JS to consume
@@ -11,6 +12,15 @@ $userID     = (int) ($_SESSION['id'] ?? 0);
 $loadFavId  = (int) ($_SESSION['loadFavId'] ?? 0);
 unset($_SESSION['loadFavId']);
 $loggedIn = !empty($_SESSION['loggedin']);
+$initialDiva = null;
+if ($loggedIn && !$loadFavId) {
+    $state = state_load($con, $userID);
+    if ($state['last_fav_id'] !== null) {
+        $loadFavId = $state['last_fav_id']; // FK guarantees favourite still exists
+    } elseif ($state['last_diva'] !== null) {
+        $initialDiva = $state['last_diva'];
+    }
+}
 // html_header.php reads theme from session/cookie — pass it to wlConfig for JS use
 $theme = $loggedIn
     ? ($_SESSION['theme'] ?? 'auto')
@@ -93,11 +103,12 @@ $show_search = true;  // show station search in the shared .app-header
 <!-- Pass PHP state to JS module -->
 <script nonce="<?= $_cspNonce ?>">
 window.wlConfig = {
-  userID:    <?= $userID ?>,
-  loggedIn:  <?= $loggedIn ? 'true' : 'false' ?>,
-  theme:     <?= json_encode($theme) ?>,
-  alerts:    <?= $alertsJson ?>,
-  loadFavId: <?= $loadFavId ?>
+  userID:      <?= $userID ?>,
+  loggedIn:    <?= $loggedIn ? 'true' : 'false' ?>,
+  theme:       <?= json_encode($theme) ?>,
+  alerts:      <?= $alertsJson ?>,
+  loadFavId:   <?= $loadFavId ?>,
+  initialDiva: <?= $initialDiva !== null ? json_encode($initialDiva, JSON_HEX_TAG | JSON_HEX_AMP) : 'null' ?>
 };
 </script>
 
