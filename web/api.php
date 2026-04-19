@@ -224,7 +224,7 @@ try {
                 (int) $_SESSION['id'],
                 $_POST['title']       ?? '',
                 $_POST['diva']        ?? '',
-                $_POST['bclass']      ?? 'btn-outline-success',
+                $_POST['bclass']      ?? 'btn-outline-color-neutral',
                 (int) ($_POST['sort'] ?? 0),
                 isset($_POST['filter_json']) ? (string) $_POST['filter_json'] : null
             );
@@ -239,7 +239,7 @@ try {
                 (int) ($_POST['favId'] ?? 0),
                 $_POST['title']       ?? '',
                 $_POST['diva']        ?? '',
-                $_POST['bclass']      ?? 'btn-outline-success',
+                $_POST['bclass']      ?? 'btn-outline-color-neutral',
                 (int) ($_POST['sort'] ?? 0),
                 isset($_POST['filter_json']) ? (string) $_POST['filter_json'] : null
             );

@@ -137,7 +137,7 @@ function updateMonitorToolbar() {
 async function addFavoriteFromMonitor() {
   const diva   = addModalDiva ?? currentMonitor.diva;
   const title  = document.getElementById('addFavTitle')?.value.trim();
-  const bclass = document.getElementById('addFavColor')?.value || 'btn-outline-default';
+  const bclass = document.getElementById('addFavColor')?.value || 'btn-outline-color-neutral';
   if (!title || !diva) return;
 
   // Collect checked lines, grouped by DIVA into new per-station format
