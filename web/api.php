@@ -191,10 +191,11 @@ try {
         case 'state_save':
             api_require_login();
             api_require_csrf();
-            // favId arrives as a FormData string ("5") or absent; reject "0" as invalid
+            // favId arrives as FormData string ("5"), absent, or "0"; only accept positive integers
             $favId = (isset($_POST['favId']) && ctype_digit($_POST['favId']) && (int) $_POST['favId'] > 0)
                 ? (int) $_POST['favId'] : null;
             $diva  = sanitizeDivaInput($_POST['diva'] ?? '') ?: null;
+            if ($diva !== null && !preg_match('/\d/', $diva)) $diva = null;
             if ($favId !== null) {
                 // Ownership check — silently ignore if the fav belongs to another user
                 $chk = $con->prepare('SELECT id FROM wl_favorites WHERE id = ? AND idUser = ?');
