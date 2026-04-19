@@ -23,7 +23,7 @@ if ($code === '' || !preg_match('/^[0-9a-f]{64}$/', $code)) {
 }
 
 $stmt = $con->prepare(
-    'SELECT id, username, pending_email FROM jardyx_auth.auth_accounts
+    'SELECT id, username, pending_email FROM auth.auth_accounts
      WHERE email_change_code = ? AND pending_email IS NOT NULL'
 );
 $stmt->bind_param('s', $code);
@@ -37,7 +37,7 @@ if (!$row) {
 }
 
 // Check uniqueness of the pending email (race condition guard)
-$chk = $con->prepare('SELECT id FROM jardyx_auth.auth_accounts WHERE email = ? AND id != ?');
+$chk = $con->prepare('SELECT id FROM auth.auth_accounts WHERE email = ? AND id != ?');
 $chk->bind_param('si', $row['pending_email'], $row['id']);
 $chk->execute();
 $chk->store_result();
@@ -47,7 +47,7 @@ $chk->close();
 if ($taken) {
     // Clear pending fields and show error
     $clr = $con->prepare(
-        'UPDATE jardyx_auth.auth_accounts SET pending_email = NULL, email_change_code = NULL WHERE id = ?'
+        'UPDATE auth.auth_accounts SET pending_email = NULL, email_change_code = NULL WHERE id = ?'
     );
     $clr->bind_param('i', $row['id']);
     $clr->execute();
@@ -57,7 +57,7 @@ if ($taken) {
 }
 
 $upd = $con->prepare(
-    'UPDATE jardyx_auth.auth_accounts SET email = pending_email, pending_email = NULL, email_change_code = NULL
+    'UPDATE auth.auth_accounts SET email = pending_email, pending_email = NULL, email_change_code = NULL
      WHERE id = ?'
 );
 $upd->bind_param('i', $row['id']);

@@ -23,6 +23,6 @@ jobs:
         run: composer install --no-interaction --no-progress --prefer-dist
 
       # Unit tests only for now. Integration tests need wlmonitor_dev +
-      # jardyx_auth schemas provisioned; no checkpoint dump exists yet.
+      # auth schemas provisioned; no checkpoint dump exists yet.
       - name: Unit tests
         run: make test-unit

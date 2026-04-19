@@ -13,7 +13,7 @@ with station search, geolocation-based proximity sorting, and per-user favourite
 - **Backend:** PHP 8.2, MySQLi, no framework. Two libraries via Composer path repos:
   - `erikr/auth` — login, session, CSRF, admin, invite, password reset, TOTP 2FA
   - `erikr/chrome` — shared header / footer / admin tab components
-- **Frontend:** Vanilla JS + the shared CSS library (`web/css/shared/` → `~/Git/css`),
+- **Frontend:** Vanilla JS + the shared CSS library (`web/css/shared/` → `~/Git/css_library`),
   app-specific overrides in `web/css/app/wl-monitor.css`, SVG icon sprite.
 - **Data sources:** Wiener Linien `ogd_realtime` API; hactar's station list mirrored
   into the `ogd_haltestellen` / `ogd_steige` / `ogd_linien` tables.
@@ -36,8 +36,8 @@ cd ~/Git/mcp
 ./generate.py --app wlmonitor --target local
 
 # 4. Apply database migrations
-#    a) shared auth DB (jardyx_auth)
-mysql -u root jardyx_auth < ~/Git/auth/db/01_initial.sql
+#    a) shared auth DB (auth)
+mysql -u root auth < ~/Git/auth/db/01_initial.sql
 # …apply remaining ~/Git/auth/db/NN_*.sql in order
 #    b) wlmonitor's own DB
 mysql -u root wlmonitor_dev < migrations/001_wl_favorites_filter_json.sql
@@ -58,7 +58,7 @@ The dev URL serves directly from `web/` in this Git checkout. Production at
 ```bash
 make test              # full suite
 make test-unit         # no DB required
-make test-integration  # needs local wlmonitor_dev + jardyx_auth
+make test-integration  # needs local wlmonitor_dev + auth
 ```
 
 PHPUnit 13, configured via `phpunit.xml`. See `tests/bootstrap.php` for fixtures.
@@ -95,8 +95,8 @@ docs/                specification, architecture, API docs
 
 - Auth, session, CSRF, bcrypt, TOTP, invite/reset tokens — all live in `erikr/auth`.
   Never reimplement in this repo. See [`auth/docs/conventions.md`](https://github.com/erik-wien/auth/blob/main/docs/conventions.md).
-- UI tokens, dark-mode pattern, header/footer chrome — all live in `erikr/css` and
-  `erikr/chrome`. See [`css/docs/design-rules.md`](https://github.com/erik-wien/css/blob/main/docs/design-rules.md).
+- UI tokens, dark-mode pattern, header/footer chrome — all live in `~/Git/css_library` and
+  `~/Git/chrome` (composer `erikr/chrome`). See `~/Git/css_library/docs/design-rules.md`.
 - Every state-changing POST verifies CSRF; logout is POST + CSRF.
 - App-specific tables use the `wl_` prefix (`wl_favorites`, `wl_preferences`).
 - `getUserIpAddr()` reads `REMOTE_ADDR` only — no proxy headers.

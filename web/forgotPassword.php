@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $email = trim($_POST['email']);
 
             $stmt = $con->prepare(
-                'SELECT id, username FROM jardyx_auth.auth_accounts
+                'SELECT id, username FROM auth.auth_accounts
                  WHERE email = ? AND activation_code = "activated" AND disabled = "0"'
             );
             $stmt->bind_param('s', $email);
@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->close();
 
             if ($row) {
-                $del = $con->prepare('DELETE FROM jardyx_auth.password_resets WHERE user_id = ?');
+                $del = $con->prepare('DELETE FROM auth.password_resets WHERE user_id = ?');
                 $del->bind_param('i', $row['id']);
                 $del->execute();
                 $del->close();
@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $expiresAt = date('Y-m-d H:i:s', time() + 3600);
 
                 $ins = $con->prepare(
-                    'INSERT INTO jardyx_auth.password_resets (user_id, token, expires_at) VALUES (?, ?, ?)'
+                    'INSERT INTO auth.password_resets (user_id, token, expires_at) VALUES (?, ?, ?)'
                 );
                 $ins->bind_param('iss', $row['id'], $token, $expiresAt);
                 $ins->execute();

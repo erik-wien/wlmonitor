@@ -121,7 +121,7 @@ if [[ "$MODE" == "local" ]]; then
     "user": "wlmonitor",
     "pass": "sopdi9-nyKnyb-zyqpyh",
     "name": "wlmonitor_dev",
-    "auth_name": "jardyx_auth",
+    "auth_name": "auth",
     "base_url": "http://localhost/wlmonitor.test"
   },
   "prod": {
@@ -129,7 +129,7 @@ if [[ "$MODE" == "local" ]]; then
     "user": "wlmonitor",
     "pass": "sopdi9-nyKnyb-zyqpyh",
     "name": "wlmonitor",
-    "auth_name": "jardyx_auth",
+    "auth_name": "auth",
     "base_url": "http://localhost/wlmonitor"
   },
   "world4you": {
@@ -137,7 +137,7 @@ if [[ "$MODE" == "local" ]]; then
     "user": "sql6675098",
     "pass": "dr@3ysr",
     "name": "5279249db19",
-    "auth_name": "jardyx_auth",
+    "auth_name": "auth",
     "base_url": "https://www.jardyx.com/wl-monitor"
   },
   "smtp_dev": {
@@ -206,7 +206,7 @@ elif [[ "$MODE" == "akadbrain" ]]; then
     "user": "wlmonitor",
     "pass": "sopdi9-nyKnyb-zyqpyh",
     "name": "wlmonitor",
-    "auth_name": "jardyx_auth",
+    "auth_name": "auth",
     "base_url": "http://akadbrain.local/wlmonitor"
   },
   "smtp_prod": {

@@ -80,6 +80,7 @@ $appMenu = [
     ['href' => 'https://energie.jardyx.com',   'label' => 'Energie'],
     ['href' => 'https://chat.jardyx.com',      'label' => 'Chat'],
     ['href' => 'https://zeit.jardyx.com',      'label' => 'Zeit'],
+    ['href' => 'https://lastfm.jardyx.com',    'label' => 'Last.fm'],
 ];
 if (defined('APP_ENV') && APP_ENV === 'local') {
     $appMenu[] = ['label' => 'Test', 'children' => [
@@ -87,6 +88,7 @@ if (defined('APP_ENV') && APP_ENV === 'local') {
         ['href' => 'http://energie.test',   'label' => 'Energie'],
         ['href' => 'http://chat.test',      'label' => 'Chat'],
         ['href' => 'http://zeit.test',      'label' => 'Zeit'],
+        ['href' => 'http://lastfm.test',    'label' => 'Last.fm'],
     ]];
 }
 \Erikr\Chrome\Header::render([

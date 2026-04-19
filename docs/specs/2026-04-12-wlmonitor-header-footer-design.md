@@ -6,7 +6,7 @@
 
 **Architecture:** `inc/html_header.php` becomes the full page opener including the `.app-header` nav bar. Pages that include it pass optional flags (`$show_search`, `$show_nav`) to control what appears. The station search (`#stationSearchWrap`) moves from `web/index.php`'s manually-built `<nav>` block into the shared header. `inc/html_footer.php` is already correct (uses `.app-footer`) — no changes needed there.
 
-**Tech stack:** PHP 8, shared CSS library (`web/css/shared/` → `~/Git/css`), `wl-monitor.css`, vanilla JS. No build step.
+**Tech stack:** PHP 8, shared CSS library (`web/css/shared/` → `~/Git/css_library`), `wl-monitor.css`, vanilla JS. No build step.
 
 ---
 

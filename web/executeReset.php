@@ -9,8 +9,8 @@ $resetRow = null;
 if ($token !== '') {
     $stmt = $con->prepare(
         'SELECT pr.id, pr.user_id, a.username
-         FROM jardyx_auth.password_resets pr
-         JOIN jardyx_auth.auth_accounts a ON a.id = pr.user_id
+         FROM auth.password_resets pr
+         JOIN auth.auth_accounts a ON a.id = pr.user_id
          WHERE pr.token = ? AND pr.used = 0 AND pr.expires_at > UTC_TIMESTAMP()'
     );
     $stmt->bind_param('s', $token);
@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resetRow !== null) {
         } else {
             auth_change_password($con, (int) $resetRow['user_id'], $pw1);
 
-            $mark = $con->prepare('UPDATE jardyx_auth.password_resets SET used = 1 WHERE id = ?');
+            $mark = $con->prepare('UPDATE auth.password_resets SET used = 1 WHERE id = ?');
             $mark->bind_param('i', $resetRow['id']);
             $mark->execute();
             $mark->close();
