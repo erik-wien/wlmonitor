@@ -11,6 +11,7 @@ let monitorTimer       = null;
 let currentMonitor     = { diva: null, favId: null, fav: null }; // active monitor context
 let addModalDiva       = null;     // DIVA override for add-favourite modal (single-steig "+")
 let currentMonitorLines = [];      // [{diva, line, platform, direction}] — collected on last render
+let sortableInstance   = null;
 
 // --- Init --------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', async () => {
@@ -472,11 +473,20 @@ function renderFavorites(favs) {
     btn.className = 'btn ' + fav.bclass + ' text-start';
     btn.id = 'btnFav-' + fav.id;
     btn.dataset.diva = fav.diva;
+    btn.dataset.favId = fav.id;
 
     const titleSpan = document.createElement('span');
     titleSpan.className = 'd-block';
     titleSpan.textContent = fav.title;
     btn.appendChild(titleSpan);
+
+    if (window.wlConfig?.loggedIn) {
+      const handle = document.createElement('span');
+      handle.className = 'drag-handle';
+      handle.setAttribute('aria-hidden', 'true');
+      handle.textContent = '≡';
+      btn.insertBefore(handle, btn.firstChild);
+    }
 
     if (fav.filter && typeof fav.filter === 'object') {
       const allEntries = Object.values(fav.filter).flat();
@@ -496,6 +506,40 @@ function renderFavorites(favs) {
     });
     container.appendChild(btn);
   }
+  if (window.wlConfig?.loggedIn) initSortable();
+}
+
+async function persistFavSort() {
+  const order = [...document.querySelectorAll('#buttons .btn[data-fav-id]')]
+    .map((btn, i) => ({ id: parseInt(btn.dataset.favId, 10), sort: i }));
+  const csrfToken = document.querySelector('input[name="csrf_token"]')?.value ?? '';
+  try {
+    const res = await fetch('api.php?action=favorites_sort', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+      body: JSON.stringify(order),
+    });
+    if (!res.ok) throw new Error('favorites_sort HTTP ' + res.status);
+  } catch (e) {
+    sendAlert('Reihenfolge konnte nicht gespeichert werden.', 'danger');
+    console.error('favorites_sort failed', e);
+  }
+}
+
+function initSortable() {
+  if (sortableInstance) { sortableInstance.destroy(); sortableInstance = null; }
+  const container = document.getElementById('buttons');
+  if (!container || !window.wlConfig?.loggedIn) return;
+  if (container.querySelectorAll('.btn[data-fav-id]').length < 2) return;
+  const mobile = window.matchMedia('(max-width: 767px)').matches;
+  const opts = { animation: 150, ghostClass: 'sortable-ghost', onEnd: persistFavSort };
+  if (mobile) {
+    opts.delay = 300;
+    opts.delayOnTouchOnly = true;
+  } else {
+    opts.handle = '.drag-handle';
+  }
+  sortableInstance = new Sortable(container, opts);
 }
 
 // --- Stations ----------------------------------------------------------------
