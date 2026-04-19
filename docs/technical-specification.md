@@ -151,7 +151,7 @@ wlmonitor/
 │   ├── monitor_json.php    Public no-auth JSON feed (Home Assistant)
 │   ├── impressum.html      Legal Impressum (UI rule §14)
 │   ├── css/
-│   │   ├── shared/         Symlink → ~/Git/css (theme.css, reset.css, layout.css, components.css, icons/)
+│   │   ├── shared/         Symlink → ~/Git/css_library (theme.css, reset.css, layout.css, components.css, icons/)
 │   │   ├── app/            App-specific stylesheets (wl-monitor.css, …)
 │   │   └── icons.svg       SVG sprite (transit icons, sort glyphs, etc.)
 │   ├── js/                 wl-monitor.js + admin.js + helpers
@@ -240,6 +240,7 @@ api_require_csrf()   → HTTP 403 if CSRF token mismatch
 | `stations` | GET | — | Station list (alpha or by distance if lat/lon given) |
 | `theme_save` | POST | login + CSRF | Save theme to DB |
 | `position_save` | POST | login + CSRF | Save GPS coords to session |
+| `state_save` | POST + CSRF | login required | Upserts `wl_preferences.last_fav_id` / `last_diva`; verifies fav ownership |
 | `favorites` | GET | login | List user's favorites |
 | `favorites_check` | GET | login | Check if DIVA is already favorited |
 | `favorites_add` | POST | login + CSRF | Create favorite |
@@ -277,12 +278,12 @@ POST target for the registration form.
 3. All fields present
 4. Email format (`FILTER_VALIDATE_EMAIL`)
 5. Password ≥ 8 chars
-6. Email uniqueness (SELECT against `jardyx_auth.auth_accounts`)
+6. Email uniqueness (SELECT against `auth.auth_accounts`)
 
 **On success:**
 - Hashes password (bcrypt, cost 13)
 - Generates activation code: `bin2hex(random_bytes(64))` (128-char hex)
-- `INSERT` into `jardyx_auth.auth_accounts` with `disabled=1`
+- `INSERT` into `auth.auth_accounts` with `disabled=1`
 - `INSERT` into `wl_preferences` (departures = 2)
 - Sends activation email with link to `activate.php?email=X&code=Y`
 - Redirects to `login.php` with success alert
@@ -749,9 +750,9 @@ SVG paths sourced from Heroicons v2 (MIT license).
 
 ## 9. Database Schema
 
-The application spans two MySQL databases: `jardyx_auth` (shared auth library tables) and `wlmonitor` / `wlmonitor_dev` (app-specific tables).
+The application spans two MySQL databases: `auth` (shared auth library tables) and `wlmonitor` / `wlmonitor_dev` (app-specific tables).
 
-### 9.1 jardyx_auth.auth_accounts
+### 9.1 auth.auth_accounts
 
 Primary user record table, owned by the auth library.
 
@@ -775,7 +776,7 @@ Primary user record table, owned by the auth library.
 | `pending_email` | VARCHAR | New email awaiting confirmation |
 | `email_change_code` | VARCHAR | 64 hex chars confirmation token |
 
-### 9.2 jardyx_auth.auth_log
+### 9.2 auth.auth_log
 
 | Column | Type | Notes |
 |---|---|---|
@@ -787,7 +788,7 @@ Primary user record table, owned by the auth library.
 | `ipAdress` | INT | Stored as `INET_ATON()` |
 | `logTime` | TIMESTAMP | |
 
-### 9.3 jardyx_auth.password_resets
+### 9.3 auth.password_resets
 
 | Column | Type | Notes |
 |---|---|---|
@@ -803,6 +804,8 @@ Primary user record table, owned by the auth library.
 |---|---|---|
 | `user_id` | INT PK | FK → auth_accounts.id |
 | `departures` | INT | 1–5; max displayed per line per direction |
+| `last_fav_id` | INT NULL | FK → wl_favorites.id ON DELETE SET NULL; last favourite the user had open |
+| `last_diva` | VARCHAR(255) NULL | Last ad-hoc DIVA the user was viewing (when no favourite was selected) |
 
 ### 9.5 wl_favorites
 
@@ -865,10 +868,10 @@ Data loaded by `ogd_update()` from Wiener Linien open data CSV feeds.
 
 ### 9.8 Cross-database references
 
-Auth tables live in `jardyx_auth`; WL Monitor tables live in `wlmonitor` (or `wlmonitor_dev`). Queries that span databases use the fully-qualified prefix defined in the constant:
+Auth tables live in `auth`; WL Monitor tables live in `wlmonitor` (or `wlmonitor_dev`). Queries that span databases use the fully-qualified prefix defined in the constant:
 
 ```php
-define('AUTH_DB_PREFIX', AUTH_DATABASE_NAME . '.');   // 'jardyx_auth.'
+define('AUTH_DB_PREFIX', AUTH_DATABASE_NAME . '.');   // 'auth.'
 ```
 
 ---
@@ -1283,7 +1286,7 @@ db:
 auth_db:
   host: localhost
   socket: /tmp/mysql.sock
-  name: jardyx_auth
+  name: auth
   user: wlmonitor
   password: …
 smtp:
@@ -1314,8 +1317,8 @@ A starter template lives in `config.example.yaml`. Never commit a populated
 | `APIKEY` | hardcoded | Wiener Linien sender key |
 | `MAX_DEPARTURES` | hardcoded | `2` — per-user override in `wl_preferences.departures` |
 | `DATABASE_*` | `config.yaml` `db:` | App DB credentials |
-| `AUTH_DATABASE_NAME` | `config.yaml` `auth_db.name` | Defaults to `jardyx_auth` |
-| `AUTH_DB_PREFIX` | `AUTH_DATABASE_NAME . '.'` | Cross-DB prefix: `jardyx_auth.` |
+| `AUTH_DATABASE_NAME` | `config.yaml` `auth_db.name` | Defaults to `auth` |
+| `AUTH_DB_PREFIX` | `AUTH_DATABASE_NAME . '.'` | Cross-DB prefix: `auth.` |
 | `SMTP_*` | `config.yaml` `smtp:` | PHPMailer settings |
 | `RATE_LIMIT_FILE` | hardcoded | `data/ratelimit.json` |
 
