@@ -139,13 +139,14 @@ class AdminTest extends IntegrationTestCase
     }
 
     // --- admin_reset_password ------------------------------------------------
-    // New signature (email-based reset, not plaintext return):
-    //   admin_reset_password(mysqli $con, int $targetId, string $baseUrl): bool
+    // Signature: admin_reset_password(mysqli $con, int $targetId, string $baseUrl): array{ok: bool, unblocked_ips: list<string>}
 
     public function test_reset_password_returns_false_for_nonexistent_user(): void
     {
-        $ok = admin_reset_password($this->con, 999999999, 'http://localhost/app');
-        $this->assertFalse($ok);
+        $result = admin_reset_password($this->con, 999999999, 'http://localhost/app');
+        $this->assertIsArray($result);
+        $this->assertFalse($result['ok']);
+        $this->assertSame([], $result['unblocked_ips']);
     }
 
     public function test_reset_password_creates_invite_token_for_existing_user(): void
