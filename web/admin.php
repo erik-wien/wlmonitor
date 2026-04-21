@@ -22,7 +22,7 @@ $pageUrl = static function (int $p, string $f): string {
 ?>
 <?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
 
-<main id="main-content">
+<main id="main-content" tabindex="-1">
 <div id="adminAlerts" class="container"></div>
 
 <div class="container admin-page">

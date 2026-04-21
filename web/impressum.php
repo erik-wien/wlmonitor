@@ -2,7 +2,7 @@
 require_once(__DIR__ . '/../inc/initialize.php');
 include_once(__DIR__ . '/../inc/html_header.php');
 ?>
-<main id="main-content" class="page-reading">
+<main id="main-content" tabindex="-1" class="page-reading">
   <h1>Impressum</h1>
   <p>
     Erik R. Accart-Huemer<br>

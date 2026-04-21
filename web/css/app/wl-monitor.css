@@ -144,7 +144,7 @@
   font-family: inherit;
 }
 .header-search #s::placeholder { color: var(--color-muted); }
-.header-search #s:focus {
+.header-search #s:focus-visible {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent);
@@ -308,7 +308,7 @@ body {
 }
 #monitor .card-header:hover .btn-add-steig,
 #monitor .btn-add-steig:hover,
-#monitor .btn-add-steig:focus {
+#monitor .btn-add-steig:focus-visible {
   opacity: 1;
   background: rgba(255,255,255,.18);
 }
@@ -317,6 +317,12 @@ body {
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) #monitor .btn-add-steig { color: #cdd5cd; }
+}
+
+/* ── Active sessions table ──────────────────────────────────────────────────── */
+
+.table > tbody > tr.is-current > * {
+  background: color-mix(in srgb, var(--color-info) 10%, transparent);
 }
 
 /* ── Admin page ─────────────────────────────────────────────────────────────── */

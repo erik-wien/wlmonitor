@@ -20,5 +20,6 @@ slack:
 app:
   name: WL Monitor
   support_email: contact@eriks.cloud
+  color: '#e2001a'
   base_url: http://wlmonitor.test
 APP_CODE: wlm

@@ -102,13 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($taken) {
                     $errors['email'] = 'Diese E-Mail-Adresse ist bereits vergeben.';
                 } else {
-                    $code = bin2hex(random_bytes(32));
-                    $upd  = $con->prepare(
-                        'UPDATE ' . AUTH_DB_PREFIX . 'auth_accounts SET pending_email = ?, email_change_code = ? WHERE id = ?'
-                    );
-                    $upd->bind_param('ssi', $newEmail, $code, $userId);
-                    $upd->execute();
-                    $upd->close();
+                    $code = auth_email_confirmation_issue($con, $userId, $newEmail)['token'];
 
                     $confirmUrl = APP_BASE_URL . '/confirm_email.php?code=' . urlencode($code);
                     if (mail_send_email_change_confirmation($newEmail, $username, $confirmUrl)) {
@@ -289,7 +283,7 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
 
 <link rel="stylesheet" href="css/shared/js/vendor/cropperjs/cropper.min.css">
 
-<main class="container-md mt-4" id="main-content">
+<main class="container-md mt-4" id="main-content" tabindex="-1">
   <h4 class="mb-3"><?= icon("user-cog", "me-2") ?>Einstellungen</h4>
 
   <?php foreach ($_SESSION['alerts'] ?? [] as [$type, $msg]): ?>
@@ -467,7 +461,7 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
 
         <?php if ($has2fa): ?>
           <p>
-            <span class="badge bg-success">2FA aktiv</span>
+            <span class="badge badge-success">2FA aktiv</span>
             Dein Konto ist mit einem TOTP-Authenticator gesichert.
           </p>
           <form method="post" action="preferences.php"

@@ -9,7 +9,7 @@ require_once(__DIR__ . '/../inc/initialize.php');
 ?>
 <?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
 
-<main class="container-md mt-4 mb-4" id="main-content">
+<main class="container-md mt-4 mb-4" id="main-content" tabindex="-1">
 
   <h1 class="mb-3">Hilfe</h1>
 
