@@ -3,7 +3,7 @@
 target: local
 db:
   host: localhost
-  name: wlmonitor_dev
+  name: jardyx
   user: wlmonitor
   password: your_password
 deploy:
@@ -12,7 +12,7 @@ deploy:
 auth_db:
   host: localhost
   socket: /tmp/mysql.sock
-  name: auth
+  name: jardyx
   user: wlmonitor
   password: your_password
 slack:
