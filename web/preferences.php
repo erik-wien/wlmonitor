@@ -1,5 +1,6 @@
 <?php
 require_once(__DIR__ . '/../inc/initialize.php');
+require_once(__DIR__ . '/../inc/layout.php');
 
 use chillerlan\QRCode\QRCode;
 use chillerlan\QRCode\QROptions;
@@ -269,7 +270,7 @@ if ($setupData !== null && time() <= $setupData['until']) {
 $avatarUrl = 'avatar.php?id=' . $userId;
 $csrfToken = csrf_token();
 ?>
-<?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
+<?php render_header(); ?>
 <script nonce="<?= $_cspNonce ?>">
 (function () {
   var t = <?= json_encode($theme) ?>;
@@ -662,4 +663,4 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
 })();
 </script>
 
-<?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>
+<?php render_footer(); ?>

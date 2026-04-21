@@ -1,6 +1,7 @@
 <?php
 require_once(__DIR__ . '/../inc/initialize.php');
 require_once(__DIR__ . '/../inc/admin.php');
+require_once(__DIR__ . '/../inc/layout.php');
 auth_require();
 admin_require();
 
@@ -20,7 +21,7 @@ $pageUrl = static function (int $p, string $f): string {
     return 'admin.php?' . http_build_query($qs) . '#users';
 };
 ?>
-<?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
+<?php render_header(); ?>
 
 <main id="main-content" tabindex="-1">
 <div id="adminAlerts" class="container"></div>
@@ -407,4 +408,4 @@ document.getElementById('btnOgdUpdate').addEventListener('click', async () => {
 });
 </script>
 
-<?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>
+<?php render_footer(); ?>

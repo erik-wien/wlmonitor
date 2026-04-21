@@ -3,6 +3,7 @@ require_once(__DIR__ . '/../inc/initialize.php');
 require_once(__DIR__ . '/../inc/stations.php');
 require_once(__DIR__ . '/../inc/favorites.php');
 require_once(__DIR__ . '/../inc/colors.php');
+require_once(__DIR__ . '/../inc/layout.php');
 
 if (empty($_SESSION['loggedin'])) {
     header('Location: index.php'); exit;
@@ -103,7 +104,7 @@ foreach (wl_palette_list() as $entry) {
     $bclassOptions[$entry['class']] = $entry['label'];
 }
 ?>
-<?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
+<?php render_header(); ?>
 <script nonce="<?= $_cspNonce ?>">
 (function() {
   var t = <?= json_encode($theme) ?>;
@@ -435,4 +436,4 @@ foreach (wl_palette_list() as $entry) {
 })();
 </script>
 
-<?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>
+<?php render_footer(); ?>

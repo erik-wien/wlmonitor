@@ -6,6 +6,7 @@
  * POST: Validates input, calls invite_complete(), redirects to login.
  */
 require_once(__DIR__ . '/../inc/initialize.php');
+require_once(__DIR__ . '/../inc/layout.php');
 
 $token  = trim($_GET['token'] ?? $_POST['token'] ?? '');
 $error  = '';
@@ -16,9 +17,9 @@ if ($token !== '') {
 }
 
 if ($userId === null) {
-    include_once(__DIR__ . '/../inc/html_header.php');
+    render_header();
     echo '<div class="container mt-4"><div class="alert alert-danger">Link ungültig oder abgelaufen.</div></div>';
-    include_once(__DIR__ . '/../inc/html_footer.php');
+    render_footer();
     exit;
 }
 
@@ -37,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-include_once(__DIR__ . '/../inc/html_header.php');
+render_header();
 ?>
 <div class="container mt-4" style="max-width:480px">
   <h4 class="mb-3">Passwort einrichten</h4>
@@ -58,4 +59,4 @@ include_once(__DIR__ . '/../inc/html_header.php');
     <button type="submit" class="btn btn-primary">Passwort speichern</button>
   </form>
 </div>
-<?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>
+<?php render_footer(); ?>

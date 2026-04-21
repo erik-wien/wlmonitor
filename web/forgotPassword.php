@@ -1,5 +1,6 @@
 <?php
 require_once(__DIR__ . '/../inc/initialize.php');
+require_once(__DIR__ . '/../inc/layout.php');
 
 $error   = '';
 $success = false;
@@ -48,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 header('Content-Type: text/html; charset=utf-8');
 ?>
-<?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
+<?php render_header(); ?>
 
 <nav class="navbar" id="mainNav">
   <div class="container-fluid">
@@ -87,4 +88,4 @@ header('Content-Type: text/html; charset=utf-8');
   <?php endif; ?>
 </div>
 
-<?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>
+<?php render_footer(); ?>

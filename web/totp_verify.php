@@ -7,6 +7,7 @@
  * POST: Call auth_totp_complete(), redirect on success or re-render on failure.
  */
 require_once(__DIR__ . '/../inc/initialize.php');
+require_once(__DIR__ . '/../inc/layout.php');
 
 // Already fully logged in → go to app
 if (!empty($_SESSION['loggedin'])) {
@@ -61,7 +62,7 @@ $csrfToken  = csrf_token();
 $alerts     = $_SESSION['alerts'] ?? [];
 unset($_SESSION['alerts']);
 ?>
-<?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
+<?php render_header(); ?>
 
 <div class="container-sm mt-5">
 
@@ -107,4 +108,4 @@ unset($_SESSION['alerts']);
   </div>
 </div>
 
-<?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>
+<?php render_footer(); ?>

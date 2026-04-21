@@ -6,8 +6,9 @@
  * instead of the user menu when the visitor isn't signed in.
  */
 require_once(__DIR__ . '/../inc/initialize.php');
+require_once(__DIR__ . '/../inc/layout.php');
 ?>
-<?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
+<?php render_header(); ?>
 
 <main class="container-md mt-4 mb-4" id="main-content" tabindex="-1">
 
@@ -130,4 +131,4 @@ require_once(__DIR__ . '/../inc/initialize.php');
 
 </main>
 
-<?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>
+<?php render_footer(); ?>

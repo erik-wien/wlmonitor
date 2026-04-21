@@ -1,6 +1,7 @@
 <?php
 require_once(__DIR__ . '/../inc/initialize.php');
-include_once(__DIR__ . '/../inc/html_header.php');
+require_once(__DIR__ . '/../inc/layout.php');
+render_header();
 ?>
 <main id="main-content" tabindex="-1" class="page-reading">
   <h1>Impressum</h1>
@@ -13,4 +14,4 @@ include_once(__DIR__ . '/../inc/html_header.php');
   <p>Angaben gemäß § 5 ECG</p>
   <p><a href="index.php">&larr; Zurück</a></p>
 </main>
-<?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>
+<?php render_footer(); ?>

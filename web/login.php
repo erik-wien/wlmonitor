@@ -1,5 +1,6 @@
 <?php
 require_once(__DIR__ . '/../inc/initialize.php');
+require_once(__DIR__ . '/../inc/layout.php');
 
 // Already logged in → go to main page
 if (!empty($_SESSION['loggedin'])) {
@@ -13,7 +14,7 @@ $remembered = htmlspecialchars($_COOKIE['wlmonitor_username'] ?? '', ENT_QUOTES,
 $alerts = $_SESSION['alerts'] ?? [];
 unset($_SESSION['alerts']);
 ?>
-<?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
+<?php render_header(); ?>
 <script nonce="<?= $_cspNonce ?>">
 (function () {
   var t = <?= json_encode($theme) ?>;
@@ -85,4 +86,4 @@ unset($_SESSION['alerts']);
   </div>
 </div>
 
-<?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>
+<?php render_footer(); ?>

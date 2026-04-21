@@ -1,0 +1,134 @@
+<?php
+/**
+ * inc/layout.php — wrapper functions for \Erikr\Chrome header/footer.
+ *
+ * render_header(bool $showSearch = false): void
+ *   Emits DOCTYPE, <head>, <body>, and the shared Chrome header.
+ *   Pass true for index.php which shows the station-search widget.
+ *
+ * render_footer(): void
+ *   Emits the shared Chrome footer plus </body></html>.
+ */
+
+function render_header(bool $showSearch = false): void
+{
+    global $_cspNonce;
+
+    $csp      = $_cspNonce ?? '';
+    $loggedIn = !empty($_SESSION['loggedin']);
+    $theme    = $loggedIn ? ($_SESSION['theme'] ?? 'auto') : ($_COOKIE['theme'] ?? 'auto');
+    $theme    = in_array($theme, ['light', 'dark', 'auto'], true) ? $theme : 'auto';
+    $username = $_SESSION['username'] ?? '';
+    $isAdmin  = (($_SESSION['rights'] ?? '') === 'Admin');
+    $uid      = (int) ($_SESSION['id'] ?? 0);
+
+    $leftExtra = '';
+    if ($showSearch) {
+        ob_start(); ?>
+<div class="header-search" id="stationSearchWrap">
+    <div class="search-row">
+        <input type="search" id="s"
+               placeholder="Station suchen …" autocomplete="off">
+        <button class="btn-icon" id="stationListToggle" type="button"
+                tabindex="-1" title="Alle Stationen">
+            <?= icon("chevron-down") ?>
+        </button>
+        <div id="stationDropdown" class="station-dropdown" style="display:none;">
+            <div class="station-dropdown-header">
+                <div class="sort-btn-group">
+                    <input type="radio" name="stationSort" id="sortAlpha"
+                           value="alpha" autocomplete="off" checked>
+                    <label for="sortAlpha"><?= icon("sort-alpha") ?> A–Z</label>
+                    <input type="radio" name="stationSort" id="sortDist"
+                           value="dist" autocomplete="off">
+                    <label for="sortDist"><?= icon("map-marker") ?> Nähe</label>
+                </div>
+            </div>
+            <ul id="stationList" style="list-style:none;padding:0;margin:0;"></ul>
+        </div>
+    </div>
+</div>
+<?php
+        $leftExtra = ob_get_clean();
+    }
+
+    $appMenu = [
+        ['href' => 'https://wlmonitor.jardyx.com', 'label' => 'WL Monitor'],
+        ['href' => 'https://energie.jardyx.com',   'label' => 'Energie'],
+        ['href' => 'https://chat.jardyx.com',      'label' => 'Chat'],
+        ['href' => 'https://zeit.jardyx.com',      'label' => 'Zeit'],
+        ['href' => 'https://lastfm.jardyx.com',    'label' => 'Last.fm'],
+    ];
+    if (defined('APP_ENV') && APP_ENV === 'local') {
+        $appMenu[] = ['label' => 'Test', 'children' => [
+            ['href' => 'http://wlmonitor.test', 'label' => 'WL Monitor'],
+            ['href' => 'http://energie.test',   'label' => 'Energie'],
+            ['href' => 'http://chat.test',      'label' => 'Chat'],
+            ['href' => 'http://zeit.test',      'label' => 'Zeit'],
+            ['href' => 'http://lastfm.test',    'label' => 'Last.fm'],
+        ]];
+    }
+
+    $themeAttr = $theme !== 'auto'
+        ? ' data-theme="' . htmlspecialchars($theme, ENT_QUOTES) . '"'
+        : '';
+    ?>
+<!DOCTYPE html>
+<html lang="de"<?= $themeAttr ?>>
+<head>
+  <title>Wiener Linien Abfahrtsmonitor</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <meta name="application-name" content="WL Monitor">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="WL Monitor">
+  <meta name="theme-color" content="<?= htmlspecialchars(APP_COLOR, ENT_QUOTES) ?>">
+  <link rel="icon" type="image/svg+xml" href="jardyx-favicon.svg">
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="manifest" href="img/manifest.json">
+  <link rel="stylesheet" href="css/shared/theme.css">
+  <link rel="stylesheet" href="css/shared/reset.css">
+  <link rel="stylesheet" href="css/shared/layout.css">
+  <link rel="stylesheet" href="css/shared/components.css">
+  <link rel="stylesheet" href="css/app/wl-monitor.css">
+</head>
+<body>
+<?php
+    \Erikr\Chrome\Header::render([
+        'appName'       => 'WL Monitor',
+        'base'          => '',
+        'cspNonce'      => $csp,
+        'csrfToken'     => function_exists('csrf_token') ? csrf_token() : '',
+        'appMenu'       => $appMenu,
+        'leftExtra'     => $leftExtra,
+        'spritePath'    => __DIR__ . '/../web/css/icons.svg',
+        'loggedIn'      => $loggedIn,
+        'username'      => $username,
+        'isAdmin'       => $isAdmin,
+        'theme'         => $theme,
+        'brandHref'     => 'index.php',
+        'brandLogoSrc'  => 'jardyx-logo.svg',
+        'avatarSrc'     => 'avatar.php?id=' . $uid,
+        'prefsHref'     => 'preferences.php',
+        'securityHref'  => 'preferences.php#sicherheit',
+        'adminHref'     => 'admin.php',
+        'helpHref'      => 'help.php',
+        'logoutHref'    => 'logout.php',
+        'themeEndpoint' => 'preferences.php',
+        'anonLoginHref' => 'login.php',
+    ]);
+}
+
+function render_footer(): void
+{
+    \Erikr\Chrome\Footer::render([
+        'base'          => '',
+        'impressumHref' => 'impressum.php',
+    ]);
+    echo '</body></html>';
+}

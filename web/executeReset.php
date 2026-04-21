@@ -1,5 +1,6 @@
 <?php
 require_once(__DIR__ . '/../inc/initialize.php');
+require_once(__DIR__ . '/../inc/layout.php');
 
 $token = trim($_GET['token'] ?? '');
 $error = '';
@@ -54,7 +55,7 @@ $theme = htmlspecialchars($_COOKIE['theme'] ?? 'auto', ENT_QUOTES, 'UTF-8');
 
 header('Content-Type: text/html; charset=utf-8');
 ?>
-<?php include_once(__DIR__ . '/../inc/html_header.php'); ?>
+<?php render_header(); ?>
 <script nonce="<?= $_cspNonce ?>">
 (function () {
   var t = <?= json_encode($theme) ?>;
@@ -96,4 +97,4 @@ header('Content-Type: text/html; charset=utf-8');
   <?php endif; ?>
 </div>
 
-<?php include_once(__DIR__ . '/../inc/html_footer.php'); ?>
+<?php render_footer(); ?>
