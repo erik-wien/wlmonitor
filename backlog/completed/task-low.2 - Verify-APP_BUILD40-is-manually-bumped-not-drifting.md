@@ -1,10 +1,10 @@
 ---
 id: TASK-LOW.2
 title: 'Verify APP_BUILD=40 is manually bumped, not drifting'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-04-21 05:44'
-updated_date: '2026-04-21 06:15'
+updated_date: '2026-04-21 11:51'
 labels: []
 dependencies: []
 parent_task_id: TASK-LOW
@@ -18,8 +18,8 @@ Audit 2026-04-20: APP_BUILD=40 in wlmonitor stands out against APP_BUILD=1-3 in 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 git log confirms APP_BUILD is manually bumped
-- [ ] #2 Document policy in wlmonitor/CLAUDE.md if missing
+- [x] #1 git log confirms APP_BUILD is manually bumped
+- [x] #2 Document policy in wlmonitor/CLAUDE.md if missing
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -42,3 +42,9 @@ Verification task — likely no code change needed.
 
 **Verification:** git log of the constant shows human-authored commits with release-style messages. No CI or deploy script references it.
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Verified via git log: APP_BUILD has 20+ discrete manual increments across the project history, all authored in feature/fix/chore commits with non-sequential numbers (9→19, 25→27, 28→31, etc.) — consistent with human session-by-session bumping. No deploy script (deploy.sh, mcp/) touches APP_BUILD. Added versioning policy note to CLAUDE.md.
+<!-- SECTION:FINAL_SUMMARY:END -->
