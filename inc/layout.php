@@ -53,19 +53,19 @@ function render_header(bool $showSearch = false): void
     }
 
     $appMenu = [
-        ['href' => 'https://wlmonitor.jardyx.com', 'label' => 'WL Monitor'],
         ['href' => 'https://energie.jardyx.com',   'label' => 'Energie'],
         ['href' => 'https://chat.jardyx.com',      'label' => 'Chat'],
         ['href' => 'https://zeit.jardyx.com',      'label' => 'Zeit'],
         ['href' => 'https://lastfm.jardyx.com',    'label' => 'Last.fm'],
+        ['href' => 'https://www.jardyx.com',       'label' => 'Suche'],
     ];
     if (defined('APP_ENV') && APP_ENV === 'local') {
         $appMenu[] = ['label' => 'Test', 'children' => [
-            ['href' => 'http://wlmonitor.test', 'label' => 'WL Monitor'],
             ['href' => 'http://energie.test',   'label' => 'Energie'],
             ['href' => 'http://chat.test',      'label' => 'Chat'],
             ['href' => 'http://zeit.test',      'label' => 'Zeit'],
             ['href' => 'http://lastfm.test',    'label' => 'Last.fm'],
+            ['href' => 'http://suche.test',     'label' => 'Suche'],
         ]];
     }
 
@@ -115,7 +115,7 @@ function render_header(bool $showSearch = false): void
         'brandLogoSrc'  => 'jardyx-logo.svg',
         'avatarSrc'     => 'avatar.php?id=' . $uid,
         'prefsHref'     => 'preferences.php',
-        'securityHref'  => 'preferences.php#sicherheit',
+        'securityHref'  => 'security.php',
         'adminHref'     => 'admin.php',
         'helpHref'      => 'help.php',
         'logoutHref'    => 'logout.php',

@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-04-21 16:25'
+updated_date: '2026-04-21 16:43'
 labels: []
 dependencies: []
 parent_task_id: TASK-MEDIUM
@@ -23,7 +24,7 @@ Audit 2026-04-21 — three issues in inc/layout.php Header::render() call:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 WL Monitor not listed in its own apps navigation
-- [ ] #2 securityHref resolves to correct security page without anchor-link workaround
+- [x] #1 WL Monitor not listed in its own apps navigation
+- [x] #2 securityHref resolves to correct security page without anchor-link workaround
 - [ ] #3 Anwendung → preferences.php (Abfahrten tab) wired once Chrome supports appPrefsHref
 <!-- AC:END -->
