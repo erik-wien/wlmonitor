@@ -7,6 +7,7 @@ ALTER TABLE wl_preferences
   ADD COLUMN IF NOT EXISTS last_fav_id INT          NULL DEFAULT NULL,
   ADD COLUMN IF NOT EXISTS last_diva   VARCHAR(255) NULL DEFAULT NULL;
 
+ALTER TABLE wl_preferences DROP FOREIGN KEY IF EXISTS fk_wlprefs_last_fav;
 ALTER TABLE wl_preferences
   ADD CONSTRAINT fk_wlprefs_last_fav
   FOREIGN KEY (last_fav_id) REFERENCES wl_favorites(id) ON DELETE SET NULL;
