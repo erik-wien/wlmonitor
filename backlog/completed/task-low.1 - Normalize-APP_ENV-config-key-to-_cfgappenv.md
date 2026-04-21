@@ -1,10 +1,10 @@
 ---
 id: TASK-LOW.1
 title: 'Normalize APP_ENV config key to $_cfg[''app''][''env'']'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-04-21 05:44'
-updated_date: '2026-04-21 06:15'
+updated_date: '2026-04-21 13:22'
 labels: []
 dependencies: []
 parent_task_id: TASK-LOW
@@ -18,9 +18,9 @@ Audit 2026-04-20: wlmonitor is the only app reading $_cfg['target'] with default
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 wlmonitor reads the same config key as other apps
-- [ ] #2 mcp config generator writes the canonical key for all apps
-- [ ] #3 Footer STAGE rendering correct on all environments (DEV local, PROD akadbrain/w4y)
+- [x] #1 wlmonitor reads the same config key as other apps
+- [x] #2 mcp config generator writes the canonical key for all apps
+- [x] #3 Footer STAGE rendering correct on all environments (DEV local, PROD akadbrain/w4y)
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -45,3 +45,9 @@ Config key rename so wlmonitor matches the rest of the ecosystem.
 
 Keep low-priority — cosmetic drift only, but doing it now avoids rework when chrome footer migrates (chrome TASK-MEDIUM.1 assumes `$_cfg['app']['env']`).
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed in two commits across two repos. generate.py now writes app.env = target into every app's config.yaml (fixes the latent bug where all apps fell back to 'dev'). wlmonitor/inc/initialize.php updated to read $_cfg['app']['env'] ?? 'dev' matching the canonical pattern used by energie, zeiterfassung, simplechat. Chrome Footer::deriveStage() already handles all target names correctly ('local'→DEV, 'akadbrain'/'world4you'→PROD).
+<!-- SECTION:FINAL_SUMMARY:END -->
