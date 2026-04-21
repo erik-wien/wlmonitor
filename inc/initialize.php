@@ -23,7 +23,7 @@ require_once __DIR__ . '/yaml.php';
 
 $_cfg = wl_yaml_load(__DIR__ . '/../config.yaml');
 
-define('APP_ENV',  $_cfg['target']   ?? 'local');
+define('APP_ENV',  $_cfg['app']['env'] ?? 'dev');
 define('APP_CODE', $_cfg['APP_CODE'] ?? 'wlm');
 
 define('SCRIPT_PATH',    '/home/.sites/765/site679/web/jardyx.com/wlmonitor/');

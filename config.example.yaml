@@ -22,4 +22,5 @@ app:
   support_email: contact@eriks.cloud
   color: '#e2001a'
   base_url: http://wlmonitor.test
+  env: local
 APP_CODE: wlm
