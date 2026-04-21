@@ -3,10 +3,10 @@ id: TASK-MEDIUM.1
 title: >-
   header: remove self from apps list; fix Sicherheit page; add Anwendung
   (Abfahrten)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-04-21 16:25'
-updated_date: '2026-04-21 16:43'
+updated_date: '2026-04-21 17:18'
 labels: []
 dependencies: []
 parent_task_id: TASK-MEDIUM
@@ -26,5 +26,11 @@ Audit 2026-04-21 — three issues in inc/layout.php Header::render() call:
 <!-- AC:BEGIN -->
 - [x] #1 WL Monitor not listed in its own apps navigation
 - [x] #2 securityHref resolves to correct security page without anchor-link workaround
-- [ ] #3 Anwendung → preferences.php (Abfahrten tab) wired once Chrome supports appPrefsHref
+- [x] #3 Anwendung → preferences.php (Abfahrten tab) wired once Chrome supports appPrefsHref
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+All three ACs complete. AC#1+2 landed in ee1b63a. AC#3 wired now: appPrefsHref → preferences.php#abfahrten, appPrefsLabel → 'Abfahrten' in layout.php once Chrome TASK-HIGH.1 confirmed live.
+<!-- SECTION:FINAL_SUMMARY:END -->

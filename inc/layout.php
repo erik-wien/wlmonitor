@@ -52,7 +52,7 @@ function render_header(bool $showSearch = false): void
         $leftExtra = ob_get_clean();
     }
 
-    $appMenu = [
+    $appsMenu = [
         ['href' => 'https://energie.jardyx.com',   'label' => 'Energie'],
         ['href' => 'https://chat.jardyx.com',      'label' => 'Chat'],
         ['href' => 'https://zeit.jardyx.com',      'label' => 'Zeit'],
@@ -60,7 +60,7 @@ function render_header(bool $showSearch = false): void
         ['href' => 'https://www.jardyx.com',       'label' => 'Suche'],
     ];
     if (defined('APP_ENV') && APP_ENV === 'local') {
-        $appMenu[] = ['label' => 'Test', 'children' => [
+        $appsMenu[] = ['label' => 'Test', 'children' => [
             ['href' => 'http://energie.test',   'label' => 'Energie'],
             ['href' => 'http://chat.test',      'label' => 'Chat'],
             ['href' => 'http://zeit.test',      'label' => 'Zeit'],
@@ -104,7 +104,7 @@ function render_header(bool $showSearch = false): void
         'base'          => '',
         'cspNonce'      => $csp,
         'csrfToken'     => function_exists('csrf_token') ? csrf_token() : '',
-        'appMenu'       => $appMenu,
+        'appsMenu'      => $appsMenu,
         'leftExtra'     => $leftExtra,
         'spritePath'    => __DIR__ . '/../web/css/icons.svg',
         'loggedIn'      => $loggedIn,
@@ -115,6 +115,8 @@ function render_header(bool $showSearch = false): void
         'brandLogoSrc'  => 'jardyx-logo.svg',
         'avatarSrc'     => 'avatar.php?id=' . $uid,
         'prefsHref'     => 'preferences.php',
+        'appPrefsHref'  => 'preferences.php#abfahrten',
+        'appPrefsLabel' => 'Abfahrten',
         'securityHref'  => 'security.php',
         'adminHref'     => 'admin.php',
         'helpHref'      => 'help.php',
