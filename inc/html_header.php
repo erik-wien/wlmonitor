@@ -61,7 +61,8 @@ if ($show_search) {
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="WL Monitor">
-  <meta name="theme-color" content="#000000">
+  <meta name="theme-color" content="<?= htmlspecialchars(APP_COLOR, ENT_QUOTES) ?>">
+  <link rel="icon" type="image/svg+xml" href="jardyx-favicon.svg">
   <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
@@ -104,7 +105,7 @@ if (defined('APP_ENV') && APP_ENV === 'local') {
     'isAdmin'       => $_isAdmin,
     'theme'         => $_theme,
     'brandHref'     => 'index.php',
-    'brandLogoSrc'  => 'assets/jardyx.svg',
+    'brandLogoSrc'  => 'jardyx-logo.svg',
     'avatarSrc'     => 'avatar.php?id=' . $_uid,
     'prefsHref'     => 'preferences.php',
     'securityHref'  => 'preferences.php#sicherheit',

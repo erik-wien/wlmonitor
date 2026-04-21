@@ -31,7 +31,7 @@ define('CURRENT_PATH',   __FILE__);
 define('APIKEY',         'tVqqssNTeDyFb35');
 define('MAX_DEPARTURES', 2);
 define('APP_VERSION',    '3.0');
-define('APP_BUILD',      39);
+define('APP_BUILD',      40);
 
 $_db = $_cfg['db'];
 define('DATABASE_HOST',     $_db['host']);
@@ -42,6 +42,7 @@ define('AUTH_DATABASE_NAME', $_cfg['auth_db']['name'] ?? 'auth');
 define('APP_BASE_URL',       rtrim($_cfg['app']['base_url'] ?? '', '/'));
 define('APP_NAME',           $_cfg['app']['name']          ?? 'WL Monitor');
 define('APP_SUPPORT_EMAIL',  $_cfg['app']['support_email'] ?? 'contact@eriks.cloud');
+define('APP_COLOR',          $_cfg['app']['color']         ?? '#e2001a');
 
 /** Prefix for all cross-DB auth table references (e.g. 'auth.'). */
 define('AUTH_DB_PREFIX', AUTH_DATABASE_NAME . '.');
