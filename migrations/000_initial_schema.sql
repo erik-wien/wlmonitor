@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS `wl_userprefs` (
   `updated` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `created` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
-  CONSTRAINT `users ` FOREIGN KEY (`id`) REFERENCES `auth`.`auth_accounts` (`id`) ON UPDATE NO ACTION
+  CONSTRAINT `users ` FOREIGN KEY (`id`) REFERENCES `auth_accounts` (`id`) ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!50001 DROP VIEW IF EXISTS `ogd_stations`*/;
