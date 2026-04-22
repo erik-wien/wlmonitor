@@ -60,7 +60,7 @@ function render_header(bool $showSearch = false): void
         ['href' => 'https://www.jardyx.com',       'label' => 'Suche'],
     ];
     if (defined('APP_ENV') && APP_ENV === 'local') {
-        $appsMenu[] = ['label' => 'Test', 'children' => [
+        $appsMenu[] = ['label' => 'Test', 'adminOnly' => true, 'children' => [
             ['href' => 'http://energie.test',   'label' => 'Energie'],
             ['href' => 'http://chat.test',      'label' => 'Chat'],
             ['href' => 'http://zeit.test',      'label' => 'Zeit'],
