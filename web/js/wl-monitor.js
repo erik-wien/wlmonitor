@@ -372,6 +372,30 @@ function renderMonitor(data) {
     container.appendChild(card);
   }
 
+  if (Array.isArray(data.alerts) && data.alerts.length) {
+    const wrap = document.createElement('div');
+    wrap.id = 'monitorAlerts';
+    for (const info of data.alerts) {
+      const box = document.createElement('div');
+      box.className = 'alert alert-warning';
+      box.setAttribute('role', 'alert');
+      if (info.title) {
+        const strong = document.createElement('strong');
+        strong.textContent = info.title;
+        box.appendChild(strong);
+      }
+      if (info.descriptionHTML) {
+        if (info.title) box.appendChild(document.createElement('br'));
+        box.appendChild(parseTrustedHtml(info.descriptionHTML));
+      } else if (info.description) {
+        if (info.title) box.appendChild(document.createElement('br'));
+        box.appendChild(document.createTextNode(info.description));
+      }
+      wrap.appendChild(box);
+    }
+    container.appendChild(wrap);
+  }
+
   if (update_at) {
     const t = document.createElement('p');
     t.id = 'monitorUpdateTime';
@@ -394,11 +418,68 @@ function appendDepartureColumns(tr, line) {
 
   const tdTowards = tr.insertCell();
   tdTowards.className = 'towards-cell';
-  tdTowards.textContent = line.towards;
+  tdTowards.appendChild(document.createTextNode(line.towards));
 
   const tdTimes = tr.insertCell();
   tdTimes.className = 'times-cell';
-  tdTimes.textContent = line.departures;
+  if (line.realtime_supported === false) {
+    tdTimes.classList.add('times-scheduled');
+    tdTimes.title = 'Fahrplanzeit (keine Echtzeit)';
+  }
+  const deps = Array.isArray(line.departures) ? line.departures : [];
+  const jammedTimes = [];
+  const deviations  = []; // {t, label}
+  deps.forEach((d, i) => {
+    if (i > 0) tdTimes.appendChild(document.createTextNode(', '));
+    const span = document.createElement('span');
+    span.className = 'dep' + (d.bf ? ' dep-barrierfree' : '');
+    if (d.bf) span.title = 'Barrierefreies Fahrzeug';
+    span.textContent = d.t;
+    tdTimes.appendChild(span);
+    if (d.jam) {
+      tdTimes.appendChild(createAlertMarker());
+      jammedTimes.push(d.t);
+    }
+    if (d.name_override || d.towards_override) {
+      const parts = [];
+      if (d.name_override) parts.push(d.name_override);
+      if (d.towards_override) parts.push('→ ' + d.towards_override);
+      deviations.push({ t: d.t, label: parts.join(' ') });
+    }
+  });
+
+  if (jammedTimes.length) {
+    const note = document.createElement('div');
+    note.className = 'departure-note';
+    note.textContent = 'Verzögerung bei: ' + jammedTimes.join(', ');
+    tdTowards.appendChild(note);
+  }
+  for (const dev of deviations) {
+    const note = document.createElement('div');
+    note.className = 'departure-note';
+    note.textContent = dev.t + ': ' + dev.label;
+    tdTowards.appendChild(note);
+  }
+}
+
+// Parses an HTML fragment from the Wiener Linien API into DOM nodes.
+// We trust WL as the source; descriptionHTML is operator-curated disruption text.
+function parseTrustedHtml(html) {
+  const doc = new DOMParser().parseFromString('<div>' + html + '</div>', 'text/html');
+  const frag = document.createDocumentFragment();
+  const root = doc.body.firstChild;
+  if (root) while (root.firstChild) frag.appendChild(root.firstChild);
+  return frag;
+}
+
+function createAlertMarker() {
+  const span = document.createElement('span');
+  span.className = 'line-alert';
+  span.setAttribute('role', 'img');
+  span.setAttribute('aria-label', 'Störung auf dieser Linie');
+  span.title = 'Störung auf dieser Linie';
+  span.textContent = '⚠️';
+  return span;
 }
 
 function createLineBadge(line) {

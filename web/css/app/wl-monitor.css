@@ -9,6 +9,11 @@
 .departure-table .platform-cell { width: 2.2em; font-size: 0.7em; color: var(--color-muted); vertical-align: middle; }
 .departure-table .towards-cell  { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
 .departure-table .times-cell    { white-space: nowrap; text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; vertical-align: middle; padding-left: 0.5em; }
+.departure-table .dep-barrierfree { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 2px; }
+.departure-table .times-cell.times-scheduled { font-style: italic; color: var(--color-muted); }
+.line-alert { margin-left: 0.15em; font-size: 0.9em; line-height: 1; }
+.departure-table .towards-cell .departure-note { font-size: 0.7em; color: var(--color-muted); white-space: normal; margin-top: 0.1em; }
+#monitorAlerts { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; }
 .departure-table td, .departure-table th {
   color: var(--color-text);
   border-color: var(--color-border);

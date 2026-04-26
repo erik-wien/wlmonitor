@@ -1,7 +1,7 @@
 -- Add cross-session monitor state to wl_preferences.
--- wl_favorites and wl_preferences are in the same DB (wlmonitor), so a real FK is valid per auth-rules §5(a).
+-- wl_favorites and wl_preferences are in the same app DB, so a real FK is valid per auth-rules §5(a).
 -- ON DELETE SET NULL ensures last_fav_id is cleared automatically when a favourite is deleted.
-USE wlmonitor;
+-- DB chosen by connection (db.name in config.yaml) — do not add USE here.
 
 ALTER TABLE wl_preferences
   ADD COLUMN IF NOT EXISTS last_fav_id INT          NULL DEFAULT NULL,

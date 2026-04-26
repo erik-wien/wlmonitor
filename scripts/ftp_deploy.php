@@ -213,6 +213,10 @@ foreach ($files as $file) {
     $name = basename($file);
     if (isset($applied[$name])) { echo "skip $name\n"; continue; }
     $sql = file_get_contents($file);
+    // Guard: per-app migrations must rely on the connection's selected DB.
+    // A `USE <name>;` baked into a migration would fail on targets whose DB
+    // is not named that (e.g. world4you 5279249db19) — strip those lines.
+    $sql = preg_replace('/^\\s*USE\\s+[^;]+;\\s*$/mi', '', $sql);
     $con->multi_query($sql);
     do { if ($result = $con->store_result()) $result->free(); }
     while ($con->more_results() && $con->next_result());

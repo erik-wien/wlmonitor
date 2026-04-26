@@ -5,10 +5,11 @@
 -- Deltas 001_*.sql..005_*.sql remain as historical artifacts and should not
 -- be applied on top of this file.
 --
--- DB: wlmonitor  (use `mariadb -uroot wlmonitor < 000_initial_schema.sql`)
+-- DB: the app DB. Name varies per target (jardyx on local, 5279249db19 on world4you).
+-- The migration runner connects with the right db.name from config.yaml — do NOT
+-- add `USE <name>;` here, it would fail on world4you where no DB named "wlmonitor"
+-- exists. For manual runs: `mariadb -uroot <dbname> < 000_initial_schema.sql`.
 -- FK target: auth.auth_accounts (the shared auth DB, NOT jardyx_auth).
-
-USE wlmonitor;
 
 /*M!999999\- enable the sandbox mode */ 
 

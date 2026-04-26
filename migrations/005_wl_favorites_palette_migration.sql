@@ -1,9 +1,7 @@
 -- Migration 005: rewrite wl_favorites.bclass to palette classes; drop wl_colors
--- DB: wlmonitor
+-- DB chosen by connection (db.name in config.yaml) — do not add USE here.
 -- Idempotent: WHERE bclass IN (...) only matches legacy values; safe to re-run.
 -- Deployment order: run AFTER app code is deployed (code no longer queries wl_colors).
-
-USE wlmonitor;
 
 UPDATE wl_favorites SET bclass = CASE bclass
     WHEN 'btn-outline-default'   THEN 'btn-outline-color-neutral'
