@@ -136,7 +136,7 @@ $rsyncExcludes = [
 ];
 
 echo "Rsyncing to {$sshTarget}:{$remoteBase} ...\n";
-$rsyncCmd = ['rsync', '-avz', '--delete', '--copy-links'];
+$rsyncCmd = ['rsync', '-avz', '--delete', '--copy-links', '--chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r'];
 foreach ($rsyncExcludes as $p) {
     $rsyncCmd[] = '--exclude=' . $p;
 }
@@ -149,6 +149,11 @@ if (run_proc($rsyncCmd) !== 0) {
     fwrite(STDERR, "rsync failed\n");
     exit(1);
 }
+
+// rsync's --chmod left config.yaml group/other-readable; it holds DB passwords
+// and tokens, so lock it back to owner-only on the server.
+run_proc(array_merge(['ssh'], $sshOpts,
+    [$sshTarget, 'chmod 600 ' . escapeshellarg($remoteBase . '/config.yaml')]));
 
 // ── Run migrations via SSH + php84 ───────────────────────────────────────────
 
