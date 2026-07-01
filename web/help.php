@@ -28,9 +28,9 @@ require_once(__DIR__ . '/../inc/layout.php');
   </nav>
 
   <!-- ── FAQ ─────────────────────────────────────────────────────────────── -->
-  <section id="faq" class="card mb-3">
-    <div class="card-header">Häufige Fragen</div>
-    <div class="card-body">
+  <section id="faq" class="app-card mb-3">
+    <div class="app-card-header">Häufige Fragen</div>
+    <div class="app-card-body">
 
       <h3 class="h6">Was sind Favoriten?</h3>
       <p>
@@ -93,9 +93,9 @@ require_once(__DIR__ . '/../inc/layout.php');
   </section>
 
   <!-- ── Datenschutz ────────────────────────────────────────────────────── -->
-  <section id="datenschutz" class="card mb-4">
-    <div class="card-header">Cookies &amp; Datenschutz</div>
-    <div class="card-body">
+  <section id="datenschutz" class="app-card mb-4">
+    <div class="app-card-header">Cookies &amp; Datenschutz</div>
+    <div class="app-card-body">
 
       <p>
         Diese Webapp verwendet Cookies ausschließlich zur Speicherung Ihrer

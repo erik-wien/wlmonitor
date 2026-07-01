@@ -113,7 +113,7 @@ function favorites_validate_filter(?string $filterJson): ?string {
  * @param int         $idUser     Owner's user ID.
  * @param string      $title      Display label (max 100 chars, no HTML).
  * @param string      $diva       DIVA number(s), comma-separated.
- * @param string      $bclass     Bootstrap button variant class (e.g. 'btn-outline-success').
+ * @param string      $bclass     Bootstrap button variant class (e.g. 'btn-color-green').
  * @param int         $sort       Sort position (lower = higher in list).
  * @param string|null $filterJson JSON array of {line, platform} filters, or null for no filter.
  * @return int                    Auto-incremented ID of the new row.

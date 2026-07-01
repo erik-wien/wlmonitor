@@ -75,7 +75,7 @@ header('Content-Type: text/html; charset=utf-8');
   <h4 class="mb-3">Neues Kennwort setzen</h4>
 
   <?php if ($error): ?>
-    <div class="alert alert-danger"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
+    <div class="app-alert app-alert-danger"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
     <a href="forgotPassword.php" class="btn btn-secondary btn-sm">Neuen Link anfordern</a>
   <?php else: ?>
     <form method="post" action="executeReset.php?token=<?= urlencode($token) ?>">

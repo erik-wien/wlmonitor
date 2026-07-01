@@ -27,18 +27,18 @@ $pageUrl = static function (int $p, string $f): string {
 <div id="adminAlerts" class="container"></div>
 
 <div class="container admin-page">
-  <nav class="tab-bar" role="tablist" aria-label="Administration">
-    <button type="button" class="tab-btn is-active" role="tab"
+  <nav class="app-tabs" role="tablist" aria-label="Administration">
+    <button type="button" class="app-tab is-active" role="tab"
             id="tab-ogd" aria-controls="panel-ogd" aria-selected="true"
             data-tab="ogd">
       <?= icon("database") ?> Stationsdaten
     </button>
-    <button type="button" class="tab-btn" role="tab"
+    <button type="button" class="app-tab" role="tab"
             id="tab-users" aria-controls="panel-users" aria-selected="false"
             data-tab="users">
       <?= icon("users-cog") ?> Benutzerverwaltung
     </button>
-    <button type="button" class="tab-btn" role="tab"
+    <button type="button" class="app-tab" role="tab"
             id="tab-log" aria-controls="panel-log" aria-selected="false"
             data-tab="log">
       <?= icon("history") ?> Log
@@ -46,18 +46,18 @@ $pageUrl = static function (int $p, string $f): string {
   </nav>
 
   <!-- ── Tab: Stationsdaten ──────────────────────────────────────────── -->
-  <section id="panel-ogd" class="tab-panel is-active"
+  <section id="panel-ogd" class="app-tab-panel is-active"
            role="tabpanel" aria-labelledby="tab-ogd">
-    <div class="card">
-      <div class="card-header">Stationsdaten (OGD)</div>
-      <div class="card-body">
+    <div class="app-card">
+      <div class="app-card-header">Stationsdaten (OGD)</div>
+      <div class="app-card-body">
         <p class="form-text">
           Lädt die aktuellen Haltestellen, Steige und Linien von
           data.wien.gv.at neu und ersetzt die lokalen Tabellen
           <code>ogd_haltestellen</code>, <code>ogd_steige</code>,
           <code>ogd_linien</code>.
         </p>
-        <button id="btnOgdUpdate" type="button" class="btn btn-outline-success">
+        <button id="btnOgdUpdate" type="button" class="btn btn-outline-danger">
           <?= icon("sync") ?> Jetzt aktualisieren
         </button>
         <div id="ogdLog" class="ogd-log" hidden>
@@ -68,7 +68,7 @@ $pageUrl = static function (int $p, string $f): string {
   </section>
 
   <!-- ── Tab: Benutzerverwaltung ─────────────────────────────────────── -->
-  <section id="panel-users" class="tab-panel"
+  <section id="panel-users" class="app-tab-panel"
            role="tabpanel" aria-labelledby="tab-users" hidden>
     <?php \Erikr\Chrome\Admin\UsersTab::render([
         'users'   => $users,
@@ -85,7 +85,7 @@ $pageUrl = static function (int $p, string $f): string {
   </section>
 
   <!-- ── Tab: Log ────────────────────────────────────────────────────── -->
-  <section id="panel-log" class="tab-panel"
+  <section id="panel-log" class="app-tab-panel"
            role="tabpanel" aria-labelledby="tab-log" hidden>
     <?php \Erikr\Chrome\Admin\LogTab::render(); ?>
   </section>

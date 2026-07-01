@@ -63,11 +63,11 @@ header('Content-Type: text/html; charset=utf-8');
   <h4 class="mb-3">Kennwort vergessen</h4>
 
   <?php if ($error): ?>
-    <div class="alert alert-danger"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
+    <div class="app-alert app-alert-danger"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
   <?php endif; ?>
 
   <?php if ($success): ?>
-    <div class="alert alert-success">
+    <div class="app-alert app-alert-success">
       Sofern die angegebene E-Mail-Adresse registriert ist, haben Sie einen Link zum Zurücksetzen erhalten.
     </div>
     <a href="login.php" class="btn btn-secondary btn-sm">Zurück zur Anmeldung</a>

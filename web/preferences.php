@@ -174,34 +174,34 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
   <h4 class="mb-3"><?= icon("user-cog", "me-2") ?>Einstellungen</h4>
 
   <?php foreach ($_SESSION['alerts'] ?? [] as [$type, $msg]): ?>
-    <div class="alert alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?> alert-dismissible fade show" role="alert">
+    <div class="app-alert app-alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?> alert-dismissible fade show" role="alert">
       <?= htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') ?>
       <button type="button" class="btn-close" data-dismiss-alert></button>
     </div>
   <?php endforeach; unset($_SESSION['alerts']); ?>
 
-  <nav class="tab-bar mb-3" role="tablist" aria-label="Einstellungen">
-    <button class="tab-btn" role="tab" id="tab-design"
+  <nav class="app-tabs mb-3" role="tablist" aria-label="Einstellungen">
+    <button class="app-tab" role="tab" id="tab-design"
             aria-controls="panel-design" aria-selected="true"
             data-tab="design">Design</button>
-    <button class="tab-btn" role="tab" id="tab-abfahrten"
+    <button class="app-tab" role="tab" id="tab-abfahrten"
             aria-controls="panel-abfahrten" aria-selected="false"
             data-tab="abfahrten">Abfahrten</button>
-    <button class="tab-btn" role="tab" id="tab-email"
+    <button class="app-tab" role="tab" id="tab-email"
             aria-controls="panel-email" aria-selected="false"
             data-tab="email">E-Mail</button>
-    <button class="tab-btn" role="tab" id="tab-profilbild"
+    <button class="app-tab" role="tab" id="tab-profilbild"
             aria-controls="panel-profilbild" aria-selected="false"
             data-tab="profilbild">Profilbild</button>
   </nav>
 
   <!-- ── Design ───────────────────────────────────────────────────────────── -->
   <div id="panel-design" role="tabpanel" aria-labelledby="tab-design">
-    <div class="card mb-3">
-      <div class="card-header"><?= icon("palette", "me-1") ?> Design</div>
-      <div class="card-body">
+    <div class="app-card mb-3">
+      <div class="app-card-header"><?= icon("palette", "me-1") ?> Design</div>
+      <div class="app-card-body">
         <?php if (!empty($errors['theme'])): ?>
-          <div class="alert alert-danger py-2" role="alert">
+          <div class="app-alert app-alert-danger py-2" role="alert">
             <?= htmlspecialchars($errors['theme'], ENT_QUOTES, 'UTF-8') ?>
           </div>
         <?php endif; ?>
@@ -217,7 +217,7 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
               </label>
             <?php endforeach; ?>
           </div>
-          <button type="submit" class="btn btn-outline-success">
+          <button type="submit" class="btn btn-outline-danger">
             <?= icon("save", "me-1") ?> Speichern
           </button>
         </form>
@@ -227,14 +227,14 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
 
   <!-- ── Abfahrten ────────────────────────────────────────────────────────── -->
   <div id="panel-abfahrten" role="tabpanel" aria-labelledby="tab-abfahrten" hidden>
-    <div class="card mb-3">
-      <div class="card-header"><?= icon("list-ol", "me-1") ?> Abfahrten pro Linie</div>
-      <div class="card-body">
+    <div class="app-card mb-3">
+      <div class="app-card-header"><?= icon("list-ol", "me-1") ?> Abfahrten pro Linie</div>
+      <div class="app-card-body">
         <p class="text-muted small mb-3">
           Wie viele Abfahrten pro Linie und Richtung werden angezeigt (1–5)?
         </p>
         <?php if (!empty($errors['departures'])): ?>
-          <div class="alert alert-danger py-2" role="alert">
+          <div class="app-alert app-alert-danger py-2" role="alert">
             <?= htmlspecialchars($errors['departures'], ENT_QUOTES, 'UTF-8') ?>
           </div>
         <?php endif; ?>
@@ -252,7 +252,7 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
               <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
             </div>
           </div>
-          <button type="submit" class="btn btn-outline-success">
+          <button type="submit" class="btn btn-outline-danger">
             <?= icon("save", "me-1") ?> Speichern
           </button>
         </form>
@@ -262,9 +262,9 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
 
   <!-- ── E-Mail ───────────────────────────────────────────────────────────── -->
   <div id="panel-email" role="tabpanel" aria-labelledby="tab-email" hidden>
-    <div class="card mb-3">
-      <div class="card-header"><?= icon("envelope", "me-1") ?> E-Mail-Adresse</div>
-      <div class="card-body">
+    <div class="app-card mb-3">
+      <div class="app-card-header"><?= icon("envelope", "me-1") ?> E-Mail-Adresse</div>
+      <div class="app-card-body">
         <p class="text-muted small mb-3">
           Aktuelle Adresse: <strong><?= $currentEmail ?></strong>
         </p>
@@ -273,7 +273,7 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
           Die Änderung wird erst nach Bestätigung aktiv.
         </p>
         <?php if (!empty($errors['email'])): ?>
-          <div class="alert alert-danger py-2" role="alert">
+          <div class="app-alert app-alert-danger py-2" role="alert">
             <?= htmlspecialchars($errors['email'], ENT_QUOTES, 'UTF-8') ?>
           </div>
         <?php endif; ?>
@@ -292,7 +292,7 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
             <input type="password" id="emailPassword" name="email_password"
                    class="form-control" autocomplete="current-password" required>
           </div>
-          <button type="submit" class="btn btn-outline-success">
+          <button type="submit" class="btn btn-outline-danger">
             <?= icon("paper-plane", "me-1") ?> Bestätigungslink senden
           </button>
         </form>
@@ -302,9 +302,9 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
 
   <!-- ── Profilbild ───────────────────────────────────────────────────────── -->
   <div id="panel-profilbild" role="tabpanel" aria-labelledby="tab-profilbild" hidden>
-    <div class="card mb-3">
-      <div class="card-header"><?= icon("camera", "me-1") ?> Profilbild</div>
-      <div class="card-body">
+    <div class="app-card mb-3">
+      <div class="app-card-header"><?= icon("camera", "me-1") ?> Profilbild</div>
+      <div class="app-card-body">
         <div class="d-flex align-items-center gap-3 mb-3">
           <img src="<?= htmlspecialchars($avatarUrl, ENT_QUOTES, 'UTF-8') ?>" class="rounded-circle"
                style="width:64px;height:64px;object-fit:cover;" alt="Profilbild">
@@ -319,24 +319,24 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
 </main>
 
 <!-- Avatar crop modal (outside container, position:fixed) -->
-<div class="modal" id="avatarCropModal" aria-hidden="true" role="dialog"
-     aria-modal="true" aria-labelledby="avatarCropTitle"
-     style="display:none;position:fixed;inset:0;z-index:1050;background:rgba(0,0,0,.6);
+<div class="app-modal-backdrop" id="avatarCropModal" aria-hidden="true" role="dialog"
+     aria-modal="true" aria-labelledby="avatarCropTitle" hidden
+     style="position:fixed;inset:0;z-index:1050;background:rgba(0,0,0,.6);
             align-items:center;justify-content:center;padding:1rem">
-  <div class="modal-dialog" style="max-width:560px;width:100%;background:var(--color-bg);
+  <div class="app-modal-dialog" style="max-width:560px;width:100%;background:var(--color-bg);
        border:1px solid var(--color-border);border-radius:var(--radius);
        box-shadow:var(--shadow-sm);display:flex;flex-direction:column;max-height:90vh">
-    <div class="modal-header" style="padding:.75rem 1rem;border-bottom:1px solid var(--color-border)">
+    <div style="padding:.75rem 1rem;border-bottom:1px solid var(--color-border)">
       <strong id="avatarCropTitle">Profilbild zuschneiden</strong>
     </div>
-    <div class="modal-body" style="padding:1rem;overflow:auto;min-height:0">
+    <div style="padding:1rem;overflow:auto;min-height:0">
       <div style="max-height:60vh">
         <img id="avatarCropImage" alt="" style="display:block;max-width:100%">
       </div>
     </div>
-    <div class="modal-footer" style="padding:.75rem 1rem;border-top:1px solid var(--color-border);display:flex;gap:.5rem;justify-content:flex-end">
+    <div style="padding:.75rem 1rem;border-top:1px solid var(--color-border);display:flex;gap:.5rem;justify-content:flex-end">
       <button type="button" class="btn" id="avatarCropCancel">Abbrechen</button>
-      <button type="button" class="btn btn-outline-success" id="avatarCropConfirm">Speichern</button>
+      <button type="button" class="btn btn-outline-danger" id="avatarCropConfirm">Speichern</button>
     </div>
   </div>
 </div>
@@ -345,10 +345,6 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
 <script nonce="<?= $_cspNonce ?>" src="css/shared/js/avatar-cropper.js"></script>
 <script nonce="<?= $_cspNonce ?>">
 (function () {
-  const modal = document.getElementById('avatarCropModal');
-  new MutationObserver(function () {
-    modal.style.display = modal.classList.contains('show') ? 'flex' : 'none';
-  }).observe(modal, { attributes: true, attributeFilter: ['class'] });
   initAvatarCropper({
     fileInputId: 'avatarFile',
     modalId:     'avatarCropModal',

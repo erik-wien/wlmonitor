@@ -2,6 +2,8 @@
    wlmonitor-specific styles. Not portable to other apps.
 */
 
+:root { --logo-color: #e2001a; } /* per-app brand logo tint (config color) */
+
 /* ── Departure table ────────────────────────────────────────────────────────── */
 
 .departure-table { table-layout: auto; width: 100%; }
@@ -262,34 +264,38 @@ body {
 }
 
 /* ── Monitor card colors ─────────────────────────────────────────────────────── */
+/* WL identity green tint, defined as three-block tokens so the component rules
+   carry no literal hex. (Transit line-badge colours above stay hardcoded — those
+   are non-negotiable Wiener-Linien branding, not themeable UI.) */
 
-#monitor .card {
-  background-color: #f4f7f4;
+:root {
+  --wl-monitor-card-bg:       #f4f7f4;
+  --wl-monitor-header-bg:     #404d40;
+  --wl-monitor-header-fg:     #e8ede8;
+  --wl-monitor-header-border: #303d30;
 }
-#monitor .card-header {
-  background-color: #404d40;
-  color: #e8ede8;
-  border-bottom-color: #303d30;
+[data-theme="dark"] {
+  --wl-monitor-card-bg:       #141814;
+  --wl-monitor-header-bg:     #2a342a;
+  --wl-monitor-header-fg:     #cdd5cd;
+  --wl-monitor-header-border: #1e281e;
 }
-
-[data-theme="dark"] #monitor .card {
-  background-color: #141814;
-}
-[data-theme="dark"] #monitor .card-header {
-  background-color: #2a342a;
-  color: #cdd5cd;
-  border-bottom-color: #1e281e;
-}
-
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) #monitor .card {
-    background-color: #141814;
+  :root:not([data-theme="light"]) {
+    --wl-monitor-card-bg:       #141814;
+    --wl-monitor-header-bg:     #2a342a;
+    --wl-monitor-header-fg:     #cdd5cd;
+    --wl-monitor-header-border: #1e281e;
   }
-  :root:not([data-theme="light"]) #monitor .card-header {
-    background-color: #2a342a;
-    color: #cdd5cd;
-    border-bottom-color: #1e281e;
-  }
+}
+
+#monitor .app-card {
+  background-color: var(--wl-monitor-card-bg);
+}
+#monitor .app-card-header {
+  background-color: var(--wl-monitor-header-bg);
+  color: var(--wl-monitor-header-fg);
+  border-bottom-color: var(--wl-monitor-header-border);
 }
 
 #monitorUpdateTime {
@@ -307,21 +313,15 @@ body {
   transition: opacity .15s, background .15s;
   background: none;
   border: none;
-  color: #e8ede8; /* matches header text */
+  color: var(--wl-monitor-header-fg); /* matches header text (token themes it) */
   padding: 0 .2rem;
   border-radius: var(--radius-sm);
 }
-#monitor .card-header:hover .btn-add-steig,
+#monitor .app-card-header:hover .btn-add-steig,
 #monitor .btn-add-steig:hover,
 #monitor .btn-add-steig:focus-visible {
   opacity: 1;
   background: rgba(255,255,255,.18);
-}
-
-[data-theme="dark"] #monitor .btn-add-steig { color: #cdd5cd; }
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) #monitor .btn-add-steig { color: #cdd5cd; }
 }
 
 /* ── Active sessions table ──────────────────────────────────────────────────── */

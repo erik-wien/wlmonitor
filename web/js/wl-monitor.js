@@ -16,7 +16,6 @@ let sortableInstance   = null;
 // --- Init --------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', async () => {
   applyTheme();
-  initDropdowns();
   initModals();
   initAlerts();
   if (window.wlConfig?.alerts?.length) {
@@ -289,10 +288,10 @@ function renderMonitor(data) {
     if (!visibleLines.length && stationFilter === null) continue;
 
     const card = document.createElement('div');
-    card.className = 'card mb-2';
+    card.className = 'app-card mb-2';
 
     const header = document.createElement('div');
-    header.className = 'card-header py-1 d-flex align-items-center';
+    header.className = 'app-card-header py-1 d-flex align-items-center';
 
     const nameSpan = document.createElement('span');
     nameSpan.className = 'flex-grow-1 text-truncate';
@@ -377,7 +376,7 @@ function renderMonitor(data) {
     wrap.id = 'monitorAlerts';
     for (const info of data.alerts) {
       const box = document.createElement('div');
-      box.className = 'alert alert-warning';
+      box.className = 'app-alert app-alert-warning';
       box.setAttribute('role', 'alert');
       if (info.title) {
         const strong = document.createElement('strong');
@@ -812,7 +811,7 @@ export function sendAlert(message, type) {
   const container = document.getElementById('alerts');
   if (!container) return;
   const div = document.createElement('div');
-  div.className = 'alert alert-' + type + ' alert-dismissible fade show';
+  div.className = 'app-alert app-alert-' + type + ' alert-dismissible';
   div.setAttribute('role', 'alert');
   div.textContent = message;
   const closeBtn = document.createElement('button');
@@ -856,35 +855,20 @@ function makeSvgIcon(id, cls) {
   return svg;
 }
 
-// --- Dropdowns ---------------------------------------------------------------
-function initDropdowns() {
-  document.querySelectorAll('[data-dropdown-toggle]').forEach(toggle => {
-    const menu = toggle.closest('.dropdown')?.querySelector('.dropdown-menu');
-    if (!menu) return;
-    toggle.addEventListener('click', e => {
-      e.stopPropagation();
-      const open = menu.classList.contains('show');
-      closeAllDropdowns();
-      if (!open) menu.classList.add('show');
-    });
-  });
-  document.addEventListener('click', closeAllDropdowns);
-}
-
-function closeAllDropdowns() {
-  document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
-}
-
 // --- Modals ------------------------------------------------------------------
-window.openModal = function(id) {
-  const modal = document.getElementById(id);
-  if (modal) modal.classList.add('show');
-};
+// Dual mechanism: catalog .app-modal-backdrop shows/hides via the [hidden]
+// attribute; legacy .modal (avatar-cropper widget) via the .show class.
+function setModal(modal, open) {
+  if (!modal) return;
+  if (modal.classList.contains('app-modal-backdrop')) modal.hidden = !open;
+  else modal.classList.toggle('show', open);
+  modal.setAttribute('aria-hidden', open ? 'false' : 'true');
+}
 
-window.closeModal = function(id) {
-  const modal = document.getElementById(id);
-  if (modal) modal.classList.remove('show');
-};
+window.openModal  = function(id) { setModal(document.getElementById(id), true); };
+window.closeModal = function(id) { setModal(document.getElementById(id), false); };
+
+const MODAL_SEL = '.modal, .app-modal-backdrop';
 
 function initModals() {
   document.querySelectorAll('[data-modal-open]').forEach(btn => {
@@ -892,13 +876,15 @@ function initModals() {
   });
   document.querySelectorAll('[data-modal-close]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const modal = btn.closest('.modal');
-      if (modal) modal.classList.remove('show');
+      const modal = btn.closest(MODAL_SEL);
+      if (modal) setModal(modal, false);
     });
   });
-  document.querySelectorAll('.modal').forEach(modal => {
-    modal.addEventListener('click', e => {
-      if (e.target === modal) modal.classList.remove('show');
+  // Backdrop close binds to pointerdown (gesture start) so a selection drag
+  // ending outside the dialog doesn't wrongly close it (UI rule §8).
+  document.querySelectorAll(MODAL_SEL).forEach(modal => {
+    modal.addEventListener('pointerdown', e => {
+      if (e.target === modal) setModal(modal, false);
     });
   });
 }
