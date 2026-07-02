@@ -18,7 +18,7 @@ if ($token !== '') {
 
 if ($userId === null) {
     render_header();
-    echo '<div class="container mt-4"><div class="alert alert-danger">Link ungültig oder abgelaufen.</div></div>';
+    echo '<div class="container mt-4"><div class="app-alert app-alert-danger">Link ungültig oder abgelaufen.</div></div>';
     render_footer();
     exit;
 }
@@ -43,7 +43,7 @@ render_header();
 <div class="container mt-4" style="max-width:480px">
   <h4 class="mb-3">Passwort einrichten</h4>
   <?php if ($error): ?>
-    <div class="alert alert-danger"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
+    <div class="app-alert app-alert-danger"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
   <?php endif; ?>
   <form method="post">
     <input type="hidden" name="token"

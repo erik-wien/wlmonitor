@@ -97,7 +97,10 @@ class MonitorParserTest extends TestCase
         $this->assertSame('ptMetro',   $line0['type']);
         $this->assertSame('H',         $line0['direction']);
         $this->assertSame('1',         $line0['platform']);
-        $this->assertSame('3, 8',      $line0['departures']);
+        $this->assertSame(
+            [['t' => '3', 'bf' => false], ['t' => '8', 'bf' => false]],
+            $line0['departures']
+        );
         $this->assertSame(1,           $result['trains']);
         $this->assertSame('10:30:00',  $result['update_at']);
     }
@@ -136,7 +139,10 @@ class MonitorParserTest extends TestCase
             stream_wrapper_restore('https');
         }
 
-        $this->assertSame('*, 5', $result['STS123']['lines'][0]['departures']);
+        $this->assertSame(
+            [['t' => '*', 'bf' => false], ['t' => '5', 'bf' => false]],
+            $result['STS123']['lines'][0]['departures']
+        );
     }
 
     public function test_max_departures_limits_departure_count(): void
@@ -175,7 +181,10 @@ class MonitorParserTest extends TestCase
         }
 
         // Only 1 departure allowed; the third should be cut off
-        $this->assertSame('1', $result['TST1']['lines'][0]['departures']);
+        $this->assertSame(
+            [['t' => '1', 'bf' => false]],
+            $result['TST1']['lines'][0]['departures']
+        );
     }
 
     public function test_throws_on_empty_monitors_array(): void

@@ -59,39 +59,40 @@ $theme = htmlspecialchars($theme, ENT_QUOTES, 'UTF-8');
 
 <?php if ($loggedIn): ?>
 <!-- Add-favourite modal -->
-<div class="modal" id="addFavModal">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><?= icon("star", "me-1") ?> Als Favorit speichern</h5>
-        <button type="button" class="btn-close" data-modal-close></button>
+<div class="app-modal-backdrop" id="addFavModal" role="dialog" aria-modal="true"
+     aria-labelledby="addFavModalTitle" aria-hidden="true" hidden>
+  <div class="app-modal-dialog app-modal-sm">
+    <div class="app-modal-header">
+      <div class="app-modal-header-row">
+        <h5 class="app-modal-title" id="addFavModalTitle"><?= icon("star", "me-1") ?> Als Favorit speichern</h5>
+        <button type="button" class="app-modal-close" data-modal-close aria-label="Schließen">&times;</button>
       </div>
-      <div class="modal-body">
-        <div class="mb-3">
-          <label class="form-label" for="addFavTitle">Bezeichnung</label>
-          <input type="text" id="addFavTitle" class="form-control" maxlength="100" required>
-        </div>
-        <div class="mb-3">
-          <label class="form-label" for="addFavColor">Farbe</label>
-          <select id="addFavColor" class="form-select">
-            <?php foreach (wl_palette_list() as $entry): ?>
-              <option value="<?= htmlspecialchars($entry['class'], ENT_QUOTES, 'UTF-8') ?>">
-                <?= htmlspecialchars($entry['label'], ENT_QUOTES, 'UTF-8') ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div id="addFavLinesSection" style="display:none">
-          <label class="form-label">Linien</label>
-          <div id="addFavLines" class="d-flex flex-column gap-1 mb-1"
-               style="max-height:200px;overflow-y:auto"></div>
-          <div class="form-text">Wähle die Linien aus, die dieser Favorit anzeigen soll.</div>
-        </div>
+    </div>
+    <div class="app-modal-body">
+      <div class="mb-3">
+        <label class="form-label" for="addFavTitle">Bezeichnung</label>
+        <input type="text" id="addFavTitle" class="form-control" maxlength="100" required>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-modal-close>Abbrechen</button>
-        <button type="button" class="btn btn-outline-success" id="addFavSubmit"><?= icon("save", "me-1") ?> Speichern</button>
+      <div class="mb-3">
+        <label class="form-label" for="addFavColor">Farbe</label>
+        <select id="addFavColor" class="form-select">
+          <?php foreach (wl_palette_list() as $entry): ?>
+            <option value="<?= htmlspecialchars($entry['class'], ENT_QUOTES, 'UTF-8') ?>">
+              <?= htmlspecialchars($entry['label'], ENT_QUOTES, 'UTF-8') ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
       </div>
+      <div id="addFavLinesSection" style="display:none">
+        <label class="form-label">Linien</label>
+        <div id="addFavLines" class="d-flex flex-column gap-1 mb-1"
+             style="max-height:200px;overflow-y:auto"></div>
+        <div class="form-text">Wähle die Linien aus, die dieser Favorit anzeigen soll.</div>
+      </div>
+    </div>
+    <div class="app-modal-footer">
+      <button type="button" class="btn" data-modal-close>Abbrechen</button>
+      <button type="button" class="btn btn-outline-danger" id="addFavSubmit"><?= icon("save", "me-1") ?> Speichern</button>
     </div>
   </div>
 </div>

@@ -25,17 +25,21 @@
  *     'station_name' => string,   // e.g. 'Karlsplatz'
  *     'lines'        => [
  *       [
- *         'name'       => string, // e.g. 'U1'
- *         'towards'    => string, // e.g. 'Leopoldau'
- *         'type'       => string, // ptMetro | ptTram | ptBusCity | …
- *         'direction'  => string, // 'H' (outgoing) | 'R' (incoming)
- *         'platform'   => string,
- *         'departures' => string, // e.g. '3, 8' or '*, 5' (0 → *)
+ *         'name'         => string, // e.g. 'U1'
+ *         'towards'      => string, // e.g. 'Leopoldau'
+ *         'type'         => string, // ptMetro | ptTram | ptBusCity | …
+ *         'direction'    => string, // 'H' (outgoing) | 'R' (incoming)
+ *         'platform'     => string,
+ *         'barrier_free' => bool,   // line-level default
+ *         'trafficjam'   => bool,
+ *         'alert'        => bool,   // trafficjam OR referenced by an active trafficInfo
+ *         'departures'   => [ ['t' => string, 'bf' => bool], … ], // 't' is countdown ('*' for 0)
  *       ],
  *       …
  *     ],
  *   ],
  *   …
+ *   'alerts'    => [ ['title','description','priority','lines'=>[],'stops'=>[]], … ],
  *   'trains'    => int,    // total departure rows across all stations
  *   'update_at' => string, // server time formatted as 'H:i:s'
  *   'api_ping'  => int,    // server time minus local time in seconds
@@ -85,6 +89,27 @@ function monitor_get(mysqli $con, string $divaRaw, int $maxDepartures): array {
         throw new RuntimeException('No monitors found for the given DIVA numbers.');
     }
 
+    // Build a lookup of active trafficInfos by name, plus a set of line names
+    // each info affects (for the per-line ⚠️ flag).
+    $activeInfos = [];
+    $infosByLine = [];
+    foreach ($json['data']['trafficInfos'] ?? [] as $info) {
+        if (($info['status'] ?? 'active') !== 'active') continue;
+        $name = $info['name'] ?? '';
+        if ($name === '' || isset($activeInfos[$name])) continue;
+        $activeInfos[$name] = [
+            'title'           => $info['title']           ?? '',
+            'description'     => $info['description']     ?? '',
+            'descriptionHTML' => $info['descriptionHTML'] ?? '',
+            'priority'        => $info['priority']        ?? '',
+            'lines'           => $info['relatedLines']    ?? [],
+            'stops'           => $info['relatedStops']    ?? [],
+        ];
+        foreach ($info['relatedLines'] ?? [] as $ln) {
+            $infosByLine[$ln] = true;
+        }
+    }
+
     $result      = [];
     $totalTrains = 0;
 
@@ -108,30 +133,53 @@ function monitor_get(mysqli $con, string $divaRaw, int $maxDepartures): array {
         }
 
         foreach ($monitor['lines'] as $line) {
-            $depStr = '';
-            $dCount = 1;
+            $lineBf       = (bool) ($line['barrierFree'] ?? false);
+            $lineName     = $line['name'];
+            $lineTowards  = $line['towards'];
+            $deps         = [];
+            $dCount       = 1;
             foreach ($line['departures']['departure'] ?? [] as $dep) {
                 if ($dCount > $maxDepartures) break;
-                if ($depStr !== '') $depStr .= ', ';
                 $cd = $dep['departureTime']['countdown'];
-                // Countdown 0 means the vehicle is at the platform now.
-                $depStr .= ($cd === 0 ? '*' : $cd);
+                // vehicle.* fields override line defaults for a single run.
+                $vehicle = $dep['vehicle'] ?? null;
+                $depBf   = ($vehicle !== null && array_key_exists('barrierFree', $vehicle))
+                    ? (bool) $vehicle['barrierFree']
+                    : $lineBf;
+                $depJam  = isset($vehicle['trafficjam']) ? (bool) $vehicle['trafficjam'] : false;
+                $vName   = $vehicle['name']    ?? null;
+                $vTow    = $vehicle['towards'] ?? null;
+                $deps[]  = [
+                    't'                => ($cd === 0 ? '*' : (string) $cd),
+                    'bf'               => $depBf,
+                    'jam'              => $depJam,
+                    'name_override'    => ($vName !== null && $vName !== $lineName)    ? $vName : null,
+                    'towards_override' => ($vTow  !== null && $vTow  !== $lineTowards) ? $vTow  : null,
+                ];
                 $dCount++;
             }
 
+            $trafficjam = (bool) ($line['trafficjam'] ?? false);
+            $hasAlert   = $trafficjam || isset($infosByLine[$lineName]);
+
             $result[$stationId]['lines'][] = [
-                'name'       => $line['name'],
-                'towards'    => $line['towards'],
-                'type'       => $line['type']      ?? '',
-                'direction'  => $line['direction'] ?? '',
-                'platform'   => $line['platform'],
-                'departures' => $depStr,
+                'name'               => $lineName,
+                'towards'            => $lineTowards,
+                'type'               => $line['type']      ?? '',
+                'direction'          => $line['direction'] ?? '',
+                'platform'           => $line['platform'],
+                'barrier_free'       => $lineBf,
+                'realtime_supported' => (bool) ($line['realtimeSupported'] ?? true),
+                'trafficjam'         => $trafficjam,
+                'alert'              => $hasAlert,
+                'departures'         => $deps,
             ];
 
             $totalTrains++;
         }
     }
 
+    $result['alerts']    = array_values($activeInfos);
     $result['trains']    = $totalTrains;
     $result['update_at'] = date_format(date_create($serverTime), 'H:i:s');
     $result['api_ping']  = strtotime($serverTime) - time();

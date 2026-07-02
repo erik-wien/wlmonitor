@@ -167,7 +167,7 @@ foreach (wl_palette_list() as $entry) {
         <div id="filterLines" class="d-flex flex-column gap-1 mb-2"
              style="max-height:220px;overflow-y:auto;min-height:1.5rem"></div>
         <div class="form-text mb-2">Keine Auswahl = alle Linien dieser Haltestelle.</div>
-        <button type="button" id="stationEditorOk" class="btn btn-sm btn-outline-success">OK</button>
+        <button type="button" id="stationEditorOk" class="btn btn-sm btn-outline-danger">OK</button>
       </div>
 
       <div class="form-text mt-1">Mindestens eine Haltestelle erforderlich.</div>
@@ -179,7 +179,7 @@ foreach (wl_palette_list() as $entry) {
              value="<?= (int) $row['sort'] ?>" min="0">
     </div>
 
-    <button type="submit" class="btn btn-outline-success"><?= icon("save", "me-1") ?> Speichern</button>
+    <button type="submit" class="btn btn-outline-danger"><?= icon("save", "me-1") ?> Speichern</button>
     <a href="index.php" class="btn btn-secondary ms-2">Abbrechen</a>
   </form>
 </div>

@@ -67,15 +67,15 @@ unset($_SESSION['alerts']);
 <div class="container-sm mt-5">
 
   <?php foreach ($alerts as [$type, $msg]): ?>
-    <div class="alert alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?> alert-dismissible fade show">
+    <div class="app-alert app-alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?> alert-dismissible fade show">
       <?= $msg ?>
       <button type="button" class="btn-close" data-dismiss-alert></button>
     </div>
   <?php endforeach; ?>
 
-  <div class="card shadow-sm">
-    <div class="card-body p-4">
-      <h4 class="card-title mb-4 text-center">
+  <div class="app-card shadow-sm">
+    <div class="app-card-body p-4">
+      <h4 class="app-card-heading mb-4 text-center">
         <?= icon("lock", "me-2") ?> Zwei-Faktor-Authentifizierung
       </h4>
       <p class="text-center text-muted mb-3" style="font-size:.9rem;">
@@ -83,7 +83,7 @@ unset($_SESSION['alerts']);
       </p>
 
       <?php if ($error !== ''): ?>
-        <div class="alert alert-danger"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
+        <div class="app-alert app-alert-danger"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
       <?php endif; ?>
 
       <form method="post" action="totp_verify.php">

@@ -16,7 +16,6 @@ let sortableInstance   = null;
 // --- Init --------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', async () => {
   applyTheme();
-  initDropdowns();
   initModals();
   initAlerts();
   if (window.wlConfig?.alerts?.length) {
@@ -289,10 +288,10 @@ function renderMonitor(data) {
     if (!visibleLines.length && stationFilter === null) continue;
 
     const card = document.createElement('div');
-    card.className = 'card mb-2';
+    card.className = 'app-card mb-2';
 
     const header = document.createElement('div');
-    header.className = 'card-header py-1 d-flex align-items-center';
+    header.className = 'app-card-header py-1 d-flex align-items-center';
 
     const nameSpan = document.createElement('span');
     nameSpan.className = 'flex-grow-1 text-truncate';
@@ -372,6 +371,30 @@ function renderMonitor(data) {
     container.appendChild(card);
   }
 
+  if (Array.isArray(data.alerts) && data.alerts.length) {
+    const wrap = document.createElement('div');
+    wrap.id = 'monitorAlerts';
+    for (const info of data.alerts) {
+      const box = document.createElement('div');
+      box.className = 'app-alert app-alert-warning';
+      box.setAttribute('role', 'alert');
+      if (info.title) {
+        const strong = document.createElement('strong');
+        strong.textContent = info.title;
+        box.appendChild(strong);
+      }
+      if (info.descriptionHTML) {
+        if (info.title) box.appendChild(document.createElement('br'));
+        box.appendChild(parseTrustedHtml(info.descriptionHTML));
+      } else if (info.description) {
+        if (info.title) box.appendChild(document.createElement('br'));
+        box.appendChild(document.createTextNode(info.description));
+      }
+      wrap.appendChild(box);
+    }
+    container.appendChild(wrap);
+  }
+
   if (update_at) {
     const t = document.createElement('p');
     t.id = 'monitorUpdateTime';
@@ -394,11 +417,68 @@ function appendDepartureColumns(tr, line) {
 
   const tdTowards = tr.insertCell();
   tdTowards.className = 'towards-cell';
-  tdTowards.textContent = line.towards;
+  tdTowards.appendChild(document.createTextNode(line.towards));
 
   const tdTimes = tr.insertCell();
   tdTimes.className = 'times-cell';
-  tdTimes.textContent = line.departures;
+  if (line.realtime_supported === false) {
+    tdTimes.classList.add('times-scheduled');
+    tdTimes.title = 'Fahrplanzeit (keine Echtzeit)';
+  }
+  const deps = Array.isArray(line.departures) ? line.departures : [];
+  const jammedTimes = [];
+  const deviations  = []; // {t, label}
+  deps.forEach((d, i) => {
+    if (i > 0) tdTimes.appendChild(document.createTextNode(', '));
+    const span = document.createElement('span');
+    span.className = 'dep' + (d.bf ? ' dep-barrierfree' : '');
+    if (d.bf) span.title = 'Barrierefreies Fahrzeug';
+    span.textContent = d.t;
+    tdTimes.appendChild(span);
+    if (d.jam) {
+      tdTimes.appendChild(createAlertMarker());
+      jammedTimes.push(d.t);
+    }
+    if (d.name_override || d.towards_override) {
+      const parts = [];
+      if (d.name_override) parts.push(d.name_override);
+      if (d.towards_override) parts.push('→ ' + d.towards_override);
+      deviations.push({ t: d.t, label: parts.join(' ') });
+    }
+  });
+
+  if (jammedTimes.length) {
+    const note = document.createElement('div');
+    note.className = 'departure-note';
+    note.textContent = 'Verzögerung bei: ' + jammedTimes.join(', ');
+    tdTowards.appendChild(note);
+  }
+  for (const dev of deviations) {
+    const note = document.createElement('div');
+    note.className = 'departure-note';
+    note.textContent = dev.t + ': ' + dev.label;
+    tdTowards.appendChild(note);
+  }
+}
+
+// Parses an HTML fragment from the Wiener Linien API into DOM nodes.
+// We trust WL as the source; descriptionHTML is operator-curated disruption text.
+function parseTrustedHtml(html) {
+  const doc = new DOMParser().parseFromString('<div>' + html + '</div>', 'text/html');
+  const frag = document.createDocumentFragment();
+  const root = doc.body.firstChild;
+  if (root) while (root.firstChild) frag.appendChild(root.firstChild);
+  return frag;
+}
+
+function createAlertMarker() {
+  const span = document.createElement('span');
+  span.className = 'line-alert';
+  span.setAttribute('role', 'img');
+  span.setAttribute('aria-label', 'Störung auf dieser Linie');
+  span.title = 'Störung auf dieser Linie';
+  span.textContent = '⚠️';
+  return span;
 }
 
 function createLineBadge(line) {
@@ -731,7 +811,7 @@ export function sendAlert(message, type) {
   const container = document.getElementById('alerts');
   if (!container) return;
   const div = document.createElement('div');
-  div.className = 'alert alert-' + type + ' alert-dismissible fade show';
+  div.className = 'app-alert app-alert-' + type + ' alert-dismissible';
   div.setAttribute('role', 'alert');
   div.textContent = message;
   const closeBtn = document.createElement('button');
@@ -775,35 +855,20 @@ function makeSvgIcon(id, cls) {
   return svg;
 }
 
-// --- Dropdowns ---------------------------------------------------------------
-function initDropdowns() {
-  document.querySelectorAll('[data-dropdown-toggle]').forEach(toggle => {
-    const menu = toggle.closest('.dropdown')?.querySelector('.dropdown-menu');
-    if (!menu) return;
-    toggle.addEventListener('click', e => {
-      e.stopPropagation();
-      const open = menu.classList.contains('show');
-      closeAllDropdowns();
-      if (!open) menu.classList.add('show');
-    });
-  });
-  document.addEventListener('click', closeAllDropdowns);
-}
-
-function closeAllDropdowns() {
-  document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
-}
-
 // --- Modals ------------------------------------------------------------------
-window.openModal = function(id) {
-  const modal = document.getElementById(id);
-  if (modal) modal.classList.add('show');
-};
+// Dual mechanism: catalog .app-modal-backdrop shows/hides via the [hidden]
+// attribute; legacy .modal (avatar-cropper widget) via the .show class.
+function setModal(modal, open) {
+  if (!modal) return;
+  if (modal.classList.contains('app-modal-backdrop')) modal.hidden = !open;
+  else modal.classList.toggle('show', open);
+  modal.setAttribute('aria-hidden', open ? 'false' : 'true');
+}
 
-window.closeModal = function(id) {
-  const modal = document.getElementById(id);
-  if (modal) modal.classList.remove('show');
-};
+window.openModal  = function(id) { setModal(document.getElementById(id), true); };
+window.closeModal = function(id) { setModal(document.getElementById(id), false); };
+
+const MODAL_SEL = '.modal, .app-modal-backdrop';
 
 function initModals() {
   document.querySelectorAll('[data-modal-open]').forEach(btn => {
@@ -811,13 +876,15 @@ function initModals() {
   });
   document.querySelectorAll('[data-modal-close]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const modal = btn.closest('.modal');
-      if (modal) modal.classList.remove('show');
+      const modal = btn.closest(MODAL_SEL);
+      if (modal) setModal(modal, false);
     });
   });
-  document.querySelectorAll('.modal').forEach(modal => {
-    modal.addEventListener('click', e => {
-      if (e.target === modal) modal.classList.remove('show');
+  // Backdrop close binds to pointerdown (gesture start) so a selection drag
+  // ending outside the dialog doesn't wrongly close it (UI rule §8).
+  document.querySelectorAll(MODAL_SEL).forEach(modal => {
+    modal.addEventListener('pointerdown', e => {
+      if (e.target === modal) setModal(modal, false);
     });
   });
 }

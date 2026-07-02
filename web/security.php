@@ -145,17 +145,17 @@ if ($setupData !== null && time() <= $setupData['until']) {
   <h4 class="mb-3"><?= icon("shield", "me-2") ?>Sicherheit</h4>
 
   <?php foreach ($_SESSION['alerts'] ?? [] as [$type, $msg]): ?>
-    <div class="alert alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?> alert-dismissible fade show" role="alert">
+    <div class="app-alert app-alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?> alert-dismissible fade show" role="alert">
       <?= htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') ?>
       <button type="button" class="btn-close" data-dismiss-alert></button>
     </div>
   <?php endforeach; unset($_SESSION['alerts']); ?>
 
-  <div class="card mb-3">
-    <div class="card-header"><?= icon("key", "me-1") ?> Kennwort ändern</div>
-    <div class="card-body">
+  <div class="app-card mb-3">
+    <div class="app-card-header"><?= icon("key", "me-1") ?> Kennwort ändern</div>
+    <div class="app-card-body">
       <?php if (!empty($errors['password'])): ?>
-        <div class="alert alert-danger py-2" role="alert">
+        <div class="app-alert app-alert-danger py-2" role="alert">
           <?= htmlspecialchars($errors['password'], ENT_QUOTES, 'UTF-8') ?>
         </div>
       <?php endif; ?>
@@ -177,23 +177,23 @@ if ($setupData !== null && time() <= $setupData['until']) {
           <input type="password" name="confirm_password" id="confirm_password"
                  class="form-control" required minlength="8" autocomplete="new-password">
         </div>
-        <button type="submit" class="btn btn-outline-success">Kennwort speichern</button>
+        <button type="submit" class="btn btn-outline-danger">Kennwort speichern</button>
       </form>
     </div>
   </div>
 
-  <div class="card mb-3">
-    <div class="card-header"><?= icon("shield", "me-1") ?> Zwei-Faktor-Authentifizierung</div>
-    <div class="card-body">
+  <div class="app-card mb-3">
+    <div class="app-card-header"><?= icon("shield", "me-1") ?> Zwei-Faktor-Authentifizierung</div>
+    <div class="app-card-body">
       <?php if (!empty($errors['totp'])): ?>
-        <div class="alert alert-danger py-2" role="alert">
+        <div class="app-alert app-alert-danger py-2" role="alert">
           <?= htmlspecialchars($errors['totp'], ENT_QUOTES, 'UTF-8') ?>
         </div>
       <?php endif; ?>
 
       <?php if ($has2fa): ?>
         <p>
-          <span class="badge badge-success">2FA aktiv</span>
+          <span class="app-badge app-badge-success">2FA aktiv</span>
           Dein Konto ist mit einem TOTP-Authenticator gesichert.
         </p>
         <form method="post" action="security.php"
@@ -220,7 +220,7 @@ if ($setupData !== null && time() <= $setupData['until']) {
                    required autofocus autocomplete="one-time-code"
                    style="max-width:160px;">
           </div>
-          <button type="submit" class="btn btn-outline-success">Bestätigen</button>
+          <button type="submit" class="btn btn-outline-danger">Bestätigen</button>
         </form>
 
       <?php else: ?>
@@ -228,15 +228,15 @@ if ($setupData !== null && time() <= $setupData['until']) {
         <form method="post" action="security.php">
           <?= csrf_input() ?>
           <input type="hidden" name="action" value="totp_start">
-          <button type="submit" class="btn btn-outline-success">2FA aktivieren</button>
+          <button type="submit" class="btn btn-outline-danger">2FA aktivieren</button>
         </form>
       <?php endif; ?>
     </div>
   </div>
 
-  <div class="card mb-3">
-    <div class="card-header"><?= icon("shield-off", "me-1") ?> Aktive Sitzungen</div>
-    <div class="card-body">
+  <div class="app-card mb-3">
+    <div class="app-card-header"><?= icon("shield-off", "me-1") ?> Aktive Sitzungen</div>
+    <div class="app-card-body">
       <?php if (!empty($sessions)): ?>
         <div class="table-responsive mb-3">
           <table class="table table-sm">
@@ -258,7 +258,7 @@ if ($setupData !== null && time() <= $setupData['until']) {
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" class="icon-info-circle" tabindex="0" role="img"><title><?= htmlspecialchars($s['user_agent'], ENT_QUOTES, 'UTF-8') ?></title><circle cx="8" cy="8" r="7" fill="currentColor"/><text x="8" y="12" text-anchor="middle" font-family="'Times New Roman', Times, serif" font-size="11" font-weight="bold" font-style="italic" fill="#fff">i</text></svg>
                     <?php endif; ?>
                     <?php if ($s['is_current']): ?>
-                      <span class="badge badge-info">Diese Sitzung</span>
+                      <span class="app-badge app-badge-info">Diese Sitzung</span>
                     <?php endif; ?>
                   </td>
                   <td><code><?= htmlspecialchars($s['ip'], ENT_QUOTES, 'UTF-8') ?></code></td>

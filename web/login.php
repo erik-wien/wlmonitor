@@ -7,83 +7,59 @@ if (!empty($_SESSION['loggedin'])) {
     header('Location: index.php'); exit;
 }
 
-$theme    = htmlspecialchars($_COOKIE['theme'] ?? 'auto', ENT_QUOTES, 'UTF-8');
-$remembered = htmlspecialchars($_COOKIE['wlmonitor_username'] ?? '', ENT_QUOTES, 'UTF-8');
-
-// Flush session alerts
-$alerts = $_SESSION['alerts'] ?? [];
+$alerts     = $_SESSION['alerts'] ?? [];
 unset($_SESSION['alerts']);
+$remembered = htmlspecialchars($_COOKIE['wlmonitor_username'] ?? '', ENT_QUOTES, 'UTF-8');
+$theme      = $_COOKIE['theme'] ?? 'auto';
+$theme      = in_array($theme, ['light', 'dark', 'auto'], true) ? $theme : 'auto';
+$nonce      = htmlspecialchars($_cspNonce ?? '', ENT_QUOTES, 'UTF-8');
 ?>
-<?php render_header(); ?>
-<script nonce="<?= $_cspNonce ?>">
-(function () {
-  var t = <?= json_encode($theme) ?>;
-  if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
-})();
-</script>
-
-<nav class="navbar" id="mainNav">
-  <div class="container-fluid">
-    <a class="navbar-brand fw-semibold" href="index.php">
-      <?= icon("subway", "me-1") ?> WL Monitor
-    </a>
-  </div>
-</nav>
-
-<div class="container-sm mt-5">
-
-  <?php foreach ($alerts as [$type, $msg]): ?>
-    <div class="alert alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?> alert-dismissible fade show">
-      <?= $msg ?>
-      <button type="button" class="btn-close" data-dismiss-alert></button>
-    </div>
-  <?php endforeach; ?>
-
-  <div class="card shadow-sm">
-    <div class="card-body p-4">
-      <h4 class="card-title mb-4 text-center">
-        <?= icon("subway", "me-2") ?>Anmelden
-      </h4>
-
-      <form method="post" action="authentication.php">
-        <?= csrf_input() ?>
-
-        <div class="mb-3">
-          <label class="form-label" for="login-username">Benutzername</label>
-          <input type="text" id="login-username" name="login-username"
-                 class="form-control" autocomplete="username"
-                 value="<?= $remembered ?>" required autofocus>
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label" for="login-password">Kennwort</label>
-          <input type="password" id="login-password" name="login-password"
-                 class="form-control" autocomplete="current-password" required>
-        </div>
-
-        <div class="mb-3 form-check">
-          <input type="checkbox" class="form-check-input" id="rememberName"
-                 name="rememberName" value="1"
-                 <?= $remembered !== '' ? 'checked' : '' ?>>
-          <label class="form-check-label" for="rememberName">Benutzername merken</label>
-        </div>
-        <div class="mb-3 form-check">
-          <input type="checkbox" class="form-check-input" id="remember_me"
-                 name="remember_me" value="1">
-          <label class="form-check-label" for="remember_me">Angemeldet bleiben (<?= (int) (AUTH_REMEMBER_LIFETIME / 86400) ?>&nbsp;Tage)</label>
-        </div>
-        <p class="form-text">Meldet Sie auch auf den anderen Apps auf eriks.cloud an.</p>
-
-        <button type="submit" class="btn btn-primary w-100 mb-3">
-          <?= icon("sign-in", "me-1") ?> Anmelden
-        </button>
-
-        <div class="small">
-          <a href="forgotPassword.php">Kennwort vergessen?</a>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-<?php render_footer(); ?>
+<!DOCTYPE html>
+<html lang="de" data-theme="<?= htmlspecialchars($theme, ENT_QUOTES, 'UTF-8') ?>">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Anmelden &mdash; <?= htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8') ?></title>
+  <meta name="theme-color" content="<?= htmlspecialchars(APP_COLOR, ENT_QUOTES) ?>">
+  <link rel="icon" type="image/svg+xml" href="jardyx-favicon.svg">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/shared/theme.css">
+  <link rel="stylesheet" href="css/shared/reset.css">
+  <link rel="stylesheet" href="css/shared/layout.css">
+  <link rel="stylesheet" href="css/shared/components.css">
+  <link rel="stylesheet" href="css/app/wl-monitor.css">
+</head>
+<body class="login-page">
+<main class="login-main" id="main-content">
+  <form class="login-card" method="post" action="authentication.php" autocomplete="on">
+    <?= csrf_input() ?>
+    <span class="login-logo" aria-hidden="true"></span>
+    <h1><?= htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8') ?></h1>
+    <?php foreach ($alerts as [$type, $msg]): ?>
+      <p class="app-alert app-alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?>" role="alert"><?= $msg ?></p>
+    <?php endforeach; ?>
+    <label class="login-field">
+      <span>Benutzername</span>
+      <input type="text" name="login-username" autocomplete="username" required autofocus
+             value="<?= $remembered ?>" data-clearable>
+    </label>
+    <label class="login-field">
+      <span>Kennwort</span>
+      <input type="password" name="login-password" autocomplete="current-password" required>
+    </label>
+    <label class="login-check">
+      <input type="checkbox" name="rememberName" value="1"<?= $remembered !== '' ? ' checked' : '' ?>>
+      <span>Benutzername merken</span>
+    </label>
+    <label class="login-check">
+      <input type="checkbox" name="remember_me" value="1">
+      <span>Angemeldet bleiben (<?= (int) (AUTH_REMEMBER_LIFETIME / 86400) ?>&nbsp;Tage)</span>
+    </label>
+    <p class="login-note">Meldet Sie auch auf den anderen Apps auf eriks.cloud an.</p>
+    <button type="submit" class="btn-login">Anmelden</button>
+    <p class="login-forgot"><a href="forgotPassword.php">Kennwort vergessen?</a></p>
+  </form>
+</main>
+<script src="css/shared/js/field-enhance.js" nonce="<?= $nonce ?>"></script>
+</body>
+</html>
