@@ -137,6 +137,8 @@ $rsyncExcludes = [
 
 echo "Rsyncing to {$sshTarget}:{$remoteBase} ...\n";
 $rsyncCmd = ['rsync', '-avz', '--delete', '--copy-links', '--chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r'];
+// Protect erikr/auth mail templates from the '*.md' exclude below (first-match-wins).
+$rsyncCmd[] = '--include=**/templates/email/*.md';
 foreach ($rsyncExcludes as $p) {
     $rsyncCmd[] = '--exclude=' . $p;
 }
