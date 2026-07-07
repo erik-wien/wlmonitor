@@ -156,6 +156,23 @@
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
+/* Inline-Sprite-Icons (<svg class="icon"><use href="css/icons.svg#…"></svg>).
+   Stroke-basiert (Heroicons-Stil). Die früher geteilte .icon-Regel wurde in
+   css_library als „ungenutzt" entfernt — wlmonitor nutzt sie aber weiter
+   (inc/initialize.php + wl-monitor.js), daher hier app-lokal wiederhergestellt.
+   Ohne sie rendern die Pfade als gefüllte, ungesizte schwarze Blöcke. */
+.icon {
+  width: 1em;
+  height: 1em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+  vertical-align: middle;
+}
+
 .header-search .btn-icon {
   background: none;
   border: 1px solid var(--color-border);

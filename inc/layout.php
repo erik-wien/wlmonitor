@@ -91,11 +91,15 @@ function render_header(bool $showSearch = false): void
   <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16x16.png">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="manifest" href="img/manifest.json">
-  <link rel="stylesheet" href="css/shared/theme.css">
-  <link rel="stylesheet" href="css/shared/reset.css">
-  <link rel="stylesheet" href="css/shared/layout.css">
-  <link rel="stylesheet" href="css/shared/components.css">
-  <link rel="stylesheet" href="css/app/wl-monitor.css">
+  <?php $cssV = static function (string $rel): string {
+      $m = @filemtime(dirname(__DIR__) . '/web/' . $rel);   // folgt shared/-Symlink
+      return $m ? '?v=' . $m : '';
+  }; ?>
+  <link rel="stylesheet" href="css/shared/theme.css<?= $cssV('css/shared/theme.css') ?>">
+  <link rel="stylesheet" href="css/shared/reset.css<?= $cssV('css/shared/reset.css') ?>">
+  <link rel="stylesheet" href="css/shared/layout.css<?= $cssV('css/shared/layout.css') ?>">
+  <link rel="stylesheet" href="css/shared/components.css<?= $cssV('css/shared/components.css') ?>">
+  <link rel="stylesheet" href="css/app/wl-monitor.css<?= $cssV('css/app/wl-monitor.css') ?>">
 </head>
 <body>
 <?php
