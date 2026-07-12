@@ -72,7 +72,7 @@ function render_header(bool $showSearch = false): void
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="WL Monitor">
   <meta name="theme-color" content="<?= htmlspecialchars(APP_COLOR, ENT_QUOTES) ?>">
-  <link rel="icon" type="image/svg+xml" href="css/shared/icons/jardyx.svg">
+  <link rel="icon" type="image/svg+xml" href="css/shared/logos/jardyx_rot.svg">
   <link rel="icon" type="image/x-icon" href="img/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="img/favicon-16x16.png">
