@@ -3,6 +3,8 @@
  * Vanilla JS, fetch() based. No jQuery.
  */
 
+import { confirmDialog } from '../css/shared/js/dialog.js';
+
 // --- State -------------------------------------------------------------------
 let stationCache       = [];       // full list for current sort mode
 let currentSort        = 'alpha';  // 'alpha' | 'dist'
@@ -247,7 +249,11 @@ function populateAddFavLines(filterByDiva) {
 
 async function deleteFavoriteFromMonitor() {
   if (!currentMonitor.favId) return;
-  if (!confirm('Favorit "' + (currentMonitor.fav?.title ?? '') + '" wirklich löschen?')) return;
+  if (!await confirmDialog('Favorit "' + (currentMonitor.fav?.title ?? '') + '" wirklich löschen?', {
+    titel: 'Favorit löschen',
+    okLabel: 'Löschen',
+    gefahr: 'commit',
+  })) return;
   try {
     await apiPost('favorites_delete', { id: currentMonitor.favId });
     currentMonitor.favId = null;

@@ -196,8 +196,7 @@ if ($setupData !== null && time() <= $setupData['until']) {
           <span class="app-badge app-badge-success">2FA aktiv</span>
           Dein Konto ist mit einem TOTP-Authenticator gesichert.
         </p>
-        <form method="post" action="security.php"
-              onsubmit="return confirm('2FA wirklich deaktivieren?')">
+        <form method="post" action="security.php" id="totpDisableForm">
           <?= csrf_input() ?>
           <input type="hidden" name="action" value="totp_disable">
           <button type="submit" class="btn btn-outline-danger">2FA deaktivieren</button>
@@ -266,7 +265,7 @@ if ($setupData !== null && time() <= $setupData['until']) {
                   <td><?= htmlspecialchars(substr($s['expires_at'], 0, 16), ENT_QUOTES, 'UTF-8') ?></td>
                   <td>
                     <form method="post" action="security.php"
-                          <?= $s['is_current'] ? 'onsubmit="return confirm(\'Das ist Ihre aktuelle Sitzung. Wirklich abmelden?\')"' : '' ?>>
+                          <?= $s['is_current'] ? 'class="revoke-one-device-form"' : '' ?>>
                       <?= csrf_input() ?>
                       <input type="hidden" name="action" value="revoke_one_device">
                       <input type="hidden" name="selector" value="<?= htmlspecialchars($s['selector'], ENT_QUOTES, 'UTF-8') ?>">
@@ -283,8 +282,7 @@ if ($setupData !== null && time() <= $setupData['until']) {
         Aktive Sitzungen auf anderen Apps bleiben bis zu 4 Tage bestehen;
         um sie sofort zu beenden, ändern Sie Ihr Kennwort.
       </p>
-      <form method="post" action="security.php"
-            onsubmit="return confirm('Wirklich von allen Geräten abmelden?')">
+      <form method="post" action="security.php" id="revokeAllDevicesForm">
         <?= csrf_input() ?>
         <input type="hidden" name="action" value="revoke_all_devices">
         <button type="submit" class="btn btn-outline-danger">Von allen Geräten abmelden</button>
@@ -293,5 +291,30 @@ if ($setupData !== null && time() <= $setupData['until']) {
   </div>
 
 </main>
+
+<script type="module" src="css/shared/js/dialog.js?v=<?= APP_VERSION . '.' . APP_BUILD ?>" nonce="<?= $_cspNonce ?>"></script>
+<script nonce="<?= $_cspNonce ?>">
+(function () {
+  function guard(form, text, opts) {
+    if (!form) return;
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      if (await window.confirmDialog(text, opts)) form.submit();
+    });
+  }
+
+  guard(document.getElementById('totpDisableForm'),
+    '2FA wirklich deaktivieren?',
+    { titel: '2FA deaktivieren', okLabel: 'Deaktivieren', gefahr: 'commit' });
+
+  guard(document.querySelector('.revoke-one-device-form'),
+    'Das ist Ihre aktuelle Sitzung. Wirklich abmelden?',
+    { titel: 'Sitzung abmelden', okLabel: 'Abmelden', gefahr: 'commit' });
+
+  guard(document.getElementById('revokeAllDevicesForm'),
+    'Wirklich von allen Geräten abmelden?',
+    { titel: 'Alle Geräte abmelden', okLabel: 'Abmelden', gefahr: 'commit' });
+})();
+</script>
 
 <?php render_footer(); ?>
