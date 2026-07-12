@@ -52,22 +52,9 @@ function render_header(bool $showSearch = false): void
         $leftExtra = ob_get_clean();
     }
 
-    $appsMenu = [
-        ['href' => 'https://energie.jardyx.com',   'label' => 'Energie'],
-        ['href' => 'https://chat.jardyx.com',      'label' => 'Chat'],
-        ['href' => 'https://zeit.jardyx.com',      'label' => 'Zeit'],
-        ['href' => 'https://lastfm.jardyx.com',    'label' => 'Last.fm'],
-        ['href' => 'https://www.jardyx.com',       'label' => 'Suche'],
-    ];
-    if (defined('APP_ENV') && APP_ENV === 'local') {
-        $appsMenu[] = ['label' => 'Test', 'adminOnly' => true, 'children' => [
-            ['href' => 'http://energie.test',   'label' => 'Energie'],
-            ['href' => 'http://chat.test',      'label' => 'Chat'],
-            ['href' => 'http://zeit.test',      'label' => 'Zeit'],
-            ['href' => 'http://lastfm.test',    'label' => 'Last.fm'],
-            ['href' => 'http://suche.test',     'label' => 'Suche'],
-        ]];
-    }
+    // Cross-App-Navigation aus der zentralen Registry (Erikr\Chrome\AppsMenu) —
+    // ersetzt die frühere handgepflegte Liste (TASK-19).
+    $appsMenu = \Erikr\Chrome\AppsMenu::build('wlmonitor', APP_ENV);
 
     $themeAttr = $theme !== 'auto'
         ? ' data-theme="' . htmlspecialchars($theme, ENT_QUOTES) . '"'
