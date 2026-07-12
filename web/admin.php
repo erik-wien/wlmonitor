@@ -267,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
 initLogTab({
   endpoint:  'api.php',
   csrfToken: window.CSRF,
-  perPage:   <?= (int) $perPage ?>,
+  perPage:   50,
 });
 
 // ── OGD updater (app-specific) ──────────────────────────────────────────────
