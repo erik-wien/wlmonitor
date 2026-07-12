@@ -318,28 +318,8 @@ window.wlPrefsFromPost = <?= json_encode($_SERVER['REQUEST_METHOD'] === 'POST') 
 
 </main>
 
-<!-- Avatar crop modal (outside container, position:fixed) -->
-<div class="app-modal-backdrop" id="avatarCropModal" aria-hidden="true" role="dialog"
-     aria-modal="true" aria-labelledby="avatarCropTitle" hidden
-     style="position:fixed;inset:0;z-index:1050;background:rgba(0,0,0,.6);
-            align-items:center;justify-content:center;padding:1rem">
-  <div class="app-modal-dialog" style="max-width:560px;width:100%;background:var(--color-bg);
-       border:1px solid var(--color-border);border-radius:var(--radius);
-       box-shadow:var(--shadow-sm);display:flex;flex-direction:column;max-height:90vh">
-    <div style="padding:.75rem 1rem;border-bottom:1px solid var(--color-border)">
-      <strong id="avatarCropTitle">Profilbild zuschneiden</strong>
-    </div>
-    <div style="padding:1rem;overflow:auto;min-height:0">
-      <div style="max-height:60vh">
-        <img id="avatarCropImage" alt="" style="display:block;max-width:100%">
-      </div>
-    </div>
-    <div style="padding:.75rem 1rem;border-top:1px solid var(--color-border);display:flex;gap:.5rem;justify-content:flex-end">
-      <button type="button" class="btn" id="avatarCropCancel">Abbrechen</button>
-      <button type="button" class="btn btn-outline-danger" id="avatarCropConfirm">Speichern</button>
-    </div>
-  </div>
-</div>
+<!-- Avatar crop modal (outside container) -->
+<?php \Erikr\Chrome\AvatarCropModal::render(); ?>
 
 <script nonce="<?= $_cspNonce ?>" src="css/shared/js/vendor/cropperjs/cropper.min.js"></script>
 <script nonce="<?= $_cspNonce ?>" src="css/shared/js/avatar-cropper.js"></script>
