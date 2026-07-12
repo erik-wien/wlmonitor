@@ -17,8 +17,8 @@
  *
  * @category   geo-information
  * @package    wl-monitor
- * @author     Erik R. Huemer <erik.huemer@jardyx.com>
- * @copyright  2019 Erik R. Huemer
+ * @author     Erik R. Accart-Huemer <erik.huemer@jardyx.com>
+ * @copyright  2019 Erik R. Accart-Huemer
  * @license    http://www.php.net/license/3_01.txt  PHP License 3.01
  * @version    SVN: $Id$
  * @link       https://www.jardyx.com/wl-monitor/download/wl-monitor.zip
