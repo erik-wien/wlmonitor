@@ -117,7 +117,16 @@ try {
             $diva = sanitizeDivaInput($_GET['diva'] ?? $_SESSION['diva'] ?? '60200103');
             $_SESSION['diva'] = $diva;
             $maxDep = (int) ($_SESSION['departures'] ?? MAX_DEPARTURES);
-            $monitorData = monitor_get($con, $diva, $maxDep);
+            try {
+                $monitorData = monitor_get($con, $diva, $maxDep);
+            } catch (Throwable $e) {
+                // monitor_get() throws precise RuntimeExceptions (WL API down,
+                // invalid JSON, no monitors for the given DIVAs) — surface the
+                // concrete message + 503 here, analogous to monitor_json.php,
+                // instead of falling into the generic 500 catch below.
+                appendLog($con, 'api', 'Error: ' . $e->getMessage());
+                api_json(['error' => $e->getMessage()], 503);
+            }
 
             // The WL API silently omits stops with no upcoming departures.
             // Inject empty placeholder entries so the JS can render a card for

@@ -3,9 +3,10 @@ id: TASK-11
 title: >-
   Live-Board: bei Poll-Fehler letzte gültige Daten stehen lassen + Server-Detail
   zeigen (Adoption apiCall())
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-16 06:59'
+updated_date: '2026-07-16 10:43'
 labels: []
 dependencies: []
 priority: high

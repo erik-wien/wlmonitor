@@ -4,6 +4,7 @@
  */
 
 import { confirmDialog } from '../css/shared/js/dialog.js';
+import { apiCall, apiForm } from '../css/shared/js/api-call.js';
 
 // --- State -------------------------------------------------------------------
 let stationCache       = [];       // full list for current sort mode
@@ -47,13 +48,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // --- API helpers -------------------------------------------------------------
+// Thin wrappers around the shared apiCall()/apiForm() hull (see
+// css/shared/js/api-call.js) — kept so the many call sites below don't need
+// to change. Errors are ApiError instances (status/detail/kind) with a
+// German-language e.message that already includes the server's concrete
+// error text where available.
 async function apiFetch(action, params = {}) {
   const url = new URL('api.php', location.href);
   url.searchParams.set('action', action);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('API ' + action + ' failed: ' + res.status);
-  return res.json();
+  return apiCall(url, { method: 'GET' });
 }
 
 async function apiPost(action, body = {}) {
@@ -62,22 +66,39 @@ async function apiPost(action, body = {}) {
   const csrfInput = document.querySelector('input[name="csrf_token"]');
   if (csrfInput) fd.append('csrf_token', csrfInput.value);
   for (const [k, v] of Object.entries(body)) fd.append(k, v);
-  const res = await fetch('api.php', { method: 'POST', body: fd });
-  if (!res.ok) throw new Error('API POST ' + action + ' failed: ' + res.status);
-  return res.json();
+  return apiForm('api.php', fd);
 }
 
 // --- Monitor -----------------------------------------------------------------
+let monitorHasData = false; // true once a departure board has been rendered
+
 async function loadMonitor(diva, fav = null) {
   currentMonitor = { diva: diva || null, favId: fav ? fav.id : null, fav };
   const params = diva ? { diva } : {};
   try {
     const data = await apiFetch('monitor', params);
     renderMonitor(data);
+    monitorHasData = true;
     updateMonitorToolbar();
   } catch (e) {
     const container = document.getElementById('monitor');
-    if (container) container.textContent = 'Keine Abfahrtsdaten verfügbar.';
+    if (container) {
+      if (monitorHasData) {
+        // Keep the last successfully rendered board on refresh errors (§21) —
+        // show a dismissible-free inline notice instead of wiping it.
+        let notice = document.getElementById('monitorRefreshNotice');
+        if (!notice) {
+          notice = document.createElement('div');
+          notice.id = 'monitorRefreshNotice';
+          notice.className = 'app-alert app-alert-warning mb-2';
+          notice.setAttribute('role', 'alert');
+          container.prepend(notice);
+        }
+        notice.textContent = 'Aktualisierung fehlgeschlagen (' + e.message + ') — zeige letzten Stand.';
+      } else {
+        container.textContent = 'Keine Abfahrtsdaten verfügbar (' + e.message + ').';
+      }
+    }
     console.error(e);
   }
 }
