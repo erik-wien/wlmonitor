@@ -1,9 +1,10 @@
 ---
 id: TASK-12
 title: 'monitor_get(): Timeout am WL-API-Call setzen (8-10s, analog ogd.php)'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-16 06:59'
+updated_date: '2026-07-16 10:43'
 labels: []
 dependencies: []
 priority: medium

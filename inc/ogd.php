@@ -48,7 +48,11 @@ function ogd_download_csv(string $url): array {
     $ctx = stream_context_create(['http' => ['timeout' => 30]]);
     $raw = file_get_contents($url, false, $ctx);
     if ($raw === false) {
-        throw new RuntimeException("CSV download failed: $url");
+        $headers = function_exists('http_get_last_response_headers')
+            ? http_get_last_response_headers()
+            : ($http_response_header ?? null);
+        $detail = $headers ? implode(' / ', $headers) : (error_get_last()['message'] ?? 'unknown error');
+        throw new RuntimeException("CSV download failed: $url ($detail)");
     }
     $lines  = explode("\n", $raw);
     $header = str_getcsv(array_shift($lines), ';', '"', '');

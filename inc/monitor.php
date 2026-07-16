@@ -72,7 +72,8 @@ function monitor_get(mysqli $con, string $divaRaw, int $maxDepartures): array {
         . '&sender=' . APIKEY
         . '&activateTrafficInfo=stoerungkurz&activateTrafficInfo=stoerunglang';
 
-    $raw = file_get_contents($apiUrl);
+    $ctx = stream_context_create(['http' => ['timeout' => 10]]);
+    $raw = file_get_contents($apiUrl, false, $ctx);
     if ($raw === false) {
         throw new RuntimeException('Wiener Linien API request failed.');
     }
