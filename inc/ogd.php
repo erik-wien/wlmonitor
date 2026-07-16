@@ -48,9 +48,12 @@ function ogd_download_csv(string $url): array {
     $ctx = stream_context_create(['http' => ['timeout' => 30]]);
     $raw = file_get_contents($url, false, $ctx);
     if ($raw === false) {
-        $headers = function_exists('http_get_last_response_headers')
-            ? http_get_last_response_headers()
-            : ($http_response_header ?? null);
+        // $http_response_header is populated in THIS function call's local scope
+        // only when this call's stream actually received a response. Prefer it
+        // over http_get_last_response_headers(), which reflects the last HTTP
+        // stream result process-wide and can leak a prior call's 200 OK headers
+        // into a later DNS/connect failure that never got a response at all.
+        $headers = $http_response_header ?? null;
         $detail = $headers ? implode(' / ', $headers) : (error_get_last()['message'] ?? 'unknown error');
         throw new RuntimeException("CSV download failed: $url ($detail)");
     }

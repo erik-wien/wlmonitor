@@ -297,7 +297,12 @@ document.getElementById('btnOgdUpdate').addEventListener('click', async () => {
       logPre.textContent = 'Verbindung unterbrochen (' + e.message + ') — das Update kann serverseitig trotzdem durchgelaufen sein. Bitte Log prüfen.';
       showAlert('Verbindung unterbrochen — Update läuft ggf. serverseitig weiter, bitte Log prüfen.', 'danger');
     } else {
-      logPre.textContent = 'Fehler: ' + e.message;
+      // On a real server error (HTTP 500), api.php puts the full step-by-step
+      // log into e.detail (ApiError, css/shared/js/api-call.js) — show that
+      // in the log box instead of just the short e.message so the admin sees
+      // the completed steps AND the error, like before the timeout/error
+      // split (Review TASK-13).
+      logPre.textContent = e.detail ? e.detail : 'Fehler: ' + e.message;
       showAlert('Fehler beim OGD-Update: ' + e.message, 'danger');
     }
   } finally {

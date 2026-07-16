@@ -73,10 +73,16 @@ async function apiPost(action, body = {}) {
 let monitorHasData = false; // true once a departure board has been rendered
 
 async function loadMonitor(diva, fav = null) {
-  currentMonitor = { diva: diva || null, favId: fav ? fav.id : null, fav };
+  // Local candidate — NOT committed to currentMonitor until the fetch+render
+  // succeeds. Committing eagerly would desync the visible board/toolbar
+  // (still the old target on failure) from currentMonitor (already the new
+  // target), which e.g. makes deleteFavoriteFromMonitor() delete the wrong
+  // favourite. See Review TASK-11.
+  const candidate = { diva: diva || null, favId: fav ? fav.id : null, fav };
   const params = diva ? { diva } : {};
   try {
     const data = await apiFetch('monitor', params);
+    currentMonitor = candidate;
     renderMonitor(data);
     monitorHasData = true;
     updateMonitorToolbar();
@@ -84,8 +90,10 @@ async function loadMonitor(diva, fav = null) {
     const container = document.getElementById('monitor');
     if (container) {
       if (monitorHasData) {
-        // Keep the last successfully rendered board on refresh errors (§21) —
-        // show a dismissible-free inline notice instead of wiping it.
+        // Keep the last successfully rendered board AND currentMonitor on
+        // refresh/switch errors (§21) — show a dismissible-free inline notice
+        // instead of wiping it, naming the target that failed so the user
+        // knows the switch didn't happen.
         let notice = document.getElementById('monitorRefreshNotice');
         if (!notice) {
           notice = document.createElement('div');
@@ -94,7 +102,8 @@ async function loadMonitor(diva, fav = null) {
           notice.setAttribute('role', 'alert');
           container.prepend(notice);
         }
-        notice.textContent = 'Aktualisierung fehlgeschlagen (' + e.message + ') — zeige letzten Stand.';
+        const targetLabel = candidate.fav?.title ?? candidate.diva ?? 'Standardanzeige';
+        notice.textContent = 'Aktualisierung von "' + targetLabel + '" fehlgeschlagen (' + e.message + ') — zeige letzten Stand.';
       } else {
         container.textContent = 'Keine Abfahrtsdaten verfügbar (' + e.message + ').';
       }

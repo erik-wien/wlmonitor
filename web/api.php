@@ -298,6 +298,17 @@ try {
             ignore_user_abort(true); // Run to completion even if browser disconnects
             $result = ogd_update($con);
             appendLog($con, 'admin', 'OGD update ' . ($result['ok'] ? 'OK' : 'FAILED: ' . $result['error']));
+            if (!$result['ok']) {
+                // On HTTP 500 the shared apiCall() (web/css/shared/js/api-call.js)
+                // throws before the admin UI can read $result['log'] directly, so
+                // the step-by-step log would otherwise be lost. ogd_update()'s log
+                // already ends with "ERROR: <message>", so route the full log
+                // through 'detail' — extractDetail() there prefers a non-empty
+                // 'error' over 'detail', so 'error' must be cleared here for
+                // ApiError.detail to carry the log (Review TASK-13).
+                $result['detail'] = implode("\n", $result['log']);
+                $result['error']  = null;
+            }
             api_json($result, $result['ok'] ? 200 : 500);
 
         // ── User edit (admin, overrides Dispatch to carry departures) ─────────
