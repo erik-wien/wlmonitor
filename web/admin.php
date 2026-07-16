@@ -303,7 +303,12 @@ document.getElementById('btnOgdUpdate').addEventListener('click', async () => {
       // the completed steps AND the error, like before the timeout/error
       // split (Review TASK-13).
       logPre.textContent = e.detail ? e.detail : 'Fehler: ' + e.message;
-      showAlert('Fehler beim OGD-Update: ' + e.message, 'danger');
+      // Trägt e.detail den mehrzeiligen Log, wäre e.message eine Log-Wand im
+      // Alert-Banner — dann nur kurze Headline; sonst (z. B. Lock-Contention
+      // "Update already in progress.") ist e.message kurz und konkret.
+      showAlert(e.detail
+        ? 'Fehler beim OGD-Update (HTTP ' + (e.status || '?') + ') — Details im Log unten.'
+        : 'Fehler beim OGD-Update: ' + e.message, 'danger');
     }
   } finally {
     btn.disabled    = false;

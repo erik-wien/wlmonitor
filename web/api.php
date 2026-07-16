@@ -298,7 +298,7 @@ try {
             ignore_user_abort(true); // Run to completion even if browser disconnects
             $result = ogd_update($con);
             appendLog($con, 'admin', 'OGD update ' . ($result['ok'] ? 'OK' : 'FAILED: ' . $result['error']));
-            if (!$result['ok']) {
+            if (!$result['ok'] && !empty($result['log'])) {
                 // On HTTP 500 the shared apiCall() (web/css/shared/js/api-call.js)
                 // throws before the admin UI can read $result['log'] directly, so
                 // the step-by-step log would otherwise be lost. ogd_update()'s log
@@ -306,6 +306,9 @@ try {
                 // through 'detail' — extractDetail() there prefers a non-empty
                 // 'error' over 'detail', so 'error' must be cleared here for
                 // ApiError.detail to carry the log (Review TASK-13).
+                // Only when the log is non-empty: the lock-contention path
+                // ("Update already in progress.") has an empty log and must keep
+                // its concrete 'error' message (Re-Review-Finding).
                 $result['detail'] = implode("\n", $result['log']);
                 $result['error']  = null;
             }
