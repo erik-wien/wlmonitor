@@ -1,9 +1,10 @@
 ---
 id: TASK-13
 title: 'OGD-Update: Fortschritt/Dauer-Hinweis statt statischem ''Verbinde...'''
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-16 06:59'
+updated_date: '2026-07-16 10:45'
 labels: []
 dependencies: []
 priority: medium

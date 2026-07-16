@@ -112,6 +112,7 @@ window.CSRF = <?= json_encode($csrfToken) ?>;
 </script>
 <script src="css/shared/js/admin.js" nonce="<?= $_cspNonce ?>"></script>
 <script type="module" src="css/shared/js/dialog.js?v=<?= APP_VERSION . '.' . APP_BUILD ?>" nonce="<?= $_cspNonce ?>"></script>
+<script type="module" src="css/shared/js/api-call.js?v=<?= APP_VERSION . '.' . APP_BUILD ?>" nonce="<?= $_cspNonce ?>"></script>
 
 <script nonce="<?= $_cspNonce ?>">
 // Shared helpers from css/shared/js/admin.js:
@@ -271,6 +272,11 @@ initLogTab({
 });
 
 // ── OGD updater (app-specific) ──────────────────────────────────────────────
+// Uses window.apiForm (css/shared/js/api-call.js, loaded as a module above)
+// instead of adminPost so a client-side timeout is distinguishable from a
+// real server error — the server runs with set_time_limit(120) and
+// ignore_user_abort(true), so a dropped connection does not necessarily mean
+// the update itself failed.
 document.getElementById('btnOgdUpdate').addEventListener('click', async () => {
   const btn    = document.getElementById('btnOgdUpdate');
   const logBox = document.getElementById('ogdLog');
@@ -279,16 +285,21 @@ document.getElementById('btnOgdUpdate').addEventListener('click', async () => {
   btn.disabled    = true;
   btn.textContent = 'Läuft...';
   logBox.hidden   = false;
-  logPre.textContent = 'Verbinde...';
+  logPre.textContent = 'Aktualisiere Stationsdaten — kann bis zu 2 Minuten dauern, Seite nicht schließen…';
 
   try {
-    const res = await adminPost('admin_ogd_update', {});
+    const res = await window.apiForm('api.php?action=admin_ogd_update', { csrf_token: window.CSRF }, { timeoutMs: 130000 });
     logPre.textContent = (res.log ?? []).join('\n');
     if (res.ok) showAlert('OGD-Daten aktualisiert.', 'success');
     else        showAlert('Fehler: ' + (res.error ?? 'Unbekannt'), 'danger');
   } catch (e) {
-    logPre.textContent = 'Netzwerkfehler: ' + e.message;
-    showAlert('Netzwerkfehler beim OGD-Update.', 'danger');
+    if (e.kind === 'timeout' || e.kind === 'network' || e.kind === 'abort') {
+      logPre.textContent = 'Verbindung unterbrochen (' + e.message + ') — das Update kann serverseitig trotzdem durchgelaufen sein. Bitte Log prüfen.';
+      showAlert('Verbindung unterbrochen — Update läuft ggf. serverseitig weiter, bitte Log prüfen.', 'danger');
+    } else {
+      logPre.textContent = 'Fehler: ' + e.message;
+      showAlert('Fehler beim OGD-Update: ' + e.message, 'danger');
+    }
   } finally {
     btn.disabled    = false;
     btn.textContent = 'Jetzt aktualisieren';
