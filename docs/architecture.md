@@ -254,9 +254,11 @@ read/write uses `flock(LOCK_EX)` to avoid race conditions.
 
 DIVA numbers are sanitised, then each becomes a `&diva=` parameter in the API URL. The WL Realtime API returns **one monitor entry per line**, not per station — entries for the same station are interleaved with entries for other stations. `monitor_get` initialises each station on first encounter and appends subsequent entries, ensuring all lines are correctly accumulated regardless of order.
 
+The `file_get_contents()` call against the WL API uses a 10-second stream context timeout, so a hanging upstream no longer blocks the PHP worker for the ~60s socket default — well under the 20s poll interval below.
+
 Countdown `0` is rendered as `*` (vehicle at platform).
 
-Throws `InvalidArgumentException` for empty DIVA input, `RuntimeException` for API/JSON failures.
+Throws `InvalidArgumentException` for empty DIVA input, `RuntimeException` for API/JSON failures (including the timeout above, which surfaces as a request failure).
 
 ---
 
@@ -279,6 +281,14 @@ The optional `filter_json` field stores per-station line filters as a JSON objec
 
 Downloads three CSV files from `data.wien.gv.at`, truncates and reloads the corresponding tables, then recreates the `ogd_stations` and `ogd_diva` views inside a database transaction.
 
+`ogd_download_csv()` uses a 30-second stream context timeout. On failure it no
+longer throws a bare "CSV download failed: `<url>`" — the exception message
+now includes the last HTTP response headers (`$http_response_header`, read in
+the same function call so it can't leak a prior request's headers) when the
+connection got a response, or `error_get_last()`'s message when it didn't
+(DNS failure, connection refused, etc.), so the admin log shows the actual
+cause instead of just "it failed".
+
 A `flock(LOCK_EX|LOCK_NB)` on `data/ogd_update.lock` prevents two simultaneous updates. The lock file handle is held open in `$GLOBALS['_ogd_lock_fp']` for the duration of the run.
 
 **Views recreated:**
@@ -296,7 +306,22 @@ User management functions. **Callers are responsible for authorisation** — all
 
 ### `web/api.php`
 
-Central JSON dispatcher. After calling `monitor_get()`, the `monitor` action also injects empty placeholder entries for any requested DIVAs absent from the WL API response (the API silently omits stops with no upcoming departures). Placeholder entries have an empty `lines` array; the JS filter logic then shows "Keine aktuellen Abfahrten" for filtered favourite cards whose stop has no current service.
+Central JSON dispatcher. The `monitor` action wraps `monitor_get()` in its own
+try/catch: its `RuntimeException`s (WL API down, invalid JSON, no monitors for
+the given DIVAs) are surfaced as the concrete exception message with a `503`
+status — analogous to `monitor_json.php` — instead of falling through to the
+generic 500/"Internal server error" handler at the bottom of the dispatcher.
+After that call succeeds, the `monitor` action also injects empty placeholder entries for any requested DIVAs absent from the WL API response (the API silently omits stops with no upcoming departures). Placeholder entries have an empty `lines` array; the JS filter logic then shows "Keine aktuellen Abfahrten" for filtered favourite cards whose stop has no current service.
+
+The `admin_ogd_update` action runs with `set_time_limit(120)` +
+`ignore_user_abort(true)` so a client-side timeout/disconnect doesn't kill a
+still-running update. On failure with a non-empty step log, it moves the log
+into the response's `detail` field and clears `error` — the shared
+`apiCall()` hull (`web/css/shared/js/api-call.js`) throws before the admin UI
+can otherwise read `$result['log']` on a non-2xx response, so without this the
+step-by-step log would be lost on error. The lock-contention path ("Update
+already in progress.") has an empty log and keeps its concrete `error`
+message unchanged.
 
 Every response is produced by `api_json()` which:
 - Sets `Content-Type: application/json; charset=utf-8`
@@ -432,8 +457,8 @@ window.wlConfig = {
 | Section             | Purpose                                                   |
 |---------------------|-----------------------------------------------------------|
 | State variables     | `stationCache`, `currentSort`, `stationOrigin`, `monitorTimer`, `currentMonitor`, `currentMonitorLines` |
-| `apiFetch()`        | GET requests to api.php                                   |
-| `apiPost()`         | POST requests to api.php (includes CSRF token from DOM)   |
+| `apiFetch()`        | GET requests to api.php — thin wrapper around the shared `apiCall()` hull |
+| `apiPost()`         | POST requests to api.php (includes CSRF token from DOM) — thin wrapper around the shared `apiForm()` hull |
 | Monitor             | `loadMonitor()`, `renderMonitor()`, `createLineBadge()`   |
 | Favorites           | `loadFavorites()`, `renderFavorites()`                    |
 | Station dropdown    | `loadStationsAlpha()`, `loadStationsByDistance()`, `renderStationList()`, `openStationDropdown()`, `closeStationDropdown()` |
@@ -442,6 +467,23 @@ window.wlConfig = {
 | Cookies             | `getCookie()`, `setCookie()` (theme preference only)      |
 
 `currentMonitor` tracks the active monitor context (`{diva, favId, fav}`). `currentMonitorLines` is rebuilt on every `renderMonitor` call and holds all `{diva, line, platform, direction, towards}` entries visible in the last render — used to populate the add-favourite line filter checkboxes.
+
+`apiFetch()`/`apiPost()` are now thin wrappers around the shared
+`apiCall()`/`apiForm()` hull (imported from `css/shared/js/api-call.js`)
+instead of hand-rolled `fetch()` calls — errors surface as `ApiError`
+instances (`status`, `detail`, `kind`) whose `message` already includes the
+server's concrete error text where available, rather than a bare "HTTP 503".
+
+`loadMonitor(diva, fav)` builds a local candidate context but only commits it
+to `currentMonitor` — and only re-renders the board — after the fetch and
+render succeed. On a failed refresh/switch (e.g. a transient blip during the
+20s background poll, or `monitor_get()`'s new 10s timeout tripping), the
+previously rendered board and `currentMonitor` are both left untouched: if a
+board was already showing, a dismissible inline notice ("Aktualisierung von
+„…" fehlgeschlagen (…) — zeige letzten Stand.") is prepended instead of
+wiping the departure list; the "Keine Abfahrtsdaten verfügbar" empty state
+now only appears when there was genuinely never any data, and it includes the
+concrete `ApiError` message.
 
 `DOMContentLoaded` is `async`: it `await`s `loadFavorites()`, then checks `wlConfig.loadFavId` to decide whether to auto-load a specific favourite (set by `editFavorite.php` via session after a save) or fall back to the default DIVA.
 
