@@ -245,9 +245,10 @@
 }
 .header-search .btn-icon:hover { background: var(--color-surface-alt); color: var(--color-text); }
 
-.search-toggle { display: none; }
+/* (0,2,0) nötig: schlägt die display:flex-Regel von .header-search .btn-icon */
+.header-search .search-toggle { display: none; }
 @media (max-width: 600px) {
-  .search-toggle { display: flex; }
+  .header-search .search-toggle { display: flex; }
   .header-search .search-row { display: none; position: absolute; top: 100%; left: 0; right: 0; padding: 0.5rem; background: var(--color-surface); border-bottom: 1px solid var(--color-border); z-index: 1050; }
   .header-search.open .search-row { display: flex; }
 }
