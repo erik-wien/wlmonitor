@@ -80,12 +80,20 @@ async function loadMonitor(diva, fav = null) {
   // favourite. See Review TASK-11.
   const candidate = { diva: diva || null, favId: fav ? fav.id : null, fav };
   const params = diva ? { diva } : {};
+  const stationChanged = diva !== currentMonitor.diva;
   try {
     const data = await apiFetch('monitor', params);
     currentMonitor = candidate;
     renderMonitor(data);
     monitorHasData = true;
     updateMonitorToolbar();
+    if (stationChanged) {
+      const el = document.getElementById('monitor');
+      el.classList.remove('board-enter');
+      void el.offsetWidth;             // Reflow: Animation neu starten
+      el.classList.add('board-enter');
+    }
+    syncActiveFavChip(fav?.id);
   } catch (e) {
     const container = document.getElementById('monitor');
     if (container) {
@@ -334,6 +342,13 @@ function renderMonitor(data) {
     nameSpan.textContent = s.station_name;
     header.appendChild(nameSpan);
 
+    if (update_at) {
+      const live = document.createElement('span');
+      live.className = 'board-live ms-2';
+      live.textContent = 'LIVE ' + update_at;
+      header.appendChild(live);
+    }
+
     if (window.wlConfig?.loggedIn && s.diva) {
       const plusBtn = document.createElement('button');
       plusBtn.type = 'button';
@@ -465,9 +480,16 @@ function appendDepartureColumns(tr, line) {
   const jammedTimes = [];
   const deviations  = []; // {t, label}
   deps.forEach((d, i) => {
-    if (i > 0) tdTimes.appendChild(document.createTextNode(', '));
+    if (i > 0) {
+      const sep = document.createElement('span');
+      sep.className = 'dep-sep';
+      sep.textContent = ' · ';
+      tdTimes.appendChild(sep);
+    }
     const span = document.createElement('span');
-    span.className = 'dep' + (d.bf ? ' dep-barrierfree' : '');
+    span.className = 'dep ' + (i === 0 ? 'dep-next' : 'dep-follow') + (d.bf ? ' dep-barrierfree' : '');
+    const mins = parseInt(d.t, 10);
+    if (i === 0 && !Number.isNaN(mins) && mins <= 1) span.classList.add('dep-immi');
     if (d.bf) span.title = 'Barrierefreies Fahrzeug';
     span.textContent = d.t;
     tdTimes.appendChild(span);
@@ -568,6 +590,13 @@ function startMonitorTimer() {
 }
 
 // --- Favorites ---------------------------------------------------------------
+// Markiert den Chip des aktiven Favoriten (favId) und entfernt die Markierung
+// von allen anderen. favId == null/undefined → kein Chip aktiv.
+function syncActiveFavChip(favId) {
+  document.querySelectorAll('#buttons .fav-chip').forEach(b =>
+    b.classList.toggle('fav-active', Number(b.dataset.favId) === (favId ?? -1)));
+}
+
 async function loadFavorites() {
   try {
     const favs = await apiFetch('favorites');
@@ -586,7 +615,7 @@ function renderFavorites(favs) {
   for (const fav of favs) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'btn ' + fav.bclass + ' text-start';
+    btn.className = 'btn fav-chip ' + fav.bclass + ' text-start';
     btn.id = 'btnFav-' + fav.id;
     btn.dataset.diva = fav.diva;
     btn.dataset.favId = fav.id;
@@ -622,6 +651,7 @@ function renderFavorites(favs) {
     });
     container.appendChild(btn);
   }
+  syncActiveFavChip(currentMonitor.fav?.id);
   if (window.wlConfig?.loggedIn) initSortable();
 }
 
@@ -695,6 +725,47 @@ async function loadStationsAlpha() {
   }
 }
 
+/* Liniensignal-Klasse aus dem Liniennamen (Suche liefert nur Namen, keinen Typ).
+   Heuristik nach Wiener Konvention: U* Metro, N* Nightline, WLB Lokalbahn,
+   Ziffern+Buchstabe Bus (59A), nur Ziffern Tram (62). */
+function lineSignalClass(name) {
+  const n = name.trim().toUpperCase();
+  if (/^U\d$/.test(n)) return 'pt-metro ' + n;
+  if (/^N\d+[A-Z]?$/.test(n)) return 'pt-bus-night';
+  if (n === 'WLB' || n === 'BB' || n.startsWith('BADNER')) return 'pt-tram-wlb';
+  if (/^[A-Z]$/.test(n)) return 'pt-tram';   // Buchstaben-Trams (O, D)
+  if (/^\d+[A-Z]$/.test(n)) return 'pt-bus-city';
+  if (/^\d+$/.test(n)) return 'pt-tram';
+  return 'pt-default';
+}
+
+function appendLinePreview(p, s) {
+  if (!s.lines) return;
+  const wrap = document.createElement('span');
+  wrap.className = 'sig-preview';
+  s.lines.split(',').slice(0, 6).forEach(raw => {
+    const name = raw.trim();
+    if (!name) return;
+    const upper = name.toUpperCase();
+    if (upper === 'WLB' || upper === 'BB') {
+      const b = document.createElement('span');
+      b.className = 'line-badge sig-mini pt-tram-wlb';
+      const img = document.createElement('img');
+      img.src = 'img/Logo_Wiener_Lokalbahn.svg';
+      img.alt = 'WLB';
+      img.className = 'wlb-logo';
+      b.appendChild(img);
+      wrap.appendChild(b);
+      return;
+    }
+    const b = document.createElement('span');
+    b.className = 'line-badge sig-mini ' + lineSignalClass(name);
+    b.textContent = name;
+    wrap.appendChild(b);
+  });
+  p.appendChild(wrap);
+}
+
 function renderStationList(stations) {
   const list = document.getElementById('stationList');
   if (!list) return;
@@ -736,6 +807,7 @@ function renderStationList(stations) {
       p.addEventListener('click', () => { loadMonitor(s.diva); startMonitorTimer(); closeStationDropdown(); saveState(s.diva); });
     }
 
+    appendLinePreview(p, s);
     li.appendChild(p);
     list.appendChild(li);
   }
@@ -786,9 +858,22 @@ function wireStationDropdown() {
     }
   });
 
-  document.addEventListener('click', e => {
+  // pointerdown (capture) statt click: click feuert beim mouseup, das nach einem
+  // mousedown innerhalb (z.B. Scrollbar-Drag der Dropdown-Liste) außerhalb enden
+  // kann und den Wrap fälschlich als "außerhalb" behandeln würde. pointerdown
+  // greift am Gestenstart und bewertet dieselbe Ziel-Prüfung korrekt.
+  document.addEventListener('pointerdown', e => {
     const wrap = document.getElementById('stationSearchWrap');
-    if (wrap && !wrap.contains(e.target)) closeStationDropdown();
+    if (wrap && !wrap.contains(e.target)) {
+      closeStationDropdown();
+      wrap.classList.remove('open');
+    }
+  }, true);
+
+  document.getElementById('searchToggle')?.addEventListener('click', () => {
+    const hs = document.querySelector('.header-search');
+    hs.classList.toggle('open');
+    if (hs.classList.contains('open')) document.getElementById('s')?.focus();
   });
 }
 

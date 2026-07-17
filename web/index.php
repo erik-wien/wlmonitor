@@ -111,8 +111,12 @@ window.wlConfig = {
 </script>
 
 <!-- App module -->
-<script src="js/vendor/Sortable.min.js" nonce="<?= $_cspNonce ?>"></script>
-<script type="module" src="js/wl-monitor.js"></script>
+<?php $jsV = static function (string $rel): string {
+    $m = @filemtime(__DIR__ . '/' . $rel);   // web/-relativer Pfad, analog zu $cssV in layout.php
+    return $m ? '?v=' . $m : '';
+}; ?>
+<script src="js/vendor/Sortable.min.js<?= $jsV('js/vendor/Sortable.min.js') ?>" nonce="<?= $_cspNonce ?>"></script>
+<script type="module" src="js/wl-monitor.js<?= $jsV('js/wl-monitor.js') ?>"></script>
 
 </main>
 <?php render_footer(); ?>

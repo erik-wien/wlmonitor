@@ -4,22 +4,74 @@
 
 :root { --logo-color: #e2001a; } /* per-app brand logo tint (config color) */
 
-/* ── Departure table ────────────────────────────────────────────────────────── */
+/* ── Tafel: Stationskarten ─────────────────────────────────────────────────── */
+
+#monitor .app-card {
+  background: var(--board-card-bg);
+  border: 1px solid var(--board-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+#monitor .app-card-header {
+  background: transparent;
+  border-bottom: 1px solid var(--board-title-line);
+  color: var(--board-title);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 0.55rem 0.9rem;
+}
+.board-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--board-live);
+  white-space: nowrap;
+}
+.board-live::before {
+  content: "";
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--board-live);
+  box-shadow: 0 0 6px var(--board-live);
+}
+
+/* ── Tafel: Abfahrtszeilen ─────────────────────────────────────────────────── */
 
 .departure-table { table-layout: auto; width: 100%; }
-.departure-table .badge-cell    { width: 2.8em; padding: 0.2em; vertical-align: middle; }
-.departure-table .platform-cell { width: 2.2em; font-size: 0.7em; color: var(--color-muted); vertical-align: middle; }
-.departure-table .towards-cell  { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
-.departure-table .times-cell    { white-space: nowrap; text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; vertical-align: middle; padding-left: 0.5em; }
-.departure-table .dep-barrierfree { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 2px; }
-.departure-table .times-cell.times-scheduled { font-style: italic; color: var(--color-muted); }
-.line-alert { margin-left: 0.15em; font-size: 0.9em; line-height: 1; }
-.departure-table .towards-cell .departure-note { font-size: 0.7em; color: var(--color-muted); white-space: normal; margin-top: 0.1em; }
-#monitorAlerts { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; }
-.departure-table td, .departure-table th {
-  color: var(--color-text);
-  border-color: var(--color-border);
+.departure-table td, .departure-table th { color: var(--board-dest); border-color: var(--board-title-line); }
+.departure-table .badge-cell    { width: 2.8em; padding: 0.25em; vertical-align: middle; }
+.departure-table .platform-cell { width: 2.2em; font-size: 0.7em; color: var(--board-sub); vertical-align: middle; }
+.departure-table .towards-cell  { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; color: var(--board-dest); }
+.departure-table .towards-cell .departure-note { font-size: 0.7em; color: var(--board-sub); white-space: normal; margin-top: 0.1em; }
+.departure-table .times-cell {
+  white-space: nowrap; text-align: right; vertical-align: middle; padding-left: 0.5em;
+  font-family: var(--board-font-mono);
+  font-variant-numeric: tabular-nums;
 }
+.departure-table .times-cell .dep-next {
+  font-size: 1.3rem; font-weight: 800; color: var(--board-countdown); line-height: 1;
+}
+.departure-table .times-cell .dep-follow,
+.departure-table .times-cell .dep-sep {
+  font-size: 0.78rem; font-weight: 500; color: var(--board-countdown-dim);
+}
+.departure-table .dep-barrierfree { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 2px; }
+.departure-table .times-cell.times-scheduled { font-style: italic; }
+.departure-table .times-cell.times-scheduled .dep-next { color: var(--board-countdown-dim); }
+.line-alert { margin-left: 0.15em; font-size: 0.9em; line-height: 1; }
+#monitorAlerts { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; }
+
+/* Puls NUR bei 0/1 min (reduced-motion wird von shared layout.css neutralisiert) */
+@keyframes board-pulse { 50% { opacity: 0.4; } }
+.dep-immi { animation: board-pulse 1.2s ease-in-out infinite; }
+
+/* Board-Wechsel (Station/Favorit): kurzer Fade — nicht beim Poll-Refresh */
+@keyframes board-enter { from { opacity: 0; } to { opacity: 1; } }
+#monitor.board-enter { animation: board-enter 0.25s ease-out; }
 
 /* ── Line badges ────────────────────────────────────────────────────────────── */
 
@@ -75,6 +127,12 @@
 
 /* unknown type fallback */
 .line-badge.pt-default { border-radius: 5px; background: #555; }
+
+/* ── Station search dropdown: mini line-signal preview ───────────────────────── */
+
+.sig-preview { display: inline-flex; gap: 3px; margin-left: 0.5rem; vertical-align: middle; }
+.line-badge.sig-mini { width: 1.7em; height: 1.7em; font-size: 0.6rem; }
+.line-badge.sig-mini.pt-bus-city, .line-badge.sig-mini.pt-bus-night { width: auto; min-width: 1.9em; padding: 0 3px; }
 
 /* ── Station search dropdown ────────────────────────────────────────────────── */
 
@@ -153,8 +211,8 @@
 .header-search #s::placeholder { color: var(--color-muted); }
 .header-search #s:focus-visible {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent);
+  border-color: var(--board-countdown);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--board-countdown) 30%, transparent);
 }
 /* Inline-Sprite-Icons (<svg class="icon"><use href="css/icons.svg#…"></svg>).
    Stroke-basiert (Heroicons-Stil). Die früher geteilte .icon-Regel wurde in
@@ -186,6 +244,14 @@
   transition: background .15s, color .15s;
 }
 .header-search .btn-icon:hover { background: var(--color-surface-alt); color: var(--color-text); }
+
+/* (0,2,0) nötig: schlägt die display:flex-Regel von .header-search .btn-icon */
+.header-search .search-toggle { display: none; }
+@media (max-width: 767px) {
+  .header-search .search-toggle { display: flex; }
+  .header-search .search-row { display: none; position: absolute; top: 100%; left: 0; right: 0; padding: 0.5rem; background: var(--color-surface); border-bottom: 1px solid var(--color-border); z-index: 1050; }
+  .header-search.open .search-row { display: flex; }
+}
 
 /* ── Sort buttons in station dropdown (replaces Bootstrap .btn-check) ─────────── */
 
@@ -249,6 +315,85 @@ body {
 }
 @media (max-width: 767px) {
   .fav-filter-sub { display: none; }
+
+  /* Favoriten als fixe Bottom-Leiste (daumenfreundlich, horizontal wischbar) */
+  #buttons {
+    position: fixed;
+    left: 0; right: 0;
+    bottom: var(--app-footer-height);
+    display: flex;
+    grid-template-columns: none;
+    gap: 0.4rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.5rem 0.75rem;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    z-index: 100;
+    scrollbar-width: none;
+  }
+  #buttons::-webkit-scrollbar { display: none; }
+  #buttons .fav-chip { flex: none; white-space: nowrap; }
+
+  /* Platz für die Leiste reservieren (zusätzlich zum Footer) */
+  body { padding-bottom: calc(var(--app-footer-height) + 3.4rem); }
+
+  /* topBtn über die Leiste heben */
+  #topBtn { bottom: calc(var(--app-footer-height) + 4rem); }
+}
+
+/* Favoriten-Chips: Outline in der User-Farbe (fav.bclass = btn-outline-color-*
+   aus der Library). Aktiv = gefüllt.
+
+   Library-Analyse (web/css/shared/components.css Z. 798-817): jede
+   .btn-outline-color-* setzt `color` (Text) und `border-color` (Rahmen) direkt
+   auf Palette-Hex-Werte — es gibt KEINE gemeinsame --btn-color-Variable. Bei
+   6 von 10 Hues ist `color` == `border-color` (red, blue, green, purple,
+   grey-dark) und `background: currentColor` liefert exakt denselben
+   Füllton, den auch die :hover-Regel der Library verwendet. Bei 4 Hues
+   (yellow, orange, turquoise, grey-light) ist `color` bewusst ein dunklerer/
+   gedeckterer Ton als `border-color` (Kontrastgrund auf transparentem
+   Untergrund) — dort weicht currentColor leicht vom :hover-Füllton ab, bleibt
+   aber erkennbar derselbe Hue-Ton. Da App-CSS laut UI-Regeln §9 keine
+   --palette-*-Variablen referenzieren darf (nur theme.css „besitzt" die
+   Palette), ist currentColor die einzige Technik, die die Farbe holt, ohne
+   Palette-Werte hier zu duplizieren.
+
+   Textfarbe im aktiven Zustand: NICHT die naive --color-bg-Heuristik (die
+   bricht für rot/blau/grün/lila/grau-dunkel im Dark-Theme, weil --color-bg
+   dort selbst dunkel ist → dunkler Text auf dunklem Fill). Stattdessen
+   WCAG-Kontrast pro Hue berechnet (Skript, nicht geraten) gegen den
+   tatsächlichen currentColor-Füllton: weiß gewinnt bei red/blue/green/purple/
+   grey-dark/grey-light, schwarz bei yellow/orange/turquoise — deckt sich mit
+   der Hell/Dunkel-Entscheidung, die die Library selbst für ihren
+   :hover-Zustand trifft. Einzige Ausnahme: btn-outline-color-neutral nutzt
+   `color: var(--color-text)` (Theme-adaptiv statt Palette-Hex) — dafür bleibt
+   var(--color-bg) korrekt, weil beide Tokens bewusst als Gegenpaar über beide
+   Themes designt sind. */
+#buttons .fav-chip {
+  border-radius: 999px;
+  border-width: 2px;
+  font-weight: 700;
+  padding: 0.45rem 1rem;
+}
+#buttons .fav-chip.fav-active {
+  background: currentColor;
+}
+#buttons .fav-chip.fav-active > * {
+  color: var(--color-bg);
+}
+#buttons .fav-chip.fav-active.btn-outline-color-red > *,
+#buttons .fav-chip.fav-active.btn-outline-color-blue > *,
+#buttons .fav-chip.fav-active.btn-outline-color-green > *,
+#buttons .fav-chip.fav-active.btn-outline-color-purple > *,
+#buttons .fav-chip.fav-active.btn-outline-color-grey-dark > *,
+#buttons .fav-chip.fav-active.btn-outline-color-grey-light > * {
+  color: #fff;
+}
+#buttons .fav-chip.fav-active.btn-outline-color-yellow > *,
+#buttons .fav-chip.fav-active.btn-outline-color-orange > *,
+#buttons .fav-chip.fav-active.btn-outline-color-turquoise > * {
+  color: #000;
 }
 
 /* ── Drag handle ──────────────────────────────────────────────────────────── */
@@ -280,40 +425,6 @@ body {
   }
 }
 
-/* ── Monitor card colors ─────────────────────────────────────────────────────── */
-/* WL identity green tint, defined as three-block tokens so the component rules
-   carry no literal hex. (Transit line-badge colours above stay hardcoded — those
-   are non-negotiable Wiener-Linien branding, not themeable UI.) */
-
-:root {
-  --wl-monitor-card-bg:       #f4f7f4;
-  --wl-monitor-header-bg:     #404d40;
-  --wl-monitor-header-fg:     #e8ede8;
-  --wl-monitor-header-border: #303d30;
-}
-[data-theme="dark"] {
-  --wl-monitor-card-bg:       #141814;
-  --wl-monitor-header-bg:     #2a342a;
-  --wl-monitor-header-fg:     #cdd5cd;
-  --wl-monitor-header-border: #1e281e;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --wl-monitor-card-bg:       #141814;
-    --wl-monitor-header-bg:     #2a342a;
-    --wl-monitor-header-fg:     #cdd5cd;
-    --wl-monitor-header-border: #1e281e;
-  }
-}
-
-#monitor .app-card {
-  background-color: var(--wl-monitor-card-bg);
-}
-#monitor .app-card-header {
-  background-color: var(--wl-monitor-header-bg);
-  color: var(--wl-monitor-header-fg);
-  border-bottom-color: var(--wl-monitor-header-border);
-}
 
 #monitorUpdateTime {
   font-size: 8pt;
@@ -330,7 +441,7 @@ body {
   transition: opacity .15s, background .15s;
   background: none;
   border: none;
-  color: var(--wl-monitor-header-fg); /* matches header text (token themes it) */
+  color: var(--board-title); /* matches header text (token themes it) */
   padding: 0 .2rem;
   border-radius: var(--radius-sm);
 }

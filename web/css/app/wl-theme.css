@@ -1,0 +1,70 @@
+/* web/css/app/wl-theme.css — Projekt-Theme „Anzeigetafel".
+   Überschreibt die semantischen Library-Tokens app-weit (Dreiblock-Muster, Regel §2):
+   hell = „Papierfahrplan" (Aushang), dunkel = „Tafel" (LED-Board).
+   Board-spezifische Tokens tragen das --board-Präfix.
+   Liniensignal-Farben sind hier NICHT themebar (CI, in wl-monitor.css hardcodiert). */
+
+:root {
+  /* ── Papierfahrplan (hell, Default) ── */
+  --color-bg:          #f2efe7;
+  --color-surface:     #faf8f2;
+  --color-surface-alt: #ebe7dc;
+  --color-card:        #faf8f2;
+  --color-border:      #d8d2c2;
+  --color-text:        #23201a;
+  --color-muted:       #78725d;
+
+  --board-card-bg:       #faf8f2;
+  --board-border:        #d8d2c2;
+  --board-title:         #7a745f;
+  --board-title-line:    #d8d2c2;
+  --board-countdown:     #23201a;   /* Papier: dunkle Countdowns */
+  --board-countdown-dim: #7a745f;
+  --board-dest:          #23201a;
+  --board-sub:           #77715f;
+  --board-live:          #1a7f37;
+  --board-font-mono:     ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+[data-theme="dark"] {
+  /* ── Tafel (dunkel) ── */
+  --color-bg:          #05070b;
+  --color-surface:     #0a0e14;
+  --color-surface-alt: #10151f;
+  --color-card:        #0a0e14;
+  --color-border:      #1c2330;
+  --color-text:        #e8ecf4;
+  --color-muted:       #8a93a5;
+
+  --board-card-bg:       #0a0e14;
+  --board-border:        #1c2330;
+  --board-title:         #8a93a5;
+  --board-title-line:    #1c2330;
+  --board-countdown:     #ffd52e;   /* Tafel: Bernstein */
+  --board-countdown-dim: #8a93a5;
+  --board-dest:          #e8ecf4;
+  --board-sub:           #727c8b;
+  --board-live:          #4ade80;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg:          #05070b;
+    --color-surface:     #0a0e14;
+    --color-surface-alt: #10151f;
+    --color-card:        #0a0e14;
+    --color-border:      #1c2330;
+    --color-text:        #e8ecf4;
+    --color-muted:       #8a93a5;
+
+    --board-card-bg:       #0a0e14;
+    --board-border:        #1c2330;
+    --board-title:         #8a93a5;
+    --board-title-line:    #1c2330;
+    --board-countdown:     #ffd52e;
+    --board-countdown-dim: #8a93a5;
+    --board-dest:          #e8ecf4;
+    --board-sub:           #727c8b;
+    --board-live:          #4ade80;
+  }
+}
