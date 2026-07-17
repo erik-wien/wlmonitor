@@ -733,6 +733,7 @@ function lineSignalClass(name) {
   if (/^U\d$/.test(n)) return 'pt-metro ' + n;
   if (/^N\d+[A-Z]?$/.test(n)) return 'pt-bus-night';
   if (n === 'WLB' || n.startsWith('BADNER')) return 'pt-tram-wlb';
+  if (/^[A-Z]$/.test(n)) return 'pt-tram';   // Buchstaben-Trams (O, D)
   if (/^\d+[A-Z]$/.test(n)) return 'pt-bus-city';
   if (/^\d+$/.test(n)) return 'pt-tram';
   return 'pt-default';
