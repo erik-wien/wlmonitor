@@ -343,9 +343,12 @@ function renderMonitor(data) {
     header.appendChild(nameSpan);
 
     if (update_at) {
+      // Nur der Dot kennzeichnet „live" — der Zeitstempel steht einmal unten
+      // („Aktualisiert: …") und hier als Tooltip/aria-label (TASK-18).
       const live = document.createElement('span');
       live.className = 'board-live ms-2';
-      live.textContent = 'LIVE ' + update_at;
+      live.title = 'Live · aktualisiert ' + update_at;
+      live.setAttribute('aria-label', 'Live, aktualisiert ' + update_at);
       header.appendChild(live);
     }
 
@@ -441,7 +444,12 @@ function renderMonitor(data) {
       }
       if (info.descriptionHTML) {
         if (info.title) body.appendChild(document.createElement('br'));
-        body.appendChild(parseTrustedHtml(info.descriptionHTML));
+        const frag = parseTrustedHtml(info.descriptionHTML);
+        // WL-Feed streut Leer-Absätze (<p><br></p>) — raus damit (TASK-18).
+        for (const p of frag.querySelectorAll('p')) {
+          if (!p.textContent.trim() && !p.querySelector('img, table')) p.remove();
+        }
+        body.appendChild(frag);
       } else if (info.description) {
         if (info.title) body.appendChild(document.createElement('br'));
         body.appendChild(document.createTextNode(info.description));
@@ -656,6 +664,15 @@ function renderFavorites(favs) {
       saveState(fav.diva, fav.id);
     });
     container.appendChild(btn);
+  }
+  // Ruhe-Farben der Library-Klasse einfrieren (TASK-19): Safari lässt :hover
+  // nach einem Tap „kleben" — background:currentColor griffe dann das
+  // Hover-Weiß ab (weißer Chip, Text weiß-auf-weiß). borderColor ist der
+  // bright-Ton der Klasse und entspricht dem Library-Hover-Füllton.
+  for (const btn of container.querySelectorAll('.fav-chip')) {
+    const cs = getComputedStyle(btn);
+    btn.style.setProperty('--chip-fill', cs.borderColor);
+    btn.style.setProperty('--chip-color', cs.color);
   }
   syncActiveFavChip(currentMonitor.fav?.id);
   if (window.wlConfig?.loggedIn) initSortable();

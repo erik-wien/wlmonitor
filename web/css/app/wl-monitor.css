@@ -34,10 +34,12 @@
 }
 .board-live::before {
   content: "";
-  width: 6px; height: 6px; border-radius: 50%;
+  width: 7px; height: 7px; border-radius: 50%;
   background: var(--board-live);
   box-shadow: 0 0 6px var(--board-live);
+  animation: live-glow 2.5s ease-in-out infinite;
 }
+@keyframes live-glow { 50% { opacity: 0.45; } }
 
 /* ── Tafel: Abfahrtszeilen ─────────────────────────────────────────────────── */
 
@@ -397,7 +399,18 @@ body {
   padding: 0.45rem 1rem;
 }
 #buttons .fav-chip.fav-active {
-  background: currentColor;
+  /* --chip-fill wird von renderFavorites() aus der berechneten border-color
+     der Library-Klasse eingefroren (TASK-19) — currentColor wäre auf Touch-
+     Geräten kaputt: Safari-Sticky-:hover setzt color auf #fff. */
+  background: var(--chip-fill, currentColor);
+  border-color: var(--chip-fill, currentColor);
+}
+/* Sticky-Hover auf Touch: Tap darf keinen hängenden Füllzustand hinterlassen. */
+@media (hover: none) {
+  #buttons .fav-chip:hover:not(.fav-active) {
+    background: transparent;
+    color: var(--chip-color, currentColor);
+  }
 }
 #buttons .fav-chip.fav-active > * {
   color: var(--color-bg);
@@ -406,13 +419,14 @@ body {
 #buttons .fav-chip.fav-active.btn-outline-color-blue > *,
 #buttons .fav-chip.fav-active.btn-outline-color-green > *,
 #buttons .fav-chip.fav-active.btn-outline-color-purple > *,
-#buttons .fav-chip.fav-active.btn-outline-color-grey-dark > *,
-#buttons .fav-chip.fav-active.btn-outline-color-grey-light > * {
+#buttons .fav-chip.fav-active.btn-outline-color-grey-dark > * {
   color: #fff;
 }
+/* grey-light füllt jetzt mit dem hellen border-Ton (--chip-fill) → dunkler Text. */
 #buttons .fav-chip.fav-active.btn-outline-color-yellow > *,
 #buttons .fav-chip.fav-active.btn-outline-color-orange > *,
-#buttons .fav-chip.fav-active.btn-outline-color-turquoise > * {
+#buttons .fav-chip.fav-active.btn-outline-color-turquoise > *,
+#buttons .fav-chip.fav-active.btn-outline-color-grey-light > * {
   color: #000;
 }
 
@@ -447,8 +461,9 @@ body {
 
 
 #monitorUpdateTime {
-  font-size: 8pt;
-  color: var(--color-muted);
+  font-size: 0.72rem;
+  color: var(--board-sub);
+  font-variant-numeric: tabular-nums;
   text-align: end;
   margin-top: 0.25rem;
   padding: 0 0.25rem;
