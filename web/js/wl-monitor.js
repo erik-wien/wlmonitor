@@ -732,7 +732,7 @@ function lineSignalClass(name) {
   const n = name.trim().toUpperCase();
   if (/^U\d$/.test(n)) return 'pt-metro ' + n;
   if (/^N\d+[A-Z]?$/.test(n)) return 'pt-bus-night';
-  if (n === 'WLB' || n.startsWith('BADNER')) return 'pt-tram-wlb';
+  if (n === 'WLB' || n === 'BB' || n.startsWith('BADNER')) return 'pt-tram-wlb';
   if (/^[A-Z]$/.test(n)) return 'pt-tram';   // Buchstaben-Trams (O, D)
   if (/^\d+[A-Z]$/.test(n)) return 'pt-bus-city';
   if (/^\d+$/.test(n)) return 'pt-tram';
@@ -746,7 +746,8 @@ function appendLinePreview(p, s) {
   s.lines.split(',').slice(0, 6).forEach(raw => {
     const name = raw.trim();
     if (!name) return;
-    if (name.toUpperCase() === 'WLB') {
+    const upper = name.toUpperCase();
+    if (upper === 'WLB' || upper === 'BB') {
       const b = document.createElement('span');
       b.className = 'line-badge sig-mini pt-tram-wlb';
       const img = document.createElement('img');
