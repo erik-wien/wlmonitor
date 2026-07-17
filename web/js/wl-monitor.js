@@ -93,6 +93,8 @@ async function loadMonitor(diva, fav = null) {
       void el.offsetWidth;             // Reflow: Animation neu starten
       el.classList.add('board-enter');
     }
+    document.querySelectorAll('#buttons .fav-chip').forEach(b =>
+      b.classList.toggle('fav-active', Number(b.dataset.favId) === (fav?.id ?? -1)));
   } catch (e) {
     const container = document.getElementById('monitor');
     if (container) {
@@ -607,7 +609,7 @@ function renderFavorites(favs) {
   for (const fav of favs) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'btn ' + fav.bclass + ' text-start';
+    btn.className = 'btn fav-chip ' + fav.bclass + ' text-start';
     btn.id = 'btnFav-' + fav.id;
     btn.dataset.diva = fav.diva;
     btn.dataset.favId = fav.id;

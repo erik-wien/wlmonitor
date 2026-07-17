@@ -303,6 +303,60 @@ body {
   .fav-filter-sub { display: none; }
 }
 
+/* Favoriten-Chips: Outline in der User-Farbe (fav.bclass = btn-outline-color-*
+   aus der Library). Aktiv = gefüllt.
+
+   Library-Analyse (web/css/shared/components.css Z. 798-817): jede
+   .btn-outline-color-* setzt `color` (Text) und `border-color` (Rahmen) direkt
+   auf Palette-Hex-Werte — es gibt KEINE gemeinsame --btn-color-Variable. Bei
+   6 von 10 Hues ist `color` == `border-color` (red, blue, green, purple,
+   grey-dark) und `background: currentColor` liefert exakt denselben
+   Füllton, den auch die :hover-Regel der Library verwendet. Bei 4 Hues
+   (yellow, orange, turquoise, grey-light) ist `color` bewusst ein dunklerer/
+   gedeckterer Ton als `border-color` (Kontrastgrund auf transparentem
+   Untergrund) — dort weicht currentColor leicht vom :hover-Füllton ab, bleibt
+   aber erkennbar derselbe Hue-Ton. Da App-CSS laut UI-Regeln §9 keine
+   --palette-*-Variablen referenzieren darf (nur theme.css „besitzt" die
+   Palette), ist currentColor die einzige Technik, die die Farbe holt, ohne
+   Palette-Werte hier zu duplizieren.
+
+   Textfarbe im aktiven Zustand: NICHT die naive --color-bg-Heuristik (die
+   bricht für rot/blau/grün/lila/grau-dunkel im Dark-Theme, weil --color-bg
+   dort selbst dunkel ist → dunkler Text auf dunklem Fill). Stattdessen
+   WCAG-Kontrast pro Hue berechnet (Skript, nicht geraten) gegen den
+   tatsächlichen currentColor-Füllton: weiß gewinnt bei red/blue/green/purple/
+   grey-dark/grey-light, schwarz bei yellow/orange/turquoise — deckt sich mit
+   der Hell/Dunkel-Entscheidung, die die Library selbst für ihren
+   :hover-Zustand trifft. Einzige Ausnahme: btn-outline-color-neutral nutzt
+   `color: var(--color-text)` (Theme-adaptiv statt Palette-Hex) — dafür bleibt
+   var(--color-bg) korrekt, weil beide Tokens bewusst als Gegenpaar über beide
+   Themes designt sind. */
+#buttons .fav-chip {
+  border-radius: 999px;
+  border-width: 2px;
+  font-weight: 700;
+  padding: 0.45rem 1rem;
+}
+#buttons .fav-chip.fav-active {
+  background: currentColor;
+}
+#buttons .fav-chip.fav-active > * {
+  color: var(--color-bg);
+}
+#buttons .fav-chip.fav-active.btn-outline-color-red > *,
+#buttons .fav-chip.fav-active.btn-outline-color-blue > *,
+#buttons .fav-chip.fav-active.btn-outline-color-green > *,
+#buttons .fav-chip.fav-active.btn-outline-color-purple > *,
+#buttons .fav-chip.fav-active.btn-outline-color-grey-dark > *,
+#buttons .fav-chip.fav-active.btn-outline-color-grey-light > * {
+  color: #fff;
+}
+#buttons .fav-chip.fav-active.btn-outline-color-yellow > *,
+#buttons .fav-chip.fav-active.btn-outline-color-orange > *,
+#buttons .fav-chip.fav-active.btn-outline-color-turquoise > * {
+  color: #000;
+}
+
 /* ── Drag handle ──────────────────────────────────────────────────────────── */
 .drag-handle {
   display: inline-block;
