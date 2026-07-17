@@ -301,6 +301,31 @@ body {
 }
 @media (max-width: 767px) {
   .fav-filter-sub { display: none; }
+
+  /* Favoriten als fixe Bottom-Leiste (daumenfreundlich, horizontal wischbar) */
+  #buttons {
+    position: fixed;
+    left: 0; right: 0;
+    bottom: var(--app-footer-height);
+    display: flex;
+    grid-template-columns: none;
+    gap: 0.4rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.5rem 0.75rem;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    z-index: 100;
+    scrollbar-width: none;
+  }
+  #buttons::-webkit-scrollbar { display: none; }
+  #buttons .fav-chip { flex: none; white-space: nowrap; }
+
+  /* Platz für die Leiste reservieren (zusätzlich zum Footer) */
+  body { padding-bottom: calc(var(--app-footer-height) + 3.4rem); }
+
+  /* topBtn über die Leiste heben */
+  #topBtn { bottom: calc(var(--app-footer-height) + 4rem); }
 }
 
 /* Favoriten-Chips: Outline in der User-Farbe (fav.bclass = btn-outline-color-*
