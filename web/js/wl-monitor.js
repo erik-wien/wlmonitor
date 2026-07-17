@@ -93,8 +93,7 @@ async function loadMonitor(diva, fav = null) {
       void el.offsetWidth;             // Reflow: Animation neu starten
       el.classList.add('board-enter');
     }
-    document.querySelectorAll('#buttons .fav-chip').forEach(b =>
-      b.classList.toggle('fav-active', Number(b.dataset.favId) === (fav?.id ?? -1)));
+    syncActiveFavChip(fav?.id);
   } catch (e) {
     const container = document.getElementById('monitor');
     if (container) {
@@ -591,6 +590,13 @@ function startMonitorTimer() {
 }
 
 // --- Favorites ---------------------------------------------------------------
+// Markiert den Chip des aktiven Favoriten (favId) und entfernt die Markierung
+// von allen anderen. favId == null/undefined → kein Chip aktiv.
+function syncActiveFavChip(favId) {
+  document.querySelectorAll('#buttons .fav-chip').forEach(b =>
+    b.classList.toggle('fav-active', Number(b.dataset.favId) === (favId ?? -1)));
+}
+
 async function loadFavorites() {
   try {
     const favs = await apiFetch('favorites');
@@ -645,6 +651,7 @@ function renderFavorites(favs) {
     });
     container.appendChild(btn);
   }
+  syncActiveFavChip(currentMonitor.fav?.id);
   if (window.wlConfig?.loggedIn) initSortable();
 }
 
