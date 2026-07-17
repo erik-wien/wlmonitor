@@ -12,7 +12,7 @@
   --color-card:        #faf8f2;
   --color-border:      #d8d2c2;
   --color-text:        #23201a;
-  --color-muted:       #7a745f;
+  --color-muted:       #78725d;
 
   --board-bg:            #f2efe7;
   --board-card-bg:       #faf8f2;
@@ -22,7 +22,7 @@
   --board-countdown:     #23201a;   /* Papier: dunkle Countdowns */
   --board-countdown-dim: #7a745f;
   --board-dest:          #23201a;
-  --board-sub:           #918a73;
+  --board-sub:           #77715f;
   --board-live:          #1a7f37;
   --board-font-mono:     ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
@@ -45,7 +45,7 @@
   --board-countdown:     #ffd52e;   /* Tafel: Bernstein */
   --board-countdown-dim: #8a93a5;
   --board-dest:          #e8ecf4;
-  --board-sub:           #5c6778;
+  --board-sub:           #727c8b;
   --board-live:          #4ade80;
 }
 
@@ -67,7 +67,7 @@
     --board-countdown:     #ffd52e;
     --board-countdown-dim: #8a93a5;
     --board-dest:          #e8ecf4;
-    --board-sub:           #5c6778;
+    --board-sub:           #727c8b;
     --board-live:          #4ade80;
   }
 }
