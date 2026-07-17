@@ -4,22 +4,74 @@
 
 :root { --logo-color: #e2001a; } /* per-app brand logo tint (config color) */
 
-/* ── Departure table ────────────────────────────────────────────────────────── */
+/* ── Tafel: Stationskarten ─────────────────────────────────────────────────── */
+
+#monitor .app-card {
+  background: var(--board-card-bg);
+  border: 1px solid var(--board-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+#monitor .app-card-header {
+  background: transparent;
+  border-bottom: 1px solid var(--board-title-line);
+  color: var(--board-title);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 0.55rem 0.9rem;
+}
+.board-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--board-live);
+  white-space: nowrap;
+}
+.board-live::before {
+  content: "";
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--board-live);
+  box-shadow: 0 0 6px var(--board-live);
+}
+
+/* ── Tafel: Abfahrtszeilen ─────────────────────────────────────────────────── */
 
 .departure-table { table-layout: auto; width: 100%; }
-.departure-table .badge-cell    { width: 2.8em; padding: 0.2em; vertical-align: middle; }
-.departure-table .platform-cell { width: 2.2em; font-size: 0.7em; color: var(--color-muted); vertical-align: middle; }
-.departure-table .towards-cell  { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
-.departure-table .times-cell    { white-space: nowrap; text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; vertical-align: middle; padding-left: 0.5em; }
-.departure-table .dep-barrierfree { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 2px; }
-.departure-table .times-cell.times-scheduled { font-style: italic; color: var(--color-muted); }
-.line-alert { margin-left: 0.15em; font-size: 0.9em; line-height: 1; }
-.departure-table .towards-cell .departure-note { font-size: 0.7em; color: var(--color-muted); white-space: normal; margin-top: 0.1em; }
-#monitorAlerts { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; }
-.departure-table td, .departure-table th {
-  color: var(--color-text);
-  border-color: var(--color-border);
+.departure-table td, .departure-table th { color: var(--board-dest); border-color: var(--board-title-line); }
+.departure-table .badge-cell    { width: 2.8em; padding: 0.25em; vertical-align: middle; }
+.departure-table .platform-cell { width: 2.2em; font-size: 0.7em; color: var(--board-sub); vertical-align: middle; }
+.departure-table .towards-cell  { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; color: var(--board-dest); }
+.departure-table .towards-cell .departure-note { font-size: 0.7em; color: var(--board-sub); white-space: normal; margin-top: 0.1em; }
+.departure-table .times-cell {
+  white-space: nowrap; text-align: right; vertical-align: middle; padding-left: 0.5em;
+  font-family: var(--board-font-mono);
+  font-variant-numeric: tabular-nums;
 }
+.departure-table .times-cell .dep-next {
+  font-size: 1.3rem; font-weight: 800; color: var(--board-countdown); line-height: 1;
+}
+.departure-table .times-cell .dep-follow,
+.departure-table .times-cell .dep-sep {
+  font-size: 0.78rem; font-weight: 500; color: var(--board-countdown-dim);
+}
+.departure-table .dep-barrierfree { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 2px; }
+.departure-table .times-cell.times-scheduled { font-style: italic; }
+.departure-table .times-cell.times-scheduled .dep-next { color: var(--board-countdown-dim); }
+.line-alert { margin-left: 0.15em; font-size: 0.9em; line-height: 1; }
+#monitorAlerts { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; }
+
+/* Puls NUR bei 0/1 min (reduced-motion wird von shared layout.css neutralisiert) */
+@keyframes board-pulse { 50% { opacity: 0.4; } }
+.dep-immi { animation: board-pulse 1.2s ease-in-out infinite; }
+
+/* Board-Wechsel (Station/Favorit): kurzer Fade — nicht beim Poll-Refresh */
+@keyframes board-enter { from { opacity: 0; } to { opacity: 1; } }
+#monitor.board-enter { animation: board-enter 0.25s ease-out; }
 
 /* ── Line badges ────────────────────────────────────────────────────────────── */
 

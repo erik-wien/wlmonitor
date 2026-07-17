@@ -80,12 +80,19 @@ async function loadMonitor(diva, fav = null) {
   // favourite. See Review TASK-11.
   const candidate = { diva: diva || null, favId: fav ? fav.id : null, fav };
   const params = diva ? { diva } : {};
+  const stationChanged = diva !== currentMonitor.diva;
   try {
     const data = await apiFetch('monitor', params);
     currentMonitor = candidate;
     renderMonitor(data);
     monitorHasData = true;
     updateMonitorToolbar();
+    if (stationChanged) {
+      const el = document.getElementById('monitor');
+      el.classList.remove('board-enter');
+      void el.offsetWidth;             // Reflow: Animation neu starten
+      el.classList.add('board-enter');
+    }
   } catch (e) {
     const container = document.getElementById('monitor');
     if (container) {
@@ -334,6 +341,13 @@ function renderMonitor(data) {
     nameSpan.textContent = s.station_name;
     header.appendChild(nameSpan);
 
+    if (update_at) {
+      const live = document.createElement('span');
+      live.className = 'board-live ms-2';
+      live.textContent = 'LIVE ' + update_at;
+      header.appendChild(live);
+    }
+
     if (window.wlConfig?.loggedIn && s.diva) {
       const plusBtn = document.createElement('button');
       plusBtn.type = 'button';
@@ -465,9 +479,16 @@ function appendDepartureColumns(tr, line) {
   const jammedTimes = [];
   const deviations  = []; // {t, label}
   deps.forEach((d, i) => {
-    if (i > 0) tdTimes.appendChild(document.createTextNode(', '));
+    if (i > 0) {
+      const sep = document.createElement('span');
+      sep.className = 'dep-sep';
+      sep.textContent = ' · ';
+      tdTimes.appendChild(sep);
+    }
     const span = document.createElement('span');
-    span.className = 'dep' + (d.bf ? ' dep-barrierfree' : '');
+    span.className = 'dep ' + (i === 0 ? 'dep-next' : 'dep-follow') + (d.bf ? ' dep-barrierfree' : '');
+    const mins = parseInt(d.t, 10);
+    if (i === 0 && !Number.isNaN(mins) && mins <= 1) span.classList.add('dep-immi');
     if (d.bf) span.title = 'Barrierefreies Fahrzeug';
     span.textContent = d.t;
     tdTimes.appendChild(span);
