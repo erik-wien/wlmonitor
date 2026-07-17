@@ -429,18 +429,24 @@ function renderMonitor(data) {
       const box = document.createElement('div');
       box.className = 'app-alert app-alert-warning';
       box.setAttribute('role', 'alert');
+      // .app-alert ist flex (Library-Layout für Icon+Text) — ohne Block-Wrapper
+      // würden die <p>-Absätze aus descriptionHTML zu Flex-Spalten nebeneinander
+      // (TASK-17). Inhalt daher in die vorgesehene .app-alert-body packen.
+      const body = document.createElement('div');
+      body.className = 'app-alert-body';
       if (info.title) {
         const strong = document.createElement('strong');
         strong.textContent = info.title;
-        box.appendChild(strong);
+        body.appendChild(strong);
       }
       if (info.descriptionHTML) {
-        if (info.title) box.appendChild(document.createElement('br'));
-        box.appendChild(parseTrustedHtml(info.descriptionHTML));
+        if (info.title) body.appendChild(document.createElement('br'));
+        body.appendChild(parseTrustedHtml(info.descriptionHTML));
       } else if (info.description) {
-        if (info.title) box.appendChild(document.createElement('br'));
-        box.appendChild(document.createTextNode(info.description));
+        if (info.title) body.appendChild(document.createElement('br'));
+        body.appendChild(document.createTextNode(info.description));
       }
+      box.appendChild(body);
       wrap.appendChild(box);
     }
     container.appendChild(wrap);

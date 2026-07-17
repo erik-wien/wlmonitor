@@ -68,6 +68,10 @@
    arbeiten) dürfen die Störungsbox nicht sprengen: breiter Inhalt scrollt im
    eigenen Container statt über das Layout zu laufen (TASK-16). */
 #monitorAlerts .app-alert { overflow-x: auto; }
+/* WL-Meldungen kommen als <p>-Absätze (inkl. Leer-Absätzen <p><br></p>) —
+   kompakt stapeln; der .app-alert-body-Wrapper (JS) macht sie zu Blockzeilen. */
+#monitorAlerts .app-alert-body p { margin: 0 0 0.3rem; }
+#monitorAlerts .app-alert-body p:last-child { margin-bottom: 0; }
 #monitorAlerts .app-alert table {
   border-collapse: collapse;
   margin: 0.35rem 0;
