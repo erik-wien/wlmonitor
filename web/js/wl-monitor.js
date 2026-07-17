@@ -725,6 +725,45 @@ async function loadStationsAlpha() {
   }
 }
 
+/* Liniensignal-Klasse aus dem Liniennamen (Suche liefert nur Namen, keinen Typ).
+   Heuristik nach Wiener Konvention: U* Metro, N* Nightline, WLB Lokalbahn,
+   Ziffern+Buchstabe Bus (59A), nur Ziffern Tram (62). */
+function lineSignalClass(name) {
+  const n = name.trim().toUpperCase();
+  if (/^U\d$/.test(n)) return 'pt-metro ' + n;
+  if (/^N\d+[A-Z]?$/.test(n)) return 'pt-bus-night';
+  if (n === 'WLB' || n.startsWith('BADNER')) return 'pt-tram-wlb';
+  if (/^\d+[A-Z]$/.test(n)) return 'pt-bus-city';
+  if (/^\d+$/.test(n)) return 'pt-tram';
+  return 'pt-default';
+}
+
+function appendLinePreview(p, s) {
+  if (!s.lines) return;
+  const wrap = document.createElement('span');
+  wrap.className = 'sig-preview';
+  s.lines.split(',').slice(0, 6).forEach(raw => {
+    const name = raw.trim();
+    if (!name) return;
+    if (name.toUpperCase() === 'WLB') {
+      const b = document.createElement('span');
+      b.className = 'line-badge sig-mini pt-tram-wlb';
+      const img = document.createElement('img');
+      img.src = 'img/Logo_Wiener_Lokalbahn.svg';
+      img.alt = 'WLB';
+      img.className = 'wlb-logo';
+      b.appendChild(img);
+      wrap.appendChild(b);
+      return;
+    }
+    const b = document.createElement('span');
+    b.className = 'line-badge sig-mini ' + lineSignalClass(name);
+    b.textContent = name;
+    wrap.appendChild(b);
+  });
+  p.appendChild(wrap);
+}
+
 function renderStationList(stations) {
   const list = document.getElementById('stationList');
   if (!list) return;
@@ -766,6 +805,7 @@ function renderStationList(stations) {
       p.addEventListener('click', () => { loadMonitor(s.diva); startMonitorTimer(); closeStationDropdown(); saveState(s.diva); });
     }
 
+    appendLinePreview(p, s);
     li.appendChild(p);
     list.appendChild(li);
   }
@@ -816,9 +856,22 @@ function wireStationDropdown() {
     }
   });
 
-  document.addEventListener('click', e => {
+  // pointerdown (capture) statt click: click feuert beim mouseup, das nach einem
+  // mousedown innerhalb (z.B. Scrollbar-Drag der Dropdown-Liste) außerhalb enden
+  // kann und den Wrap fälschlich als "außerhalb" behandeln würde. pointerdown
+  // greift am Gestenstart und bewertet dieselbe Ziel-Prüfung korrekt.
+  document.addEventListener('pointerdown', e => {
     const wrap = document.getElementById('stationSearchWrap');
-    if (wrap && !wrap.contains(e.target)) closeStationDropdown();
+    if (wrap && !wrap.contains(e.target)) {
+      closeStationDropdown();
+      wrap.classList.remove('open');
+    }
+  }, true);
+
+  document.getElementById('searchToggle')?.addEventListener('click', () => {
+    const hs = document.querySelector('.header-search');
+    hs.classList.toggle('open');
+    if (hs.classList.contains('open')) document.getElementById('s')?.focus();
   });
 }
 

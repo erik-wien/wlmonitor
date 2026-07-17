@@ -26,6 +26,10 @@ function render_header(bool $showSearch = false): void
     if ($showSearch) {
         ob_start(); ?>
 <div class="header-search" id="stationSearchWrap">
+    <button class="btn-icon search-toggle" id="searchToggle" type="button"
+            aria-label="Station suchen">
+        <?= icon("search") ?>
+    </button>
     <div class="search-row">
         <input type="search" id="s"
                placeholder="Station suchen …" autocomplete="off">
