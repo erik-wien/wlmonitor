@@ -64,6 +64,22 @@
 .departure-table .times-cell.times-scheduled .dep-next { color: var(--board-countdown-dim); }
 .line-alert { margin-left: 0.15em; font-size: 0.9em; line-height: 1; }
 #monitorAlerts { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; }
+/* Von der WL-API injizierte HTML-Tabellen (descriptionHTML, z. B. Gleisbau-
+   arbeiten) dürfen die Störungsbox nicht sprengen: breiter Inhalt scrollt im
+   eigenen Container statt über das Layout zu laufen (TASK-16). */
+#monitorAlerts .app-alert { overflow-x: auto; }
+#monitorAlerts .app-alert table {
+  border-collapse: collapse;
+  margin: 0.35rem 0;
+  max-width: 100%;
+}
+#monitorAlerts .app-alert td,
+#monitorAlerts .app-alert th {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--board-title-line);
+  vertical-align: top;
+  font-size: 0.85em;
+}
 
 /* Puls NUR bei 0/1 min (reduced-motion wird von shared layout.css neutralisiert) */
 @keyframes board-pulse { 50% { opacity: 0.4; } }
