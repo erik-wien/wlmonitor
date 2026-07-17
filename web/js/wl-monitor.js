@@ -9,7 +9,6 @@ import { apiCall, apiForm } from '../css/shared/js/api-call.js';
 // --- State -------------------------------------------------------------------
 let stationCache       = [];       // full list for current sort mode
 let currentSort        = 'alpha';  // 'alpha' | 'dist'
-let stationOrigin      = null;     // { lat, lon } when sort=dist
 let monitorTimer       = null;
 let currentMonitor     = { diva: null, favId: null, fav: null }; // active monitor context
 let addModalDiva       = null;     // DIVA override for add-favourite modal (single-steig "+")
@@ -446,8 +445,23 @@ function renderMonitor(data) {
         if (info.title) body.appendChild(document.createElement('br'));
         const frag = parseTrustedHtml(info.descriptionHTML);
         // WL-Feed streut Leer-Absätze (<p><br></p>) — raus damit (TASK-18).
-        for (const p of frag.querySelectorAll('p')) {
+        for (const p of frag.querySelectorAll('p, div')) {
           if (!p.textContent.trim() && !p.querySelector('img, table')) p.remove();
+        }
+        // Zweites WL-Format: Textzeilen mit <br>-Trennern; Leerzeilen kommen als
+        // <br>·" "·<br> bzw. <br><br>. Whitespace-Textknoten entfernen, dann
+        // br-Folgen auf eines reduzieren (TASK-18 Nachtrag).
+        for (const n of [...frag.childNodes]) {
+          if (n.nodeType === 3 && !n.textContent.trim()) n.remove();
+        }
+        let prevBr = false;
+        for (const n of [...frag.childNodes]) {
+          if (n.nodeType === 1 && n.tagName === 'BR') {
+            if (prevBr) { n.remove(); continue; }
+            prevBr = true;
+          } else {
+            prevBr = false;
+          }
         }
         body.appendChild(frag);
       } else if (info.description) {
@@ -722,12 +736,16 @@ window.matchMedia('(max-width: 767px)').addEventListener('change', () => {
 // --- Stations ----------------------------------------------------------------
 async function loadStationsByDistance(position) {
   const { latitude, longitude } = position.coords;
-  stationOrigin = { lat: latitude, lon: longitude };
   try {
     if (window.wlConfig?.loggedIn) {
       await apiPost('position_save', { lat: latitude, lon: longitude });
     }
-    const stations = await apiFetch('stations', { lat: latitude, lon: longitude });
+    let stations = await apiFetch('stations', { lat: latitude, lon: longitude });
+    // Nähe-Liste kompakt halten (TASK-20): nur Stationen ≤ 500 m — kürzere
+    // Liste rendert schneller. Fallback: mindestens die 8 nächsten, damit die
+    // Liste in dünn erschlossenen Gegenden nicht leer ist.
+    const near = stations.filter(s => s.distance !== undefined && s.distance <= 500);
+    stations = near.length >= 8 ? near : stations.slice(0, 8);
     stationCache = stations;
     renderStationList(stations);
   } catch (e) {
@@ -738,7 +756,6 @@ async function loadStationsByDistance(position) {
 }
 
 async function loadStationsAlpha() {
-  stationOrigin = null;
   try {
     const stations = await apiFetch('stations');
     stationCache = stations;
@@ -803,21 +820,10 @@ function renderStationList(stations) {
     const p  = document.createElement('p');
     p.className = 'mb-1';
 
-    if (currentSort === 'dist' && stationOrigin && s.distance !== undefined) {
+    if (currentSort === 'dist' && s.distance !== undefined) {
       const dist = s.distance >= 1000
         ? (s.distance / 1000).toFixed(2) + ' km'
         : s.distance + ' m';
-
-      const mapsUrl = 'https://www.google.com/maps/dir/?api=1'
-        + '&origin='      + encodeURIComponent(stationOrigin.lat + ',' + stationOrigin.lon)
-        + '&destination=' + encodeURIComponent(s.lat + ',' + s.lon)
-        + '&travelmode=walking';
-
-      const a = document.createElement('a');
-      a.href   = mapsUrl;
-      a.target = 'wlmonitor';
-      a.appendChild(makeSvgIcon('map-marker', 'me-2'));
-      p.appendChild(a);
 
       const span = document.createElement('span');
       span.textContent = s.station + ' (' + dist + ')';
@@ -845,7 +851,10 @@ function wireStationSort() {
         navigator.geolocation.getCurrentPosition(
           loadStationsByDistance,
           positionError,
-          { timeout: 8000 }
+          // maximumAge: gecachte Position (≤ 2 min) sofort verwenden statt
+          // jedes Mal einen frischen GPS-Fix zu erzwingen (Sekunden am Gerät);
+          // Stationsdistanzen brauchen keine High-Accuracy (TASK-20).
+          { timeout: 8000, maximumAge: 120000, enableHighAccuracy: false }
         );
       } else {
         loadStationsAlpha();
