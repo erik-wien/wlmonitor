@@ -86,6 +86,7 @@ function render_header(bool $showSearch = false): void
   <link rel="stylesheet" href="css/shared/reset.css<?= $cssV('css/shared/reset.css') ?>">
   <link rel="stylesheet" href="css/shared/layout.css<?= $cssV('css/shared/layout.css') ?>">
   <link rel="stylesheet" href="css/shared/components.css<?= $cssV('css/shared/components.css') ?>">
+  <link rel="stylesheet" href="css/app/wl-theme.css<?= $cssV('css/app/wl-theme.css') ?>">
   <link rel="stylesheet" href="css/app/wl-monitor.css<?= $cssV('css/app/wl-monitor.css') ?>">
 </head>
 <body>
