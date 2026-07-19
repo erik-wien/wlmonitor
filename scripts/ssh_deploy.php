@@ -94,6 +94,7 @@ $rsyncExcludes = [
     '.DS_Store',
     '.claude/',
     '.claude.json',
+    '.superpowers/',
     '.phpunit.result.cache',
     '.worktrees/',
     'worktrees/',
