@@ -115,6 +115,18 @@ function render_header(bool $showSearch = false): void
         'appPrefsLabel' => 'Abfahrten',
         'securityHref'  => 'security.php',
         'adminHref'     => 'admin.php',
+        // statusHref explicit (TASK-21, Suite-Policy §Baustein 2): the Header
+        // default is $base . '/status.php'; wlmonitor passes 'base' => '' but
+        // (unlike suche, where $base is a real computed path prefix) every
+        // other href here is already a bare relative path (admin.php,
+        // preferences.php, …), so the default would render '/status.php'
+        // (domain-root-absolute) — inconsistent with the rest of the menu and
+        // wrong if the app is ever not served at its (sub)domain root. Same
+        // fix zeiterfassung applied (inc/_header.php). adminItems is
+        // intentionally NOT set — wlmonitor has no App-Admin-Aktionen beyond
+        // admin.php, which already renders as "Verwaltung" in the
+        // Administration-Dropdown for isAdmin users without passing adminItems.
+        'statusHref'    => 'status.php',
         'helpHref'      => 'help.php',
         'logoutHref'    => 'logout.php',
         'themeEndpoint' => 'preferences.php',
