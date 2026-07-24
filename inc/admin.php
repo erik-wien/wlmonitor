@@ -54,6 +54,17 @@ function wl_admin_list_users(mysqli $con, int $page = 1, int $perPage = 25, stri
 /**
  * Update a user's auth fields (via the library) plus wlmonitor's
  * departures preference.
+ *
+ * The departures write is deliberately NOT gated on admin_edit_user()'s
+ * return value: the library reports success via affected_rows, which is 0
+ * whenever the UPDATE leaves every auth column unchanged — the common
+ * edit-modal case where the admin only changes "Abfahrten" and
+ * email/rights/disabled stay as pre-filled (same bug pattern as
+ * zeiterfassung TASK-17 Review-Fix). admin_edit_user() throws on genuine DB
+ * errors, so reaching the departures write means the auth-side call itself
+ * did not fail. To avoid creating an orphan wl_preferences row for a
+ * non-existent targetId, the write is additionally gated on the target
+ * actually existing in auth_accounts.
  */
 function wl_admin_edit_user(
     mysqli $con,
@@ -66,7 +77,8 @@ function wl_admin_edit_user(
 ): bool {
     $ok = admin_edit_user($con, $targetId, $email, $rights, $disabled, $totp_reset);
 
-    if ($ok) {
+    $departuresWritten = false;
+    if ($targetId > 0 && wl_admin_user_exists($con, $targetId)) {
         $departures = max(1, min($departures, MAX_DEPARTURES));
         $stmt = $con->prepare(
             'INSERT INTO wl_preferences (user_id, departures) VALUES (?, ?)
@@ -75,7 +87,23 @@ function wl_admin_edit_user(
         $stmt->bind_param('ii', $targetId, $departures);
         $stmt->execute();
         $stmt->close();
+        $departuresWritten = true;
     }
 
-    return $ok;
+    return $ok || $departuresWritten;
+}
+
+/**
+ * @internal Whether $targetId has a row in auth_accounts. Used to guard the
+ * wl_preferences write against orphan rows for non-existent users.
+ */
+function wl_admin_user_exists(mysqli $con, int $targetId): bool
+{
+    $stmt = $con->prepare('SELECT 1 FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
+    $stmt->bind_param('i', $targetId);
+    $stmt->execute();
+    $exists = (bool) $stmt->get_result()->fetch_row();
+    $stmt->close();
+
+    return $exists;
 }

@@ -123,6 +123,45 @@ class AdminTest extends IntegrationTestCase
         $this->assertSame(MAX_DEPARTURES, $departures);
     }
 
+    // Regression test for TASK-23: wl_admin_edit_user() coupled the
+    // departures write to admin_edit_user()'s return value, which reports
+    // affected_rows > 0 — 0 whenever email/rights/disabled are sent back
+    // unchanged (the common edit-modal case of "only change Abfahrten").
+    public function test_edit_persists_departures_when_auth_fields_unchanged(): void
+    {
+        $uid = $this->createUser(['email' => 'same@example.com', 'rights' => 'User', 'disabled' => '0']);
+
+        // Same email/rights/disabled as already stored -> admin_edit_user()'s
+        // UPDATE affects 0 rows. Only departures differs from the seeded
+        // default (2, see createUser()).
+        $ok = wl_admin_edit_user($this->con, $uid, 'same@example.com', 'User', 0, 1);
+
+        $pref = $this->con->prepare('SELECT departures FROM wl_preferences WHERE user_id = ?');
+        $pref->bind_param('i', $uid);
+        $pref->execute();
+        $departures = (int) $pref->get_result()->fetch_assoc()['departures'];
+        $pref->close();
+
+        $this->assertTrue($ok, 'wl_admin_edit_user() must report success even when the auth UPDATE affects 0 rows');
+        $this->assertSame(1, $departures, 'departures must be persisted despite unchanged auth fields');
+    }
+
+    public function test_edit_returns_false_for_nonexistent_user_without_creating_orphan_preferences_row(): void
+    {
+        $nonexistentId = 999999999;
+
+        $ok = wl_admin_edit_user($this->con, $nonexistentId, 'ghost@example.com', 'User', 0, 1);
+
+        $pref = $this->con->prepare('SELECT COUNT(*) AS c FROM wl_preferences WHERE user_id = ?');
+        $pref->bind_param('i', $nonexistentId);
+        $pref->execute();
+        $count = (int) $pref->get_result()->fetch_assoc()['c'];
+        $pref->close();
+
+        $this->assertFalse($ok, 'wl_admin_edit_user() must report failure for a non-existent targetId');
+        $this->assertSame(0, $count, 'no orphan wl_preferences row must be created for a non-existent targetId');
+    }
+
     public function test_edit_rejects_invalid_rights_value(): void
     {
         $uid = $this->createUser(['rights' => 'User']);
