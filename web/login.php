@@ -21,7 +21,7 @@ $nonce      = htmlspecialchars($_cspNonce ?? '', ENT_QUOTES, 'UTF-8');
 <html lang="de" data-theme="<?= htmlspecialchars($theme, ENT_QUOTES, 'UTF-8') ?>">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Anmelden &mdash; <?= htmlspecialchars(APP_NAME, ENT_QUOTES, 'UTF-8') ?></title>
   <meta name="theme-color" content="<?= htmlspecialchars(APP_COLOR, ENT_QUOTES) ?>">
   <link rel="icon" type="image/svg+xml" href="css/shared/logos/jardyx_rot.svg">
