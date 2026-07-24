@@ -1,5 +1,6 @@
 backups/
 data/ratelimit.json
+data/status_cache.json
 deprecated/
 docs/superpowers
 web/Archiv/
