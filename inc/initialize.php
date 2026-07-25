@@ -68,7 +68,7 @@ define('RATE_LIMIT_FILE', __DIR__ . '/../data/ratelimit.json');
 
 // ── Bootstrap (security headers + session + CSRF) ─────────────────────────────
 
-// img-src blob: is required by the Cropper.js avatar editor in preferences.php,
+// img-src blob: is required by the Cropper.js avatar editor in profil.php,
 // which previews the selected file via URL.createObjectURL() before upload.
 auth_bootstrap(['img-src' => 'blob:'], $con);
 

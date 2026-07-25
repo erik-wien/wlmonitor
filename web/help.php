@@ -83,10 +83,10 @@ require_once(__DIR__ . '/../inc/layout.php');
 
       <h3 class="h6" id="favoriten">Einstellungen und Passwort</h3>
       <p>
-        Anzeige-Einstellungen (Profilbild, Design, Anzahl Abfahrten, E-Mail)
-        finden Sie unter <a href="preferences.php">Einstellungen</a>. Passwort
+        Anzeige-Einstellungen (Profilbild, Anzahl Abfahrten, E-Mail)
+        finden Sie unter <a href="profil.php">Profil</a>. Passwort
         und Zwei-Faktor-Anmeldung finden Sie unter
-        <a href="preferences.php#sicherheit">Passwort &amp; 2FA</a>.
+        <a href="security.php">Passwort &amp; 2FA</a>.
       </p>
 
     </div>

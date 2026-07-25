@@ -2,7 +2,7 @@
 /**
  * web/confirm_email.php
  *
- * Confirms an email-address change initiated from preferences.php.
+ * Confirms an email-address change initiated from profil.php.
  *
  * The user receives a link with a one-time code that was stored in
  * wl_accounts.email_change_code. On a valid match the new address is
@@ -71,5 +71,5 @@ if (!empty($_SESSION['id']) && (int) $_SESSION['id'] === (int) $row['id']) {
 
 appendLog($con, 'prefs', 'Email confirmed for ' . $row['username']);
 addAlert('success', 'Ihre E-Mail-Adresse wurde erfolgreich aktualisiert.');
-header('Location: ' . (empty($_SESSION['loggedin']) ? 'login.php' : 'preferences.php'));
+header('Location: ' . (empty($_SESSION['loggedin']) ? 'login.php' : 'profil.php'));
 exit;
