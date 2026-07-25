@@ -86,7 +86,9 @@ auth_bootstrap(['img-src' => 'blob:'], $con);
 //
 // wl_favorites and wl_preferences live in the wlmonitor DB, not in auth,
 // so they cannot use FK ON DELETE CASCADE against auth_accounts.
-// admin_delete_user() invokes these callables inside its DELETE transaction.
+// admin_delete_user() ruft diese Callables VOR dem DELETE auf. Es gibt keine
+// gemeinsame Transaktion (andere Verbindung, andere DB) — dafuer gilt: schlaegt
+// ein Hook fehl, wird das Konto NICHT geloescht. Hooks muessen idempotent sein.
 
 admin_register_delete_cleanup(static function (mysqli $authCon, int $userId): void {
     global $con;
