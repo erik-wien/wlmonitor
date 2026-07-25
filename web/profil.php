@@ -42,6 +42,7 @@ $departuresError = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_verify()) {
+        appendLog($con, 'prefs', 'CSRF check failed on profil.php.');
         addAlert('danger', 'Ungültige Anfrage.');
         header('Location: profil.php'); exit;
     }
