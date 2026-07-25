@@ -258,7 +258,10 @@ document.addEventListener('DOMContentLoaded', () => {
         showAlert('Gelöscht.', 'success');
         setTimeout(() => location.reload(), 700);
       } else {
-        showAlert(errMsg(res), 'danger');
+        // Der Server benennt die Ursache selbst (Dispatch::userDelete liefert
+        // `message` zu Codes wie last_admin/cleanup_failed). errMsg() bleibt
+        // als Rückfall für die älteren Codes ohne `message`.
+        showAlert(res.message || errMsg(res), 'danger');
       }
     });
   });
