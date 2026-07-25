@@ -43,7 +43,7 @@ $departuresError = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_verify()) {
         appendLog($con, 'prefs', 'CSRF check failed on profil.php.');
-        if (($_POST['action'] ?? '') === 'upload_avatar') {
+        if (($_POST['action'] ?? '') === 'upload_avatar' || ($_POST['action'] ?? '') === 'clear_avatar') {
             header('Content-Type: application/json; charset=utf-8');
             http_response_code(403);
             echo json_encode(['ok' => false, 'error' => 'Ungültige Anfrage (CSRF-Token abgelaufen). Bitte Seite neu laden.']);
@@ -76,6 +76,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         };
         http_response_code(400);
         echo json_encode(['ok' => false, 'error' => $msg]);
+        exit;
+    }
+
+    // ── Avatar entfernen ─────────────────────────────────────────────────────
+    if ($action === 'clear_avatar') {
+        \Erikr\Chrome\AvatarUpload::clear($con, $userId);
+        appendLog($con, 'prefs', 'Avatar removed.');
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true]);
         exit;
     }
 
@@ -222,6 +231,7 @@ $departuresHtml = ob_get_clean();
       'email'               => $currentEmail,
       'emailEditAction'     => 'profil.php',
       'avatarChangeAction'  => 'profil.php',
+      'avatarClearAction'   => 'profil.php',
       'passwordHref'        => 'security.php',
       'csrfToken'           => $csrfToken,
       'cspNonce'            => $_cspNonce,
