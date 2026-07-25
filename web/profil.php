@@ -31,6 +31,36 @@ auth_require();
 $userId   = (int) $_SESSION['id'];
 $username = $_SESSION['username'] ?? '';
 
+// ── Konto deaktivieren — fetch-basiert, JSON-Antwort (Kontrakt: Chrome\Profile) ─
+// Steht bewusst VOR dem gemeinsamen POST-Block unten: der Kontrakt verlangt in
+// jedem Fall JSON (auch bei CSRF-Fehler), niemals einen Redirect.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'deactivate_account') {
+    header('Content-Type: application/json');
+    if (!csrf_verify()) {
+        appendLog($con, 'account', 'Deaktivierung: CSRF-Token ungueltig.');
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'error' => 'csrf',
+            'message' => 'Ungueltige Anfrage (CSRF-Token abgelaufen). Bitte Seite neu laden.']);
+        exit;
+    }
+    $res = auth_deactivate_own_account($con, $userId, (string) ($_POST['password'] ?? ''));
+    if ($res['ok']) {
+        echo json_encode(['ok' => true]);
+        $_SESSION = [];
+        session_destroy();
+        exit;
+    }
+    $msg = match ($res['error']) {
+        'wrong_password'          => 'Das Kennwort ist falsch.',
+        'admin_cannot_deactivate' => 'Administratorkonten koennen nicht selbst deaktiviert werden.',
+        'already_disabled'        => 'Das Konto ist bereits deaktiviert.',
+        default                   => 'Deaktivierung fehlgeschlagen. Details im Log.',
+    };
+    http_response_code(400);
+    echo json_encode(['ok' => false, 'error' => $res['error'], 'message' => $msg]);
+    exit;
+}
+
 // Reload email fresh from DB
 $stmt = $con->prepare('SELECT email FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
 $stmt->bind_param('i', $userId);
@@ -270,8 +300,11 @@ $departuresHtml = ob_get_clean();
       'cropperCssPath'      => 'css/shared/js/vendor/cropperjs/cropper.min.css',
       'cropperJsPath'       => 'css/shared/js/vendor/cropperjs/cropper.min.js',
       'avatarCropperJsPath' => 'css/shared/js/avatar-cropper.js',
+      'deactivateJsPath'    => 'css/shared/js/account-deactivate.js',
       'tokens'              => auth_api_tokens_list($con, $userId),
       'tokenAction'         => 'profil.php',
+      'deactivateAction'    => 'profil.php',
+      'isAdmin'             => (($_SESSION['rights'] ?? '') === 'Admin'),
       'appSections'         => [
           ['html' => $departuresHtml],
       ],

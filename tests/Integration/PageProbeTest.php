@@ -127,6 +127,20 @@ final class PageProbeTest extends TestCase
             'token dialog must be present but initially hidden'
         );
 
+        // "Konto deaktivieren" trigger + dialog, dialog initially hidden.
+        $this->assertStringContainsString('id="profileDeactivate"', $r['out']);
+        $this->assertStringContainsString('Konto deaktivieren', $r['out']);
+        $this->assertMatchesRegularExpression(
+            '/<div class="app-modal-backdrop" id="deactivate-modal"[^>]*\brole="dialog"[^>]*\baria-modal="true"[^>]*\bhidden\b/',
+            $r['out'],
+            'deactivate dialog must be present but initially hidden'
+        );
+        $this->assertMatchesRegularExpression(
+            '/<button\b(?:(?!style=)[^>])*id="profileDeactivate"(?:(?!style=)[^>])*>/',
+            $r['out'],
+            'the "Konto deaktivieren" trigger must carry no inline style='
+        );
+
         $this->assertNoButtonHasInlineStyle($r['out']);
 
         // Fallback (no real token row here, id 999999 has none) — no
@@ -134,6 +148,24 @@ final class PageProbeTest extends TestCase
         // real-token-row version of this check lives in
         // test_profil_does_not_leak_plaintext_token_with_real_token_row().
         $this->assertDoesNotMatchRegularExpression('/\b[0-9a-f]{64}\b/i', $r['out']);
+    }
+
+    /**
+     * The visibility rule IS the feature: an admin deactivating themselves
+     * would lock themselves out and could leave the suite without any
+     * administration. Chrome\Profile renders neither button nor dialog for
+     * admins (auth_deactivate_own_account() refuses them as well).
+     */
+    public function test_profil_hides_deactivate_for_admins(): void
+    {
+        $r = $this->runPageProbe('profil.php', [
+            'loggedin' => true, 'id' => 999999, 'username' => 'probe-user', 'rights' => 'Admin',
+        ]);
+
+        $this->assertSame(200, $r['status']);
+        $this->assertStringNotContainsString('id="profileDeactivate"', $r['out']);
+        $this->assertStringNotContainsString('Konto deaktivieren', $r['out']);
+        $this->assertStringNotContainsString('id="deactivate-modal"', $r['out']);
     }
 
     // --- aktivitaet.php --------------------------------------------------------
