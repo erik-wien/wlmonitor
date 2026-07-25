@@ -212,7 +212,21 @@ class AdminTest extends IntegrationTestCase
     public function test_delete_removes_user(): void
     {
         $uid = $this->createUser();
-        $ok  = admin_delete_user($this->con, $uid, $this->adminId);
+
+        // admin_delete_user() now deletes via auth_privileged_con() — a real,
+        // separate mysqli connection (Spec 2026-07-25 §3.1a). It cannot see or
+        // lock a row this test's own transaction hasn't committed yet: dirty
+        // reads don't help here, the DELETE still needs the row lock that
+        // $this->con holds until commit/rollback (verified: without the commit
+        // below this raises "Lock wait timeout exceeded"). So this one test
+        // commits before deleting, then manually removes the admin row from
+        // setUp() that got swept into that commit — tearDown()'s rollback can
+        // no longer undo it. The privileged connection is used for the admin
+        // row because the app DB user deliberately has no DELETE on
+        // auth_accounts (Auth-Rules §8).
+        $this->con->commit();
+
+        $res = admin_delete_user($this->con, $uid, $this->adminId);
 
         $stmt = $this->con->prepare('SELECT id FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
         $stmt->bind_param('i', $uid);
@@ -220,19 +234,30 @@ class AdminTest extends IntegrationTestCase
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
-        $this->assertTrue($ok);
+        $this->assertTrue($res['ok']);
         $this->assertNull($row);
+
+        $priv = auth_privileged_con($this->con);
+        $stmt = $priv->prepare('DELETE FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ?');
+        $stmt->bind_param('i', $this->adminId);
+        $stmt->execute();
+        $stmt->close();
+
+        $stmt = $this->con->prepare('DELETE FROM wl_preferences WHERE user_id = ?');
+        $stmt->bind_param('i', $this->adminId);
+        $stmt->execute();
+        $stmt->close();
     }
 
     public function test_delete_returns_false_when_deleting_self(): void
     {
-        $ok = admin_delete_user($this->con, $this->adminId, $this->adminId);
-        $this->assertFalse($ok);
+        $res = admin_delete_user($this->con, $this->adminId, $this->adminId);
+        $this->assertFalse($res['ok']);
     }
 
     public function test_delete_returns_false_for_nonexistent_user(): void
     {
-        $ok = admin_delete_user($this->con, 999999999, $this->adminId);
-        $this->assertFalse($ok);
+        $res = admin_delete_user($this->con, 999999999, $this->adminId);
+        $this->assertFalse($res['ok']);
     }
 }

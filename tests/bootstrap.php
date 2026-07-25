@@ -7,6 +7,17 @@ $_SERVER['REMOTE_ADDR'] ??= '127.0.0.1';
 
 require_once __DIR__ . '/../inc/initialize.php';
 
+// PHPUnit's own runner requires this bootstrap file from inside a method, not
+// from true top-level scope. That means $con (set by inc/initialize.php just
+// above) lands in that method's local variables, never in true $GLOBALS. The
+// admin_delete_user() cleanup hook registered in inc/initialize.php relies on
+// `global $con;` to reach the wlmonitor DB connection — under PHPUnit it
+// would otherwise resolve to null ("Call to a member function prepare() on
+// null", surfacing as cleanup_failed). Promote it explicitly so that hook
+// keeps working the same way it does when initialize.php is required from a
+// real top-level entry point (index.php etc.).
+$GLOBALS['con'] = $con;
+
 // Load wlmonitor business-logic modules
 require_once __DIR__ . '/../inc/favorites.php';
 require_once __DIR__ . '/../inc/stations.php';
