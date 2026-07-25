@@ -16,8 +16,6 @@ auth_require();
 <?php render_header(); ?>
 
 <main class="container-md mt-4" id="main-content" tabindex="-1">
-  <h4 class="mb-3"><?= icon("history", "me-2") ?>Log</h4>
-
   <?php
   \Erikr\Chrome\Activity::render([
       'con'    => $con,

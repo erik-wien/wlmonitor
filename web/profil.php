@@ -43,6 +43,12 @@ $departuresError = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_verify()) {
         appendLog($con, 'prefs', 'CSRF check failed on profil.php.');
+        if (($_POST['action'] ?? '') === 'upload_avatar') {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'Ungültige Anfrage (CSRF-Token abgelaufen). Bitte Seite neu laden.']);
+            exit;
+        }
         addAlert('danger', 'Ungültige Anfrage.');
         header('Location: profil.php'); exit;
     }
@@ -202,8 +208,6 @@ $departuresHtml = ob_get_clean();
 <?php render_header(); ?>
 
 <main class="container-md mt-4" id="main-content" tabindex="-1">
-  <h4 class="mb-3"><?= icon("user", "me-2") ?>Profil</h4>
-
   <?php foreach ($_SESSION['alerts'] ?? [] as [$type, $msg]): ?>
     <div class="app-alert app-alert-<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?> alert-dismissible fade show" role="alert">
       <?= htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') ?>

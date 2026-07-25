@@ -81,7 +81,7 @@ This README is a landing page. The real documentation lives in `docs/`:
 ```
 config.yaml          generated; never committed
 inc/                 shared PHP includes (initialize, html_header, html_footer, …)
-web/                 web root (index.php, api.php, preferences.php, security.php,
+web/                 web root (index.php, api.php, profil.php, security.php,
                        admin.php, login.php, …, css/, js/, fonts/)
 migrations/          wlmonitor-DB schema migrations (NNN_*.sql, applied in order)
 scripts/             utility scripts (db_backup, update_ogd, migrate, …)
