@@ -17,6 +17,10 @@
  *   change_theme      → fire-and-forget fetch von der Header-Thema-Pille,
  *                        keine Body-Antwort nötig (HTTP 204).
  *   change_departures → normaler Browser-POST (inline appSections-Formular).
+ *   token_create      → JSON-Antwort, fetch-basiert (Erikr\Chrome\ApiTokens /
+ *                        api-tokens.js).
+ *   token_revoke      → JSON-Antwort, fetch-basiert (Erikr\Chrome\ApiTokens /
+ *                        api-tokens.js).
  */
 
 require_once(__DIR__ . '/../inc/initialize.php');
@@ -43,7 +47,7 @@ $departuresError = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_verify()) {
         appendLog($con, 'prefs', 'CSRF check failed on profil.php.');
-        if (($_POST['action'] ?? '') === 'upload_avatar' || ($_POST['action'] ?? '') === 'clear_avatar') {
+        if (in_array($_POST['action'] ?? '', ['upload_avatar', 'clear_avatar', 'token_create', 'token_revoke'], true)) {
             header('Content-Type: application/json; charset=utf-8');
             http_response_code(403);
             echo json_encode(['ok' => false, 'error' => 'Ungültige Anfrage (CSRF-Token abgelaufen). Bitte Seite neu laden.']);
@@ -84,6 +88,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         \Erikr\Chrome\AvatarUpload::clear($con, $userId);
         appendLog($con, 'prefs', 'Avatar removed.');
         header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
+    // ── API-Token anlegen (AJAX) ────────────────────────────────────────────
+    if ($action === 'token_create') {
+        $label = trim((string) ($_POST['label'] ?? ''));
+        $token = auth_api_token_issue($con, $userId, $label, 'web', null);
+        $item  = auth_api_tokens_list($con, $userId)[0] ?? null;
+        appendLog($con, 'prefs', 'API token created' . ($label !== '' ? " ({$label})." : '.'));
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['ok' => true, 'token' => $token, 'item' => $item]);
+        exit;
+    }
+
+    // ── API-Token widerrufen (AJAX) ─────────────────────────────────────────
+    if ($action === 'token_revoke') {
+        $id      = (int) ($_POST['id'] ?? 0);
+        $deleted = auth_api_token_revoke($con, $userId, $id);
+        header('Content-Type: application/json; charset=utf-8');
+        if (!$deleted) {
+            appendLog($con, 'prefs', "API token revoke failed (id {$id}).");
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'error' => 'Token nicht gefunden oder bereits widerrufen.']);
+            exit;
+        }
+        appendLog($con, 'prefs', "API token revoked (id {$id}).");
         echo json_encode(['ok' => true]);
         exit;
     }
@@ -239,6 +270,8 @@ $departuresHtml = ob_get_clean();
       'cropperCssPath'      => 'css/shared/js/vendor/cropperjs/cropper.min.css',
       'cropperJsPath'       => 'css/shared/js/vendor/cropperjs/cropper.min.js',
       'avatarCropperJsPath' => 'css/shared/js/avatar-cropper.js',
+      'tokens'              => auth_api_tokens_list($con, $userId),
+      'tokenAction'         => 'profil.php',
       'appSections'         => [
           ['html' => $departuresHtml],
       ],
