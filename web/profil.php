@@ -143,6 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'change_departures') {
         $dep = (int) ($_POST['departures'] ?? 0);
         if ($dep < 1 || $dep > 5) {
+            appendLog($con, 'prefs', 'Departures change rejected: invalid value.');
             $departuresError = 'Bitte einen Wert zwischen 1 und 5 wählen.';
         } else {
             $upd = $con->prepare(

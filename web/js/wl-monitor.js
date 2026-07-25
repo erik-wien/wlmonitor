@@ -926,28 +926,6 @@ function applyTheme() {
   // 'auto' or empty: CSS media query handles it
 }
 
-async function setTheme(t) {
-  if (t === 'dark' || t === 'light') {
-    document.documentElement.dataset.theme = t;
-  } else {
-    delete document.documentElement.dataset.theme;
-  }
-  setCookie('theme', t, 365);
-  document.querySelectorAll('[data-theme-btn]').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.themeBtn === t);
-  });
-  if (window.wlConfig?.loggedIn) {
-    try {
-      const fd = new FormData();
-      fd.append('action', 'change_theme');
-      fd.append('theme', t);
-      const csrfInput = document.querySelector('input[name="csrf_token"]');
-      if (csrfInput) fd.append('csrf_token', csrfInput.value);
-      await fetch('preferences.php', { method: 'POST', body: fd });
-    } catch (e) { console.error(e); }
-  }
-}
-
 // --- Scroll to top -----------------------------------------------------------
 function wireScrollButton() {
   const btn = document.getElementById('topBtn');
