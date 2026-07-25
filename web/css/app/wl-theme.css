@@ -68,3 +68,7 @@
     --board-live:          #4ade80;
   }
 }
+
+/* Rule §16: settings-form pages (profil.php) cap their inner wrapper at
+   ~520px, centered — wortgleich zum Suite-Standard (Energie/web/css/energie.css). */
+.pref-section { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.25rem; }

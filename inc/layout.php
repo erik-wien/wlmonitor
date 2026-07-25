@@ -109,27 +109,29 @@ function render_header(bool $showSearch = false): void
         'theme'         => $theme,
         'brandHref'     => 'index.php',
         'avatarSrc'     => 'avatar.php?id=' . $uid,
-        'profileHref'   => 'preferences.php#profilbild',
-        'emailHref'     => 'preferences.php#email',
-        'appPrefsHref'  => 'preferences.php#abfahrten',
-        'appPrefsLabel' => 'Abfahrten',
-        'securityHref'  => 'security.php',
         'adminHref'     => 'admin.php',
-        // statusHref explicit (TASK-21, Suite-Policy §Baustein 2): the Header
-        // default is $base . '/status.php'; wlmonitor passes 'base' => '' but
+        // statusHref/profilHref/activityHref explicit (TASK-21, Suite-Policy
+        // §Baustein 2 resp. Usermenü-Redesign): the Header defaults are
+        // $base . '/status.php' etc.; wlmonitor passes 'base' => '' but
         // (unlike suche, where $base is a real computed path prefix) every
         // other href here is already a bare relative path (admin.php,
-        // preferences.php, …), so the default would render '/status.php'
-        // (domain-root-absolute) — inconsistent with the rest of the menu and
-        // wrong if the app is ever not served at its (sub)domain root. Same
-        // fix zeiterfassung applied (inc/_header.php). adminItems is
+        // profil.php, …), so the defaults would render domain-root-absolute
+        // ('/status.php') — inconsistent with the rest of the menu and wrong
+        // if the app is ever not served at its (sub)domain root. Same fix
+        // zeiterfassung applied (inc/_header.php). adminItems is
         // intentionally NOT set — wlmonitor has no App-Admin-Aktionen beyond
         // admin.php, which already renders as "Verwaltung" in the
         // Administration-Dropdown for isAdmin users without passing adminItems.
         'statusHref'    => 'status.php',
+        'profilHref'    => 'profil.php',
+        'activityHref'  => 'aktivitaet.php',
         'helpHref'      => 'help.php',
         'logoutHref'    => 'logout.php',
-        'themeEndpoint' => 'preferences.php',
+        // themeEndpoint: the header's theme pill fire-and-forget POSTs here
+        // (action=change_theme). preferences.php was removed (its remaining
+        // content — Profilbild/E-Mail — moved to profil.php, Abfahrten went
+        // inline there too); profil.php now also handles change_theme.
+        'themeEndpoint' => 'profil.php',
         'anonLoginHref' => 'login.php',
     ]);
 }
