@@ -47,6 +47,16 @@ define('APP_COLOR',          $_cfg['app']['color']         ?? '#e2001a');
 /** Prefix for all cross-DB auth table references (e.g. 'auth.'). */
 define('AUTH_DB_PREFIX', AUTH_DATABASE_NAME . '.');
 
+// Privilegierte Loeschverbindung (Spec 2026-07-25 §3.1a). Verpflichtend:
+// admin_delete_user() faellt NICHT auf $con zurueck.
+$_adminDb = $_cfg['auth_admin_db'] ?? [];
+define('AUTH_ADMIN_DB_HOST', $_adminDb['host']     ?? 'localhost');
+define('AUTH_ADMIN_DB_NAME', $_adminDb['name']     ?? '');
+define('AUTH_ADMIN_DB_USER', $_adminDb['user']     ?? '');
+define('AUTH_ADMIN_DB_PASS', $_adminDb['password'] ?? '');
+define('AUTH_ADMIN_DB_SOCKET', $_adminDb['socket'] ?? null);
+unset($_adminDb);
+
 unset($_cfg, $_db);
 
 date_default_timezone_set('Europe/Vienna');
