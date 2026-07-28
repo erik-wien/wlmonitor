@@ -5,6 +5,10 @@
 define('OGD_LOCK_FILE',    __DIR__ . '/../data/ogd_update.lock');
 define('OGD_LOCK_TIMEOUT', 300); // seconds before a stale lock is ignored
 
+// Unix-Zeitstempel des letzten ERFOLGREICHEN Reloads (von ogd_update()
+// geschrieben, von web/status.php gelesen). Siehe Begründung dort.
+define('OGD_LAST_RELOAD_FILE', __DIR__ . '/../data/ogd_last_reload');
+
 define('OGD_CSV_URLS', [
     'haltestellen' => 'https://data.wien.gv.at/csv/wienerlinien-ogd-haltestellen.csv',
     'steige'       => 'https://data.wien.gv.at/csv/wienerlinien-ogd-steige.csv',
@@ -186,6 +190,18 @@ function ogd_update(mysqli $con): array {
 
         $nStations = (int) $con->query('SELECT COUNT(*) AS n FROM ogd_stations')->fetch_assoc()['n'];
         $out("View recreated: ogd_stations=$nStations");
+
+        // Zeitstempel des erfolgreichen Reloads festhalten — sonst ist die
+        // Aktualität der Stammdaten schlicht nicht feststellbar: die CSVs der
+        // Wiener Linien führen zwar eine STAND-Spalte, befüllen sie aber nicht
+        // (2026-07-28 an den echten Daten geprüft: in ogd_haltestellen,
+        // ogd_linien und ogd_steige zu 100 % leer). Ohne diese Datei kann die
+        // Statusampel nur Zeilen zählen und muss offen sagen, dass sie über das
+        // Alter nichts weiß. Bewusst eine Datei in data/ und keine Tabelle:
+        // data/ ist vom Deploy ausgenommen und überlebt damit jeden Rollout,
+        // und es ist genau ein Wert.
+        @file_put_contents(OGD_LAST_RELOAD_FILE, (string) time());
+
         $out('Done.');
 
         return ['ok' => true, 'log' => $log, 'error' => null];

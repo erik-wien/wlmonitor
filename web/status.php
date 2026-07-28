@@ -12,14 +12,28 @@
  *    echte DIVA aus ogd_haltestellen (nicht bloß "URL erreichbar", sondern
  *    "liefert eine echte Monitor-Antwort"), 3s Timeout, HTTP>=400 oder ein
  *    API-seitiger Fehler-messageCode zählen als fail (§21).
- *  - OGD-Stammdaten (Wiener Linien): ogd_haltestellen/_linien/_steige werden
- *    per DELETE+INSERT komplett neu geladen (inc/ogd.php) — es gibt keine
- *    Lauf-Zeitstempel-Spalte und keinen Log-Eintrag pro Reload. Die
- *    STAND-Spalte (Schema-Kommentar: "Stand" laut WL-CSV) wäre der naheliegende
- *    Kandidat, ist aber in der lokalen Praxis leer/NULL (empirisch geprüft,
- *    s. Report) — die Wiener-Linien-CSVs befüllen sie nicht zuverlässig.
- *    Also: Zeilenzahl>0 als Minimal-Check (§Fallback lt. TASK-22), kein
- *    Alters-Warn-Zustand möglich.
+ *  - OGD-Stammdaten (Wiener Linien): Zeilenzahl + Alter des letzten Reloads.
+ *    Die STAND-Spalte der WL-CSVs wäre der naheliegende Frische-Indikator,
+ *    wird von den Wiener Linien aber nicht befüllt — 2026-07-28 an den echten
+ *    Daten nachgemessen: in ogd_haltestellen (1959 Zeilen), ogd_linien (197)
+ *    und ogd_steige (7362) ausnahmslos leer/NULL. Statt die Lücke nur zu
+ *    dokumentieren, schreibt ogd_update() den Reload-Zeitpunkt seit TASK-24
+ *    selbst nach data/ogd_last_reload; der Check liest ihn. Solange die Datei
+ *    fehlt (vor dem ersten Reload nach diesem Update), sagt der Detailtext
+ *    ausdrücklich, dass das Alter unbekannt ist — er suggeriert keine
+ *    Aktualität, die niemand geprüft hat.
+ *  - OGD-Datenquelle (data.wien.gv.at): Erreichbarkeit der CSV-Quelle. Ein
+ *    völlig eigener Host, der mit wienerlinien.at nichts zu tun hat — ist er
+ *    weg, schlägt der nächste Reload fehl, und zwar erst dann, wenn ihn jemand
+ *    anstößt. HEAD statt GET: die Haltestellen-CSV ist mehrere hundert kB, und
+ *    für die Erreichbarkeit reicht der Header.
+ *  - SMTP (Mailversand): Erreichbarkeit des Servers, über den Einladungen und
+ *    Passwort-Resets rausgehen (Chrome\Status::smtpCheck, chrome TASK-10) —
+ *    verschickt nichts, meldet sich nicht an.
+ *
+ * "zuletzt ok: …" liefert seit chrome TASK-24 die Library selbst: run() reicht
+ * den letzten Erfolgszeitstempel über eine Störung hinweg weiter, sodass eine
+ * rote Ampel zeigt, seit wann sie rot ist. Hier ist dafür nichts zu tun.
  *
  * Ampel für alle eingeloggten User; Fehlertexte/Interna nur für Admins
  * (Chrome\Status::render()). Ergebnisse ~60s gecacht (data/, wie
@@ -32,6 +46,9 @@
 
 require_once __DIR__ . '/../inc/initialize.php';
 require_once __DIR__ . '/../inc/layout.php';
+// Liefert OGD_CSV_URLS (Quell-URL für den Erreichbarkeits-Check) und
+// OGD_LAST_RELOAD_FILE (Zeitstempel des letzten Reloads).
+require_once __DIR__ . '/../inc/ogd.php';
 
 use Erikr\Chrome\Status;
 
@@ -73,7 +90,10 @@ $checks = [
             $errno = curl_errno($ch);
             $error = curl_error($ch);
             $code  = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
+            // Kein curl_close(): seit PHP 8.0 wirkungslos, ab 8.5 deprecated —
+            // die Deprecation-Meldung landete sonst mitten im Seiten-Output
+            // (bzw. im JSON von ?format=json). Gleiche Stelle wie in
+            // Energie/web/status.php und inc/ai_client.php.
 
             if ($errno !== 0) {
                 return ['state' => 'fail', 'detail' => $error !== '' ? $error : ('curl-Fehler #' . $errno)];
@@ -109,12 +129,56 @@ $checks = [
                     'detail' => 'ogd_haltestellen ist leer — noch kein OGD-Reload durchgeführt (admin.php).',
                 ];
             }
+
+            $ts = is_file(OGD_LAST_RELOAD_FILE)
+                ? (int) trim((string) @file_get_contents(OGD_LAST_RELOAD_FILE))
+                : 0;
+
+            // Vor dem ersten Reload nach TASK-24 gibt es die Datei noch nicht.
+            // Dann wird das Alter ausdrücklich als unbekannt gemeldet, statt
+            // eine Aktualität zu behaupten, die niemand geprüft hat.
+            if ($ts <= 0) {
+                return [
+                    'state'  => 'ok',
+                    'detail' => $n . ' Haltestellen. Zeitpunkt des letzten Reloads unbekannt — er wird'
+                        . ' erst ab dem nächsten Reload (admin.php) festgehalten.',
+                ];
+            }
+
+            // Die Stammdaten sind Fahrplandaten: sie ändern sich selten, aber
+            // ein Stand von über einem halben Jahr heißt, dass neue Haltestellen
+            // und Linienänderungen fehlen. 180 Tage ist bewusst großzügig — der
+            // Reload läuft ausschließlich manuell, eine engere Schwelle wäre
+            // Dauergelb ohne Erkenntnisgewinn.
+            $alterTage = (time() - $ts) / 86400;
+            if ($alterTage > 180) {
+                return [
+                    'state'           => 'warn',
+                    'detail'          => sprintf('%d Haltestellen, letzter Reload vor %.0f Tagen (Schwelle 180).', $n, $alterTage),
+                    'last_success_ts' => $ts,
+                ];
+            }
             return [
-                'state'  => 'ok',
-                'detail' => $n . ' Haltestellen (Zeilenzahl-Check — die STAND-Spalte wird von den'
-                    . ' Wiener-Linien-CSVs nicht zuverlässig befüllt, daher kein Reload-Zeitstempel verfügbar).',
+                'state'           => 'ok',
+                'detail'          => sprintf('%d Haltestellen, letzter Reload vor %.0f Tagen.', $n, $alterTage),
+                'last_success_ts' => $ts,
             ];
         },
+    ],
+    [
+        // Eigener Host, der mit der Echtzeit-API nichts zu tun hat: fällt er
+        // aus, merkt man es sonst erst, wenn jemand einen Reload anstößt.
+        // HEAD reicht — die Haltestellen-CSV ist mehrere hundert kB groß.
+        'name'  => 'OGD-Datenquelle (data.wien.gv.at)',
+        'check' => static fn(): array => Status::httpCheck(
+            OGD_CSV_URLS['haltestellen'],
+            3,
+            [CURLOPT_NOBODY => true]
+        ),
+    ],
+    [
+        'name'  => 'SMTP (Mailversand)',
+        'check' => static fn(): array => Status::smtpCheck(),
     ],
 ];
 
