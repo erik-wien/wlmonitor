@@ -1,9 +1,10 @@
 ---
 id: TASK-24
 title: 'Statusseite: last_success_ts ergaenzen, OGD-Quelle und Datenfrische pruefen'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-28 08:55'
+updated_date: '2026-07-28 12:39'
 labels: []
 dependencies: []
 priority: medium
@@ -26,7 +27,7 @@ WIDERLEGT, NICHT VERFOLGEN:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Alle drei Checks liefern last_success_ts, sodass die Seite bei jedem 'zuletzt ok: ...' anzeigt
-- [ ] #2 Die CSV-Quelle data.wien.gv.at hat einen eigenen Erreichbarkeits-Check (Timeout <= 3 s, HTTP >= 400 = Fehler)
-- [ ] #3 Es ist entschieden und im Code begruendet, ob sich die Frische der OGD-Stammdaten belastbar messen laesst - wenn nein, sagt der Detailtext das ausdruecklich, statt Aktualitaet zu suggerieren
+- [x] #1 Alle drei Checks liefern last_success_ts, sodass die Seite bei jedem 'zuletzt ok: ...' anzeigt
+- [x] #2 Die CSV-Quelle data.wien.gv.at hat einen eigenen Erreichbarkeits-Check (Timeout <= 3 s, HTTP >= 400 = Fehler)
+- [x] #3 Es ist entschieden und im Code begruendet, ob sich die Frische der OGD-Stammdaten belastbar messen laesst - wenn nein, sagt der Detailtext das ausdruecklich, statt Aktualitaet zu suggerieren
 <!-- AC:END -->
