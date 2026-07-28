@@ -57,7 +57,12 @@ auth_require();
 $checks = [
     [
         'name'  => 'Datenbank',
-        'check' => static fn() => Status::dbCheck(static fn() => $con->ping(), 'Verbindung ok.'),
+        // SELECT 1 statt ping(): ping() ist seit PHP 8.4 deprecated (die
+        // Reconnect-Funktion fiel in 8.2 weg, der Aufruf ist seither
+        // wirkungslos) und schriebe bei jedem Cache-Miss eine Deprecated-
+        // Meldung ins Log — bei display_errors sogar mitten in die Seite.
+        // Ein echter Round-Trip prüft ohnehin mehr. (chrome TASK-11)
+        'check' => static fn() => Status::dbCheck(static fn() => $con->query('SELECT 1') !== false, 'Verbindung ok.'),
     ],
     [
         'name'  => 'Wiener-Linien-Echtzeit-API',
