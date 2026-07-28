@@ -106,6 +106,11 @@ $rsyncExcludes = [
     'composer.lock',
     'composer.phar',
     'config.example.yaml',
+    // Nie mit hochladen und — wichtig — durch --delete NICHT entfernen:
+    // mail.ini traegt die SMTP-Zugangsdaten, liegt nur auf dem Server und
+    // darf nie im Repo stehen (auth TASK-6). Ausgeschlossene Dateien
+    // ueberleben --delete.
+    'mail.ini',
     'app.dev',
     'app.prod',
     'app.world4you',

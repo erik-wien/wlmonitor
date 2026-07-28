@@ -28,3 +28,6 @@ update.md
 web/jardyx-logo.svg
 web/jardyx-favicon.svg
 .superpowers/
+
+# SMTP-Zugangsdaten, nur auf dem Server (auth TASK-6) — nie ins Repo
+mail.ini
