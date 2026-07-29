@@ -169,7 +169,10 @@ document.addEventListener('DOMContentLoaded', () => {
     fd.delete('csrf_token');
     const res = await adminPost('admin_user_create', Object.fromEntries(fd));
     if (res.ok) {
-      showAlert('Einladung versandt an ' + fd.get('email') + '.', 'success');
+      // Bei res.warning ist das Konto angelegt, die Einladung aber NICHT
+      // zugestellt; adminPost() zeigt die Ursache bereits an. Dann hier
+      // keinen Versand behaupten (auth TASK-7).
+      if (!res.warning) showAlert('Einladung versandt an ' + fd.get('email') + '.', 'success');
       closeModal('createModal');
       e.target.reset();
       setTimeout(() => location.reload(), 700);
