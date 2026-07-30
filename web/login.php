@@ -26,11 +26,11 @@ $nonce      = htmlspecialchars($_cspNonce ?? '', ENT_QUOTES, 'UTF-8');
   <meta name="theme-color" content="<?= htmlspecialchars(APP_COLOR, ENT_QUOTES) ?>">
   <link rel="icon" type="image/svg+xml" href="css/shared/logos/jardyx_rot.svg">
   <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
-  <link rel="stylesheet" href="css/shared/theme.css">
-  <link rel="stylesheet" href="css/shared/reset.css">
-  <link rel="stylesheet" href="css/shared/layout.css">
-  <link rel="stylesheet" href="css/shared/components.css">
-  <link rel="stylesheet" href="css/app/wl-monitor.css">
+  <link rel="stylesheet" href="css/shared/theme.css<?= \Erikr\Chrome\AssetVersion::forFile(__DIR__, 'css/shared/theme.css') ?>">
+  <link rel="stylesheet" href="css/shared/reset.css<?= \Erikr\Chrome\AssetVersion::forFile(__DIR__, 'css/shared/reset.css') ?>">
+  <link rel="stylesheet" href="css/shared/layout.css<?= \Erikr\Chrome\AssetVersion::forFile(__DIR__, 'css/shared/layout.css') ?>">
+  <link rel="stylesheet" href="css/shared/components.css<?= \Erikr\Chrome\AssetVersion::forFile(__DIR__, 'css/shared/components.css') ?>">
+  <link rel="stylesheet" href="css/app/wl-monitor.css<?= \Erikr\Chrome\AssetVersion::forFile(__DIR__, 'css/app/wl-monitor.css') ?>">
 </head>
 <body class="login-page">
 <main class="login-main" id="main-content">
@@ -66,6 +66,6 @@ $nonce      = htmlspecialchars($_cspNonce ?? '', ENT_QUOTES, 'UTF-8');
     <p class="login-forgot"><a href="forgotPassword.php">Kennwort vergessen?</a></p>
   </form>
 </main>
-<script src="css/shared/js/field-enhance.js" nonce="<?= $nonce ?>"></script>
+<script src="css/shared/js/field-enhance.js<?= \Erikr\Chrome\AssetVersion::forFile(__DIR__, 'css/shared/js/field-enhance.js') ?>" nonce="<?= $nonce ?>"></script>
 </body>
 </html>

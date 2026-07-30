@@ -110,7 +110,7 @@ $pageUrl = static function (int $p, string $f): string {
 <script nonce="<?= $_cspNonce ?>">
 window.CSRF = <?= json_encode($csrfToken) ?>;
 </script>
-<script src="css/shared/js/admin.js" nonce="<?= $_cspNonce ?>"></script>
+<script src="css/shared/js/admin.js<?= \Erikr\Chrome\AssetVersion::forFile(__DIR__, 'css/shared/js/admin.js') ?>" nonce="<?= $_cspNonce ?>"></script>
 <script type="module" src="css/shared/js/dialog.js?v=<?= APP_VERSION . '.' . APP_BUILD ?>" nonce="<?= $_cspNonce ?>"></script>
 <script type="module" src="css/shared/js/api-call.js?v=<?= APP_VERSION . '.' . APP_BUILD ?>" nonce="<?= $_cspNonce ?>"></script>
 
