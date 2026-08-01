@@ -125,6 +125,10 @@ Regeln:
   Abfahrt ein eigenes `towards`, endet sie woanders.* Ohne dieses Feld zeigte
   das Display „U6 → Siebenhirten in 7 min", während der Zug in Alterlaa endet
   — eine falsche Zeile ist schlimmer als eine fehlende.
+- `delayed: true` markiert **eine einzelne Abfahrt** als verzögert (Quelle:
+  `jam` pro Abfahrt). Das Layout invertiert genau diese Abfahrt — `alert` auf
+  Zeilenebene reicht dafür nicht, weil eine Störung oft nur einen Kurs
+  betrifft. (Nachgetragen 2026-08-01 bei der Planung.)
 - `realtime` = `false` heißt Fahrplanzeit ohne Echtzeit.
 - `type` ist auf `metro | tram | bus | train` normalisiert (statt `ptMetro`,
   `ptTram`, `ptBusCity`, …).
@@ -184,7 +188,13 @@ Home Assistant bleibt funktionsfähig; nur die **Anfrage** ändert sich:
   Damit ist die Antwort auch reproduzierbar.
 - Kein `$e->getMessage()` nach außen; stattdessen `appendLog()`.
 - `session_start()` unterbleibt für Token-Anfragen — keine 2.880
-  Sessiondateien pro Tag mehr.
+  Sessiondateien pro Tag mehr. **Das ist kein App-Fix:** `auth_bootstrap()`
+  ruft `session_start()` bedingungslos und *bevor* das Token ausgewertet wird
+  (`auth/src/bootstrap.php:78` vs. `:118`). Die Korrektur gehört in die
+  Bibliothek und betrifft alle sieben Apps — eigene Aufgabe im Umsetzungsplan
+  (Task 3). Folge: Endpunkte, die Token annehmen, dürfen kein `csrf_verify()`
+  aufrufen (CSRF-Token brauchen eine Session; ein Bearer-Token ist gegen CSRF
+  ohnehin immun).
 
 Die Antwortstruktur bleibt Byte-für-Byte kompatibel.
 
