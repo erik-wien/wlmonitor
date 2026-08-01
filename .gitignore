@@ -2,7 +2,6 @@ backups/
 data/ratelimit.json
 data/status_cache.json
 deprecated/
-docs/superpowers
 web/Archiv/
 app.prod
 app.world4you
@@ -19,7 +18,6 @@ update.md
 # Personal / agent workflow — not for publication
 CLAUDE.md
 .claude/
-docs/superpowers/
 update.md
 .env
 .env.*
