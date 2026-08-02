@@ -87,3 +87,93 @@ function board_filter_station(array $station, ?array $stationFilter): ?array
     $station['lines'] = $lines;
     return $station;
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// Antwortform
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Verkehrsmittel-Typ der WL-API auf vier Werte normalisieren.
+ * Die WL-Kürzel (ptMetro, ptBusCity, ptTramWLB …) sind Aufrufer-Ballast.
+ */
+function board_type(string $wlType): string
+{
+    if (str_starts_with($wlType, 'ptMetro')) return 'metro';
+    if (str_starts_with($wlType, 'ptTram'))  return 'tram';
+    if (str_starts_with($wlType, 'ptBus'))   return 'bus';
+    if (str_starts_with($wlType, 'ptTrain')) return 'train';
+    return 'other';
+}
+
+/**
+ * Eine Abfahrt in die schlanke Form bringen.
+ *
+ * 'in' ist eine Zahl in Minuten; "fährt jetzt" ist 0 (die alte API kodiert
+ * das als String '*').
+ *
+ * 'towards' und 'line' erscheinen NUR bei Abweichung von der Zeile
+ * (Kurzführung, Ersatzverkehr). Ohne sie zeigte das Display „U6 →
+ * Siebenhirten in 7 min", während der Zug in Alterlaa endet — eine falsche
+ * Zeile ist schlimmer als eine fehlende.
+ *
+ * 'delayed' markiert die Abfahrt, die das Display invertiert darstellt.
+ *
+ * @return array{in: int, towards?: string, line?: string, delayed?: true}
+ */
+function board_departure(array $dep): array
+{
+    $t   = (string) ($dep['t'] ?? '0');
+    $out = ['in' => $t === '*' ? 0 : (int) $t];
+
+    if (!empty($dep['towards_override'])) $out['towards'] = (string) $dep['towards_override'];
+    if (!empty($dep['name_override']))    $out['line']    = (string) $dep['name_override'];
+    if (!empty($dep['jam']))              $out['delayed'] = true;
+
+    return $out;
+}
+
+/**
+ * Eine Linienzeile in die schlanke Form bringen.
+ *
+ * Weggelassen: direction, barrier_free, trafficjam — weder das Display noch
+ * Home Assistant benutzen sie. platform BLEIBT: es ist der Filterschlüssel
+ * und die stabile Identität der Zeile.
+ */
+function board_line(array $line): array
+{
+    return [
+        'line'       => (string) ($line['name'] ?? ''),
+        'platform'   => (string) ($line['platform'] ?? ''),
+        'towards'    => (string) ($line['towards'] ?? ''),
+        'type'       => board_type((string) ($line['type'] ?? '')),
+        'realtime'   => (bool) ($line['realtime_supported'] ?? true),
+        'alert'      => (bool) ($line['alert'] ?? false),
+        'departures' => array_map('board_departure', $line['departures'] ?? []),
+    ];
+}
+
+/**
+ * Einen Favoriten samt seiner Haltestellen in die Antwortform bringen.
+ *
+ * $fav ist eine Zeile aus favorites_get(): ['id', 'title', 'diva', 'filter'].
+ * $monitor ist die unveränderte Ausgabe von monitor_get().
+ */
+function board_favorite(array $fav, array $monitor): array
+{
+    $filter   = is_array($fav['filter'] ?? null) ? $fav['filter'] : [];
+    $stations = [];
+
+    foreach (board_stations_only($monitor) as $station) {
+        $diva     = (string) ($station['diva'] ?? '');
+        $gefiltert = board_filter_station($station, $filter[$diva] ?? null);
+        if ($gefiltert === null) continue;
+
+        $stations[] = [
+            'diva'  => $diva,
+            'name'  => (string) ($gefiltert['station_name'] ?? ''),
+            'lines' => array_map('board_line', $gefiltert['lines']),
+        ];
+    }
+
+    return ['id' => (int) $fav['id'], 'title' => (string) $fav['title'], 'stations' => $stations];
+}
