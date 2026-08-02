@@ -122,7 +122,7 @@ $rsyncExcludes = [
     'Archiv/',
     'backlog/',
     'scripts/',
-    'firmware/',
+    'epaper-monitor/',
     'config/',
     'data/',          // server-only runtime state
     'backups/',       // server-only

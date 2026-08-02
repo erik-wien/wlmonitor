@@ -5,7 +5,7 @@
 **Goal:** ESP32-Firmware, die alle 2 Minuten `board.php` abfragt und die nächsten
 Abfahrten zweier Favoriten auf einem Waveshare 7.5″ e-Paper HAT (B) zeigt.
 
-**Architecture:** PlatformIO-Projekt in `firmware/`. Reine Entscheidungslogik
+**Architecture:** PlatformIO-Projekt in `epaper-monitor/`. Reine Entscheidungslogik
 (JSON-Parsing, Darstellungsregeln, Fehlerklassifikation) liegt in
 `lib/boardlogic/` — kompiliert und getestet ohne Hardware (`pio test -e
 native`, Unity). Hardware-Code (WLAN, HTTP, GxEPD2-Rendering, Tiefschlaf) liegt
@@ -45,7 +45,7 @@ Python).
   WLAN-Fehler / 503 / unlesbare Antwort → Bild stehen lassen, **erst nach 3
   aufeinanderfolgenden Fehlversuchen** „offline“ anzeigen. `generated` älter
   als 15 Minuten → Zeitstempel im Header invertiert.
-- **`firmware/` wird nie deployt** — Ausschluss in beiden Deploy-Pfaden
+- **`epaper-monitor/` wird nie deployt** — Ausschluss in beiden Deploy-Pfaden
   (Task 1) ist Voraussetzung für alles Weitere.
 - **`config.h` geht nie ins Repo** (gitignored); `config.example.h` ist die
   einzige committete Vorlage.
@@ -55,9 +55,9 @@ Python).
 
 ---
 
-## Task 1: `firmware/` von beiden Deploy-Pfaden ausschließen
+## Task 1: `epaper-monitor/` von beiden Deploy-Pfaden ausschließen
 
-Muss vor jedem weiteren Task stehen: sobald `firmware/` existiert, darf kein
+Muss vor jedem weiteren Task stehen: sobald `epaper-monitor/` existiert, darf kein
 Deploy es versehentlich auf einen Webserver kopieren.
 
 **Files:**
@@ -68,18 +68,18 @@ Deploy es versehentlich auf einen Webserver kopieren.
 
 **Interfaces:** keine — reine Konfiguration, keine Funktionssignaturen.
 
-- [ ] **Step 1: `firmware/`-Ausschluss in `mcp/lib/rsync.sh` ergänzen**
+- [ ] **Step 1: `epaper-monitor/`-Ausschluss in `mcp/lib/rsync.sh` ergänzen**
 
 In `/Users/erikr/Git/mcp/lib/rsync.sh`, direkt nach der Zeile
 `--exclude="backlog/"` (aktuell Zeile 42) einfügen:
 
 ```bash
     --exclude="backlog/"
-    --exclude="firmware/"
+    --exclude="epaper-monitor/"
     --exclude="CLAUDE.md"
 ```
 
-- [ ] **Step 2: `firmware/`-Ausschluss in `wlmonitor/scripts/ssh_deploy.php` ergänzen**
+- [ ] **Step 2: `epaper-monitor/`-Ausschluss in `wlmonitor/scripts/ssh_deploy.php` ergänzen**
 
 In `/Users/erikr/Git/wlmonitor/scripts/ssh_deploy.php`, im Array
 `$rsyncExcludes`, direkt nach dem Eintrag `'scripts/',` (aktuell Zeile 124)
@@ -87,14 +87,14 @@ einfügen:
 
 ```php
     'scripts/',
-    'firmware/',
+    'epaper-monitor/',
 ```
 
 - [ ] **Step 3: Ausschluss gegen einen echten Marker beweisen**
 
 ```bash
 cd /Users/erikr/Git/wlmonitor
-mkdir -p firmware && touch firmware/.exclude-test
+mkdir -p firmware && touch epaper-monitor/.exclude-test
 rm -rf /tmp/wlmonitor-deploy-test
 bash /Users/erikr/Git/mcp/lib/rsync.sh local /Users/erikr/Git/wlmonitor /tmp/wlmonitor-deploy-test
 ls /tmp/wlmonitor-deploy-test/firmware 2>&1
@@ -109,7 +109,7 @@ danach ist wichtig: der Marker-Ordner darf Task 2 nicht im Weg stehen.
 - [ ] **Step 4: `$rsyncExcludes`-Eintrag verifizieren**
 
 ```bash
-grep -n "'firmware/'" /Users/erikr/Git/wlmonitor/scripts/ssh_deploy.php
+grep -n "'epaper-monitor/'" /Users/erikr/Git/wlmonitor/scripts/ssh_deploy.php
 ```
 
 Erwartet: ein Treffer, direkt nach der `'scripts/',`-Zeile.
@@ -120,7 +120,7 @@ Erwartet: ein Treffer, direkt nach der `'scripts/',`-Zeile.
 cd /Users/erikr/Git/mcp
 git add lib/rsync.sh
 git commit -m "$(cat <<'EOF'
-fix(deploy): firmware/ vom Sync ausschliessen (wlmonitor E-Paper-Projekt)
+fix(deploy): epaper-monitor/ vom Sync ausschliessen (wlmonitor E-Paper-Projekt)
 
 Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01Gpt6tdgtR4AFNeHFTLS53U
@@ -130,7 +130,7 @@ EOF
 cd /Users/erikr/Git/wlmonitor
 git add scripts/ssh_deploy.php
 git commit -m "$(cat <<'EOF'
-fix(deploy): firmware/ vom world4you-Sync ausschliessen
+fix(deploy): epaper-monitor/ vom world4you-Sync ausschliessen
 
 Co-Authored-By: Claude <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01Gpt6tdgtR4AFNeHFTLS53U
@@ -143,14 +143,14 @@ EOF
 ## Task 2: PlatformIO-Projektgerüst
 
 **Files:**
-- Create: `firmware/platformio.ini`
-- Create: `firmware/include/config.example.h`
-- Create: `firmware/.gitignore`
-- Create: `firmware/test/test_smoke/test_smoke.cpp`
+- Create: `epaper-monitor/platformio.ini`
+- Create: `epaper-monitor/include/config.example.h`
+- Create: `epaper-monitor/.gitignore`
+- Create: `epaper-monitor/test/test_smoke/test_smoke.cpp`
 
 **Interfaces:**
-- Produces: die Verzeichnisse `firmware/lib/boardlogic/` (reine Logik, ab
-  Task 3) und `firmware/src/` (Hardware-Code, ab Task 6). Die Konstanten aus
+- Produces: die Verzeichnisse `epaper-monitor/lib/boardlogic/` (reine Logik, ab
+  Task 3) und `epaper-monitor/src/` (Hardware-Code, ab Task 6). Die Konstanten aus
   `config.example.h` (`WIFI_SSID`, `WIFI_PASSWORD`, `BOARD_HOST`,
   `BOARD_PORT`, `BOARD_TOKEN`, `BOARD_FAV_IDS`, `POLL_INTERVAL_SEC`) werden
   ab Task 9 (`main.cpp`) verwendet — Namen hier verbindlich für den ganzen
@@ -167,7 +167,7 @@ Erwartet: eine Versionsnummer (kein „command not found“).
 
 - [ ] **Step 2: `platformio.ini` anlegen**
 
-`/Users/erikr/Git/wlmonitor/firmware/platformio.ini`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/platformio.ini`:
 
 ```ini
 ; PlatformIO-Projekt fuer den E-Paper-Abfahrtsmonitor (ESP32 + Waveshare
@@ -198,7 +198,7 @@ build_src_filter = -<*>
 
 - [ ] **Step 3: `.gitignore` anlegen**
 
-`/Users/erikr/Git/wlmonitor/firmware/.gitignore`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/.gitignore`:
 
 ```
 include/config.h
@@ -207,7 +207,7 @@ include/config.h
 
 - [ ] **Step 4: `config.example.h` anlegen**
 
-`/Users/erikr/Git/wlmonitor/firmware/include/config.example.h`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/include/config.example.h`:
 
 ```cpp
 #pragma once
@@ -238,7 +238,7 @@ include/config.h
 
 - [ ] **Step 5: Smoke-Test fuer die native Testumgebung**
 
-`/Users/erikr/Git/wlmonitor/firmware/test/test_smoke/test_smoke.cpp`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/test/test_smoke/test_smoke.cpp`:
 
 ```cpp
 #include <unity.h>
@@ -269,7 +269,7 @@ echte Logik dazu schreibt.
 
 ```bash
 cd /Users/erikr/Git/wlmonitor
-git add firmware/platformio.ini firmware/.gitignore firmware/include/config.example.h firmware/test/test_smoke/test_smoke.cpp
+git add epaper-monitor/platformio.ini epaper-monitor/.gitignore epaper-monitor/include/config.example.h epaper-monitor/test/test_smoke/test_smoke.cpp
 git commit -m "$(cat <<'EOF'
 feat(firmware): PlatformIO-Projektgeruest fuer den E-Paper-Monitor
 
@@ -287,9 +287,9 @@ Reine Datenschicht: JSON-Text hinein, `BoardResponse`-Struktur oder ein
 Fehlerstatus hinaus. Kein Netz, keine Hardware — vollständig nativ testbar.
 
 **Files:**
-- Create: `firmware/lib/boardlogic/board_model.h`
-- Create: `firmware/lib/boardlogic/board_model.cpp`
-- Create: `firmware/test/test_board_model/test_board_model.cpp`
+- Create: `epaper-monitor/lib/boardlogic/board_model.h`
+- Create: `epaper-monitor/lib/boardlogic/board_model.cpp`
+- Create: `epaper-monitor/test/test_board_model/test_board_model.cpp`
 
 **Interfaces:**
 - Consumes: nichts (erste reine Logik-Datei).
@@ -307,7 +307,7 @@ Fehlerstatus hinaus. Kein Netz, keine Hardware — vollständig nativ testbar.
 
 - [ ] **Step 1: Fehlschlagenden Test schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/test/test_board_model/test_board_model.cpp`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/test/test_board_model/test_board_model.cpp`:
 
 ```cpp
 #include <unity.h>
@@ -448,7 +448,7 @@ Erwartet: Fehler beim Kompilieren — `board_model.h` existiert noch nicht
 
 - [ ] **Step 3: `board_model.h` schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/lib/boardlogic/board_model.h`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/lib/boardlogic/board_model.h`:
 
 ```cpp
 #pragma once
@@ -503,7 +503,7 @@ ParseStatus parseBoardResponse(const std::string& json, BoardResponse& out);
 
 - [ ] **Step 4: `board_model.cpp` schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/lib/boardlogic/board_model.cpp`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/lib/boardlogic/board_model.cpp`:
 
 ```cpp
 #include "board_model.h"
@@ -582,7 +582,7 @@ Erwartet: alle 7 Tests PASSED.
 
 ```bash
 cd /Users/erikr/Git/wlmonitor
-git add firmware/lib/boardlogic/board_model.h firmware/lib/boardlogic/board_model.cpp firmware/test/test_board_model/test_board_model.cpp
+git add epaper-monitor/lib/boardlogic/board_model.h epaper-monitor/lib/boardlogic/board_model.cpp epaper-monitor/test/test_board_model/test_board_model.cpp
 git commit -m "$(cat <<'EOF'
 feat(firmware): board_model parst die board.php-Antwort
 
@@ -601,9 +601,9 @@ Reine Funktionen für alles, was Spec §7/§9 über Farbe, Stil, Kürzung und
 (`parseIso8601`/`estimateNow`/`isStale`, siehe Global Constraints).
 
 **Files:**
-- Create: `firmware/lib/boardlogic/layout.h`
-- Create: `firmware/lib/boardlogic/layout.cpp`
-- Create: `firmware/test/test_layout/test_layout.cpp`
+- Create: `epaper-monitor/lib/boardlogic/layout.h`
+- Create: `epaper-monitor/lib/boardlogic/layout.cpp`
+- Create: `epaper-monitor/test/test_layout/test_layout.cpp`
 
 **Interfaces:**
 - Consumes: nichts (unabhängig von `board_model`).
@@ -621,7 +621,7 @@ Reine Funktionen für alles, was Spec §7/§9 über Farbe, Stil, Kürzung und
 
 - [ ] **Step 1: Fehlschlagenden Test schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/test/test_layout/test_layout.cpp`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/test/test_layout/test_layout.cpp`:
 
 ```cpp
 #include <unity.h>
@@ -756,7 +756,7 @@ Erwartet: Kompilierfehler, `layout.h` fehlt.
 
 - [ ] **Step 3: `layout.h` schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/lib/boardlogic/layout.h`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/lib/boardlogic/layout.h`:
 
 ```cpp
 #pragma once
@@ -810,7 +810,7 @@ std::string truncateToWidth(const std::string& text, int maxWidthPx, int avgChar
 
 - [ ] **Step 4: `layout.cpp` schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/lib/boardlogic/layout.cpp`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/lib/boardlogic/layout.cpp`:
 
 ```cpp
 #include "layout.h"
@@ -917,7 +917,7 @@ werden.
 
 ```bash
 cd /Users/erikr/Git/wlmonitor
-git add firmware/lib/boardlogic/layout.h firmware/lib/boardlogic/layout.cpp firmware/test/test_layout/test_layout.cpp
+git add epaper-monitor/lib/boardlogic/layout.h epaper-monitor/lib/boardlogic/layout.cpp epaper-monitor/test/test_layout/test_layout.cpp
 git commit -m "$(cat <<'EOF'
 feat(firmware): layout - Farb-/Stilregeln, Kuerzung, Uhr ohne NTP
 
@@ -936,9 +936,9 @@ und dem Fehlerzähler des vorigen Zyklus wird der neue Zähler und die
 anzuzeigende Kopfzeilen-Meldung.
 
 **Files:**
-- Create: `firmware/lib/boardlogic/error_state.h`
-- Create: `firmware/lib/boardlogic/error_state.cpp`
-- Create: `firmware/test/test_error_state/test_error_state.cpp`
+- Create: `epaper-monitor/lib/boardlogic/error_state.h`
+- Create: `epaper-monitor/lib/boardlogic/error_state.cpp`
+- Create: `epaper-monitor/test/test_error_state/test_error_state.cpp`
 
 **Interfaces:**
 - Consumes: nichts (unabhängig von `board_model`/`layout`).
@@ -951,7 +951,7 @@ anzuzeigende Kopfzeilen-Meldung.
 
 - [ ] **Step 1: Fehlschlagenden Test schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/test/test_error_state/test_error_state.cpp`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/test/test_error_state/test_error_state.cpp`:
 
 ```cpp
 #include <unity.h>
@@ -1027,7 +1027,7 @@ Erwartet: Kompilierfehler, `error_state.h` fehlt.
 
 - [ ] **Step 3: `error_state.h` schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/lib/boardlogic/error_state.h`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/lib/boardlogic/error_state.h`:
 
 ```cpp
 #pragma once
@@ -1058,7 +1058,7 @@ ErrorState nextErrorState(FetchOutcome outcome, int previousConsecutiveFailures)
 
 - [ ] **Step 4: `error_state.cpp` schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/lib/boardlogic/error_state.cpp`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/lib/boardlogic/error_state.cpp`:
 
 ```cpp
 #include "error_state.h"
@@ -1104,7 +1104,7 @@ Erwartet: alle Tests aus Task 3, 4 und 5 zusammen PASSED (32 insgesamt).
 
 ```bash
 cd /Users/erikr/Git/wlmonitor
-git add firmware/lib/boardlogic/error_state.h firmware/lib/boardlogic/error_state.cpp firmware/test/test_error_state/test_error_state.cpp
+git add epaper-monitor/lib/boardlogic/error_state.h epaper-monitor/lib/boardlogic/error_state.cpp epaper-monitor/test/test_error_state/test_error_state.cpp
 git commit -m "$(cat <<'EOF'
 feat(firmware): error_state - Offline-/Token-Erkennung ueber mehrere Zyklen
 
@@ -1125,14 +1125,14 @@ Test-Bild geprüft — unabhängig davon, ob das echte Logo gerade erreichbar
 ist.
 
 **Files:**
-- Create: `firmware/tools/convert_logo.py`
-- Create: `firmware/tools/test_convert_logo.py`
-- Create: `firmware/src/logo.h` (generiert, aber committet — das Zielgerät
+- Create: `epaper-monitor/tools/convert_logo.py`
+- Create: `epaper-monitor/tools/test_convert_logo.py`
+- Create: `epaper-monitor/src/logo.h` (generiert, aber committet — das Zielgerät
   soll keine SVG-Toolchain brauchen)
 
 **Interfaces:**
 - Consumes: nichts.
-- Produces: `firmware/src/logo.h` mit `#define LOGO_WIDTH`, `#define
+- Produces: `epaper-monitor/src/logo.h` mit `#define LOGO_WIDTH`, `#define
   LOGO_HEIGHT`, `const unsigned char LOGO_BLACK[] PROGMEM`, `const unsigned
   char LOGO_RED[] PROGMEM` — 1-Bit-pro-Pixel, zeilenweise auf Byte-Grenzen
   aufgefüllt, MSB zuerst (Standardform für `Adafruit_GFX::drawBitmap`).
@@ -1149,7 +1149,7 @@ Erwartet: eine Versionsnummer.
 
 - [ ] **Step 2: Fehlschlagenden Test schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/tools/test_convert_logo.py`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/tools/test_convert_logo.py`:
 
 ```python
 import unittest
@@ -1200,7 +1200,7 @@ if __name__ == "__main__":
 - [ ] **Step 3: Test laufen lassen, Fehlschlag bestätigen**
 
 ```bash
-cd /Users/erikr/Git/wlmonitor/firmware/tools
+cd /Users/erikr/Git/wlmonitor/epaper-monitor/tools
 python3 -m unittest test_convert_logo.py
 ```
 
@@ -1208,7 +1208,7 @@ Erwartet: `ModuleNotFoundError: No module named 'convert_logo'`.
 
 - [ ] **Step 4: `convert_logo.py` schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/tools/convert_logo.py`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/tools/convert_logo.py`:
 
 ```python
 #!/usr/bin/env python3
@@ -1304,7 +1304,7 @@ if __name__ == "__main__":
 - [ ] **Step 5: Test laufen lassen, Erfolg bestätigen**
 
 ```bash
-cd /Users/erikr/Git/wlmonitor/firmware/tools
+cd /Users/erikr/Git/wlmonitor/epaper-monitor/tools
 python3 -m unittest test_convert_logo.py
 ```
 
@@ -1315,15 +1315,15 @@ Erwartet: alle 5 Tests OK.
 ```bash
 curl -sL "https://upload.wikimedia.org/wikipedia/commons/5/59/Wiener_Linien_logo.svg" -o /tmp/wl-logo.svg
 rsvg-convert -w 960 -h 224 /tmp/wl-logo.svg -o /tmp/wl-logo.png
-cd /Users/erikr/Git/wlmonitor/firmware/tools
+cd /Users/erikr/Git/wlmonitor/epaper-monitor/tools
 python3 convert_logo.py /tmp/wl-logo.png ../src/logo.h
 ```
 
 - [ ] **Step 7: Erzeugte Datei prüfen**
 
 ```bash
-head -8 /Users/erikr/Git/wlmonitor/firmware/src/logo.h
-grep -c "0x" /Users/erikr/Git/wlmonitor/firmware/src/logo.h
+head -8 /Users/erikr/Git/wlmonitor/epaper-monitor/src/logo.h
+grep -c "0x" /Users/erikr/Git/wlmonitor/epaper-monitor/src/logo.h
 ```
 
 Erwartet: `#define LOGO_WIDTH 240` / `#define LOGO_HEIGHT 56` in den ersten
@@ -1334,7 +1334,7 @@ ist die Datei leer geblieben).
 
 ```bash
 cd /Users/erikr/Git/wlmonitor
-git add firmware/tools/convert_logo.py firmware/tools/test_convert_logo.py firmware/src/logo.h
+git add epaper-monitor/tools/convert_logo.py epaper-monitor/tools/test_convert_logo.py epaper-monitor/src/logo.h
 git commit -m "$(cat <<'EOF'
 feat(firmware): Wiener-Linien-Logo als Schwarz/Rot-Bitmap fuer GxEPD2
 
@@ -1353,8 +1353,8 @@ nativ testbar. Verifikation: Cross-Compile für `esp32dev` (kein Gerät
 nötig, prüft aber echte API-Nutzung/Includes/Linker).
 
 **Files:**
-- Create: `firmware/src/board_client.h`
-- Create: `firmware/src/board_client.cpp`
+- Create: `epaper-monitor/src/board_client.h`
+- Create: `epaper-monitor/src/board_client.cpp`
 
 **Interfaces:**
 - Consumes: nichts direkt (liefert rohen JSON-Text als `std::string`, den
@@ -1366,7 +1366,7 @@ nötig, prüft aber echte API-Nutzung/Includes/Linker).
 
 - [ ] **Step 1: `board_client.h` schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/src/board_client.h`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/src/board_client.h`:
 
 ```cpp
 #pragma once
@@ -1389,7 +1389,7 @@ BoardFetchResult fetchBoard(const char* host, uint16_t port, const char* favIds,
 
 - [ ] **Step 2: `board_client.cpp` schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/src/board_client.cpp`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/src/board_client.cpp`:
 
 ```cpp
 #include "board_client.h"
@@ -1443,7 +1443,7 @@ Hardware.
 
 ```bash
 cd /Users/erikr/Git/wlmonitor
-git add firmware/src/board_client.h firmware/src/board_client.cpp
+git add epaper-monitor/src/board_client.h epaper-monitor/src/board_client.cpp
 git commit -m "$(cat <<'EOF'
 feat(firmware): board_client - HTTP-GET gegen den LAN-Endpunkt
 
@@ -1463,9 +1463,9 @@ Task 3–6 für alle Entscheidungen (Farbe, Kürzung, Stale-Erkennung) — hier
 steht nur noch das Zeichnen.
 
 **Files:**
-- Create: `firmware/src/panel_select.h`
-- Create: `firmware/src/display.h`
-- Create: `firmware/src/display.cpp`
+- Create: `epaper-monitor/src/panel_select.h`
+- Create: `epaper-monitor/src/display.h`
+- Create: `epaper-monitor/src/display.cpp`
 
 **Interfaces:**
 - Consumes: `BoardResponse`/`Favorite`/`Station`/`Line`/`Departure` (Task 3),
@@ -1486,7 +1486,7 @@ dokumentiert ist. Dieser Plan geht von `GxEPD2_750c_Z08` aus (SSD1677,
 800×480, B-Variante) — falls das Modul einen anderen Controller hat, in
 Schritt 2 die Klasse tauschen.
 
-`/Users/erikr/Git/wlmonitor/firmware/src/panel_select.h`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/src/panel_select.h`:
 
 ```cpp
 #pragma once
@@ -1511,7 +1511,7 @@ Schritt 2 die Klasse tauschen.
 
 - [ ] **Step 2: `display.h` schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/src/display.h`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/src/display.h`:
 
 ```cpp
 #pragma once
@@ -1529,7 +1529,7 @@ void renderBoard(const BoardResponse& board, time_t generatedEpoch, time_t estim
 
 - [ ] **Step 3: `display.cpp` schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/src/display.cpp`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/src/display.cpp`:
 
 ```cpp
 #include "display.h"
@@ -1691,7 +1691,7 @@ in Task 9 am echten Gerät visuell nachjustiert, falls nötig.
 
 ```bash
 cd /Users/erikr/Git/wlmonitor
-git add firmware/src/panel_select.h firmware/src/display.h firmware/src/display.cpp
+git add epaper-monitor/src/panel_select.h epaper-monitor/src/display.h epaper-monitor/src/display.cpp
 git commit -m "$(cat <<'EOF'
 feat(firmware): display - GxEPD2-Rendering der zwei Spalten
 
@@ -1711,8 +1711,8 @@ existiert — hier findet die einzige manuelle Hardware-Verifikation des
 gesamten Plans statt.
 
 **Files:**
-- Create: `firmware/src/main.cpp`
-- Create: `firmware/README.md`
+- Create: `epaper-monitor/src/main.cpp`
+- Create: `epaper-monitor/README.md`
 
 **Interfaces:**
 - Consumes: alles aus Task 2–8 (`config.h`-Konstanten, `fetchBoard`,
@@ -1722,7 +1722,7 @@ gesamten Plans statt.
 
 - [ ] **Step 1: `main.cpp` schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/src/main.cpp`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/src/main.cpp`:
 
 ```cpp
 #include <Arduino.h>
@@ -1839,10 +1839,10 @@ Erwartet: `SUCCESS`.
 
 - [ ] **Step 3: `README.md` schreiben**
 
-`/Users/erikr/Git/wlmonitor/firmware/README.md`:
+`/Users/erikr/Git/wlmonitor/epaper-monitor/README.md`:
 
 ```markdown
-# firmware/
+# epaper-monitor/
 
 ESP32-Firmware für den E-Paper-Abfahrtsmonitor (Waveshare 7.5″ e-Paper HAT
 (B), 800×480). Spec:
@@ -1920,7 +1920,7 @@ funktioniert"):
 
 ```bash
 cd /Users/erikr/Git/wlmonitor
-git add firmware/src/main.cpp firmware/README.md
+git add epaper-monitor/src/main.cpp epaper-monitor/README.md
 git commit -m "$(cat <<'EOF'
 feat(firmware): main.cpp - Ablaufsteuerung, RTC-Zeitanker, Tiefschlaf
 
