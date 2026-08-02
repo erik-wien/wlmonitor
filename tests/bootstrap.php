@@ -23,6 +23,7 @@ require_once __DIR__ . '/../inc/favorites.php';
 require_once __DIR__ . '/../inc/stations.php';
 require_once __DIR__ . '/../inc/admin.php';
 require_once __DIR__ . '/../inc/monitor.php';
+require_once __DIR__ . '/../inc/board.php';
 
 if (!file_exists(__DIR__ . '/../data')) {
     mkdir(__DIR__ . '/../data', 0755, true);
