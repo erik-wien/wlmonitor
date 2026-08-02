@@ -35,23 +35,49 @@ function board_stations_only(array $monitor): array
 }
 
 /**
- * Zeilen entdoppeln. Identität ist (Linie, Steig, Ziel).
+ * Zeitwert einer rohen Abfahrt (Form von monitor_get()) in Minuten, zum
+ * Sortieren/Entdoppeln. '*' ("faehrt jetzt") zaehlt als 0, wie in
+ * board_departure().
+ */
+function board_departure_time(array $dep): int
+{
+    $t = (string) ($dep['t'] ?? '0');
+    return $t === '*' ? 0 : (int) $t;
+}
+
+/**
+ * Zeilen entdoppeln. Identität ist (Linie, Steig, Ziel); die Abfahrten
+ * gleicher Einträge werden zusammengeführt statt der Folgeeintrag verworfen —
+ * sonst gehen echte Abfahrten verloren.
  *
  * Am Westbahnhof liefert die Kette "U3 Steig 1 Simmering" zweimal (beobachtet
- * 2026-08-01). Woher das kommt, ist offen — auf dem Display wäre es eine
- * doppelte Zeile, also wird hier entdoppelt.
+ * 2026-08-01), und am 2026-08-02 live gemessen: "E3|1|Breitensee S" doppelt,
+ * mit der einzigen 66-Minuten-Abfahrt NUR im zweiten Eintrag — ein simples
+ * Verwerfen hätte sie verschluckt.
  */
 function board_dedupe_lines(array $lines): array
 {
-    $gesehen = [];
-    $out     = [];
+    $out = [];
     foreach ($lines as $l) {
         $key = ($l['name'] ?? '') . "\0" . ($l['platform'] ?? '') . "\0" . ($l['towards'] ?? '');
-        if (isset($gesehen[$key])) continue;
-        $gesehen[$key] = true;
-        $out[] = $l;
+        if (!isset($out[$key])) {
+            $out[$key] = $l;
+            continue;
+        }
+        $merged = array_merge($out[$key]['departures'] ?? [], $l['departures'] ?? []);
+        usort($merged, static fn (array $a, array $b): int => board_departure_time($a) <=> board_departure_time($b));
+
+        $ohneDubletten = [];
+        $gesehen       = [];
+        foreach ($merged as $dep) {
+            $t = board_departure_time($dep);
+            if (isset($gesehen[$t])) continue;
+            $gesehen[$t] = true;
+            $ohneDubletten[] = $dep;
+        }
+        $out[$key]['departures'] = $ohneDubletten;
     }
-    return $out;
+    return array_values($out);
 }
 
 /**

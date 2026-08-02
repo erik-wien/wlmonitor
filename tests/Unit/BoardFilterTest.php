@@ -122,4 +122,47 @@ class BoardFilterTest extends TestCase
         ];
         $this->assertCount(2, board_dedupe_lines($lines));
     }
+
+    /**
+     * B3 (Review 2026-08-02, belegt am Westbahnhof 2026-08-02):
+     *   DOPPELT: E3|1|Breitensee S
+     *      Eintrag 1: 3, 13
+     *      Eintrag 2: 66
+     * board_dedupe_lines() darf den zweiten Eintrag nicht mitsamt seiner
+     * Abfahrten verwerfen — die 66-Minuten-Abfahrt muss erhalten bleiben,
+     * zusammengefuehrt und nach Zeit sortiert.
+     */
+    public function test_dedupe_merges_departures_of_duplicate_entries_instead_of_dropping_them(): void
+    {
+        $entry1 = $this->line('E3', '1', 'Breitensee S');
+        $entry1['departures'] = [['t' => '3', 'bf' => false, 'jam' => false,
+            'name_override' => null, 'towards_override' => null],
+            ['t' => '13', 'bf' => false, 'jam' => false,
+             'name_override' => null, 'towards_override' => null]];
+
+        $entry2 = $this->line('E3', '1', 'Breitensee S');
+        $entry2['departures'] = [['t' => '66', 'bf' => false, 'jam' => false,
+            'name_override' => null, 'towards_override' => null]];
+
+        $out = board_dedupe_lines([$entry1, $entry2]);
+
+        $this->assertCount(1, $out, 'still one line, not two');
+        $this->assertSame(['3', '13', '66'], array_column($out[0]['departures'], 't'),
+            'all three departures survive, sorted by time');
+    }
+
+    public function test_dedupe_removes_duplicate_departures_at_the_same_time(): void
+    {
+        $entry1 = $this->line('U6', '1', 'Floridsdorf');
+        $entry1['departures'] = [['t' => '5', 'bf' => false, 'jam' => false,
+            'name_override' => null, 'towards_override' => null]];
+
+        $entry2 = $this->line('U6', '1', 'Floridsdorf');
+        $entry2['departures'] = [['t' => '5', 'bf' => false, 'jam' => false,
+            'name_override' => null, 'towards_override' => null]];
+
+        $out = board_dedupe_lines([$entry1, $entry2]);
+
+        $this->assertCount(1, $out[0]['departures'], 'the same minute is not listed twice');
+    }
 }
