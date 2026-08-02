@@ -136,4 +136,28 @@ class BoardShapeTest extends TestCase
         $fav = ['id' => 1, 'title' => 'Alles', 'diva' => '1', 'filter' => null];
         $this->assertCount(1, board_favorite($fav, $monitor)['stations'][0]['lines']);
     }
+
+    /**
+     * B1 (Review 2026-08-02): web/board.php ruft monitor_get() EINMAL mit der
+     * Vereinigung der DIVAs ALLER gewaehlten Favoriten auf und reicht diese
+     * gemeinsame Map an jeden board_favorite()-Aufruf weiter. Ein Favorit darf
+     * daraus nur SEINE EIGENEN Stationen ziehen — fremde Stationen (hier '222',
+     * die zu einem anderen Favoriten gehoert) duerfen nicht erscheinen, auch
+     * wenn sie in der Map stehen.
+     */
+    public function test_favorite_shows_only_its_own_stations_not_every_station_in_the_shared_monitor(): void
+    {
+        $line = static fn (string $name) => ['name' => $name, 'towards' => 'Z', 'type' => 'ptTram',
+            'platform' => '1', 'realtime_supported' => true, 'alert' => false, 'departures' => []];
+        $monitor = [
+            '111' => ['id' => '111', 'diva' => '111', 'station_name' => 'Halt 111', 'lines' => [$line('L111')]],
+            '222' => ['id' => '222', 'diva' => '222', 'station_name' => 'Halt 222', 'lines' => [$line('L222')]],
+        ];
+        $fav = ['id' => 1, 'title' => 'A', 'diva' => '111',
+                'filter' => ['111' => [['line' => 'L111', 'platform' => '1']]]];
+
+        $out = board_favorite($fav, $monitor);
+
+        $this->assertSame(['111'], array_column($out['stations'], 'diva'));
+    }
 }

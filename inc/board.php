@@ -163,9 +163,20 @@ function board_favorite(array $fav, array $monitor): array
     $filter   = is_array($fav['filter'] ?? null) ? $fav['filter'] : [];
     $stations = [];
 
+    $byDiva = [];
     foreach (board_stations_only($monitor) as $station) {
-        $diva     = (string) ($station['diva'] ?? '');
-        $gefiltert = board_filter_station($station, $filter[$diva] ?? null);
+        $byDiva[(string) ($station['diva'] ?? '')] = $station;
+    }
+
+    // $monitor is shared across ALL selected favorites (web/board.php fetches
+    // one monitor for the union of their DIVAs). Iterate the FAVORITE's own
+    // DIVA list, not the shared map — otherwise a sibling favorite's stations
+    // leak in here with no filter entry of their own, i.e. unfiltered.
+    foreach (explode(',', (string) ($fav['diva'] ?? '')) as $diva) {
+        $diva = trim($diva);
+        if ($diva === '' || !isset($byDiva[$diva])) continue;
+
+        $gefiltert = board_filter_station($byDiva[$diva], $filter[$diva] ?? null);
         if ($gefiltert === null) continue;
 
         $stations[] = [
