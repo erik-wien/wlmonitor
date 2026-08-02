@@ -46,9 +46,9 @@ $diva = sanitizeDivaInput((string) ($_GET['diva'] ?? '60200103'));
 try {
     $data = monitor_get($con, $diva, $maxDep);
     echo json_encode($data, JSON_PRETTY_PRINT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_THROW_ON_ERROR);
-} catch (Throwable $ex) {
+} catch (Throwable $e) {
     // Klartext geht nur ins Log (§21) — dem Client bleibt nur die Kennung.
-    appendLog($con, 'monitor_json', 'Fehler: ' . $ex->getMessage());
+    appendLog($con, 'monitor_json', 'Fehler: ' . $e->getMessage());
     http_response_code(503);
     echo json_encode(['error' => 'upstream_unavailable']);
 }

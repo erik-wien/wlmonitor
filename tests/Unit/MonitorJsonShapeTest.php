@@ -23,8 +23,14 @@ class MonitorJsonShapeTest extends TestCase
             'Token-Pflicht fehlt');
         $this->assertStringNotContainsString('$_SESSION', $src,
             'Der Endpunkt darf keine Sitzung mehr anfassen');
-        $this->assertStringNotContainsString('$e->getMessage()', $src,
-            'Interne Fehlertexte duerfen nicht nach aussen');
+        // Die Regel ist nicht "das Wort getMessage() kommt nicht vor", sondern
+        // "die Ursache geht ins Log, nicht zum Client". Ein Textverbot wuerde
+        // sonst den Variablennamen der Exception diktieren.
+        foreach (explode("\n", $src) as $nr => $zeile) {
+            if (!str_contains($zeile, 'getMessage()')) continue;
+            $this->assertStringContainsString('appendLog(', $zeile,
+                'getMessage() darf nur in einem appendLog()-Aufruf stehen, Zeile ' . ($nr + 1));
+        }
         $this->assertStringContainsString('appendLog(', $src,
             'Jeder Fehlerpfad muss loggen (§21)');
     }
