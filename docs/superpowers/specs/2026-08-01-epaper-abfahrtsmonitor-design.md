@@ -285,10 +285,21 @@ eine Schleife **und** hält den späteren Akku-Versuch offen (~10 µA statt
   `fontconvert`-Ausgabe eingebettet.
 - **Keine Uhr nötig.** Der Stand-Zeitstempel kommt aus `generated` der
   Antwort; NTP entfällt.
-- **Zugangsdaten** (WLAN, Token, Favoriten-IDs) in `firmware/config.h`, die
-  **nicht** ins Repo kommt (`config.example.h` als Vorlage, `.gitignore`).
-- **TLS:** wlmonitor läuft über HTTPS. Das Wurzelzertifikat wird eingebettet.
-  Risiko: läuft es aus, schweigt das Display. Deshalb Punkt 9.
+- **Zugangsdaten** (WLAN, Token, Favoriten-IDs) in `firmware/include/config.h`,
+  die **nicht** ins Repo kommt (`config.example.h` als Vorlage, `.gitignore`).
+- **Verbindung (nachgetragen 2026-08-02):** Das Display steht ausschließlich zu
+  Hause. Statt HTTPS über die öffentliche `wlmonitor.eriks.cloud`-Adresse
+  spricht die Firmware **Klartext-HTTP** mit einem eigenen LAN-Listener auf
+  akadbrain: `http://10.10.10.18:8090/board.php`, der ausschließlich diesen
+  einen Pfad freigibt (alles andere 404; Login/Admin bleiben nur über
+  HTTPS/Cloudflare erreichbar — Details:
+  `docs/deploy-board-endpunkt.md`). Das erspart ein eingebettetes
+  Root-Zertifikat samt Ablaufpflege (Punkt 9 der ursprünglichen Fassung) und
+  NTP für die TLS-Zeitprüfung. Feste IP statt `akadbrain.local`/mDNS: kein
+  zusätzlicher mDNS-Stack auf dem ESP32, keine Abfragezeit pro
+  Weckzyklus — relevant für den geplanten Akkubetrieb. Das Bearer-Token geht
+  damit unverschlüsselt über die Luft (WPA2 verschlüsselt pro Station;
+  außerhalb des WLANs nicht einsehbar).
 
 ## 9. Fehlerfälle
 
