@@ -187,3 +187,40 @@ function monitor_get(mysqli $con, string $divaRaw, int $maxDepartures): array {
 
     return $result;
 }
+
+require_once __DIR__ . '/stations.php'; // for diva_info(), used below
+
+/**
+ * Inject empty placeholder station entries for any requested DIVA missing
+ * from a monitor_get() result.
+ *
+ * The Wiener Linien API silently omits stops with no upcoming departures.
+ * Without a placeholder, a filtered favourite whose only station has no
+ * current service would simply disappear from the response — indistinguishable
+ * from normal operation, which is exactly the failure this guards against
+ * (filtered-favourite cards must always be visible). Originally in
+ * web/api.php; shared here so web/board.php gets the same guarantee.
+ *
+ * @param string $requestedDivaRaw Comma-separated DIVA numbers that were requested.
+ */
+function monitor_inject_missing_stations(mysqli $con, array $monitor, string $requestedDivaRaw): array
+{
+    $requestedDivas = array_filter(array_map('trim', explode(',', $requestedDivaRaw)));
+    $returnedDivas  = [];
+    foreach ($monitor as $v) {
+        if (is_array($v) && isset($v['diva'])) $returnedDivas[] = $v['diva'];
+    }
+    $missingDivas = array_diff($requestedDivas, $returnedDivas);
+    if (!empty($missingDivas)) {
+        $nameMap = diva_info($con, array_values($missingDivas));
+        foreach ($missingDivas as $missingDiva) {
+            $monitor['__stop_' . $missingDiva] = [
+                'id'           => '__stop_' . $missingDiva,
+                'diva'         => $missingDiva,
+                'station_name' => $nameMap[$missingDiva]['station'] ?? $missingDiva,
+                'lines'        => [],
+            ];
+        }
+    }
+    return $monitor;
+}

@@ -53,9 +53,29 @@ try {
         board_out(['generated' => date('c'), 'favorites' => []]);
     }
 
+    $divas = board_all_divas($favs);
+
     // Zwei Abfahrten je Zeile — genau das, was das Layout zeigt. Mehr waere
     // unbenutzte Nutzlast auf einem Geraet mit wenig Heap.
-    $monitor = monitor_get($con, board_all_divas($favs), 2);
+    try {
+        $monitor = monitor_get($con, $divas, 2);
+    } catch (RuntimeException $e) {
+        // "Keine Abfahrten fuer keine der angefragten DIVAs" ist kein
+        // Upstream-Ausfall, sondern ein gueltiger Zustand (WL-API laesst
+        // Haltestellen ohne bevorstehende Abfahrten stillschweigend weg) —
+        // nur DIESE eine RuntimeException wird so behandelt, alle anderen
+        // (API nicht erreichbar, kaputtes JSON) bleiben ein 503 (s.u.).
+        if (!str_contains($e->getMessage(), 'No monitors found')) {
+            throw $e;
+        }
+        $monitor = [];
+    }
+
+    // Die WL-API laesst Haltestellen ohne bevorstehende Abfahrten
+    // stillschweigend weg. Ohne Platzhalter wuerde die Karte einer
+    // gefilterten Haltestelle verschwinden — nicht von "alles normal" zu
+    // unterscheiden.
+    $monitor = monitor_inject_missing_stations($con, $monitor, $divas);
 
     $out = ['generated' => date('c'), 'favorites' => []];
     foreach ($favs as $fav) {

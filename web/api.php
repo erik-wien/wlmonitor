@@ -131,23 +131,7 @@ try {
             // The WL API silently omits stops with no upcoming departures.
             // Inject empty placeholder entries so the JS can render a card for
             // every requested DIVA (filtered-favourite cards must always be visible).
-            $requestedDivas = array_filter(array_map('trim', explode(',', $diva)));
-            $returnedDivas  = [];
-            foreach ($monitorData as $k => $v) {
-                if (is_array($v) && isset($v['diva'])) $returnedDivas[] = $v['diva'];
-            }
-            $missingDivas = array_diff($requestedDivas, $returnedDivas);
-            if (!empty($missingDivas)) {
-                $nameMap = diva_info($con, array_values($missingDivas));
-                foreach ($missingDivas as $missingDiva) {
-                    $monitorData['__stop_' . $missingDiva] = [
-                        'id'           => '__stop_' . $missingDiva,
-                        'diva'         => $missingDiva,
-                        'station_name' => $nameMap[$missingDiva]['station'] ?? $missingDiva,
-                        'lines'        => [],
-                    ];
-                }
-            }
+            $monitorData = monitor_inject_missing_stations($con, $monitorData, $diva);
 
             api_json($monitorData);
 
