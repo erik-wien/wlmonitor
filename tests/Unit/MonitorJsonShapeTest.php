@@ -34,4 +34,25 @@ class MonitorJsonShapeTest extends TestCase
         $this->assertStringContainsString('appendLog(', $src,
             'Jeder Fehlerpfad muss loggen (§21)');
     }
+
+    /**
+     * B4 (Review 2026-08-02): die departures-Abfrage stand VOR dem try —
+     * mysqli laeuft im Exception-Modus (MYSQLI_REPORT_STRICT), ein fehlendes
+     * GRANT oder eine fehlende Tabelle waere dort ein unbehandelter Fatal
+     * (kein appendLog(), kaputtes JSON). web/board.php zieht den analogen
+     * favorites_get()-Aufruf bewusst in den try-Block — hier muss dieselbe
+     * DB-Abfrage ebenfalls DRIN liegen, nicht davor.
+     */
+    public function test_preferences_query_is_inside_the_protected_try_block(): void
+    {
+        $src = file_get_contents(__DIR__ . '/../../web/monitor_json.php');
+
+        $tryPos   = strpos($src, 'try {');
+        $queryPos = strpos($src, 'FROM wl_preferences');
+
+        $this->assertNotFalse($tryPos, 'no try block found');
+        $this->assertNotFalse($queryPos, 'no wl_preferences query found');
+        $this->assertGreaterThan($tryPos, $queryPos,
+            'the wl_preferences query must run INSIDE the try block, not before it');
+    }
 }
