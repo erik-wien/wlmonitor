@@ -98,7 +98,10 @@ class MonitorParserTest extends TestCase
         $this->assertSame('H',         $line0['direction']);
         $this->assertSame('1',         $line0['platform']);
         $this->assertSame(
-            [['t' => '3', 'bf' => false], ['t' => '8', 'bf' => false]],
+            [['t' => '3', 'bf' => false, 'jam' => false,
+              'name_override' => null, 'towards_override' => null],
+             ['t' => '8', 'bf' => false, 'jam' => false,
+              'name_override' => null, 'towards_override' => null]],
             $line0['departures']
         );
         $this->assertSame(1,           $result['trains']);
@@ -140,7 +143,10 @@ class MonitorParserTest extends TestCase
         }
 
         $this->assertSame(
-            [['t' => '*', 'bf' => false], ['t' => '5', 'bf' => false]],
+            [['t' => '*', 'bf' => false, 'jam' => false,
+              'name_override' => null, 'towards_override' => null],
+             ['t' => '5', 'bf' => false, 'jam' => false,
+              'name_override' => null, 'towards_override' => null]],
             $result['STS123']['lines'][0]['departures']
         );
     }
@@ -182,7 +188,8 @@ class MonitorParserTest extends TestCase
 
         // Only 1 departure allowed; the third should be cut off
         $this->assertSame(
-            [['t' => '1', 'bf' => false]],
+            [['t' => '1', 'bf' => false, 'jam' => false,
+              'name_override' => null, 'towards_override' => null]],
             $result['TST1']['lines'][0]['departures']
         );
     }
