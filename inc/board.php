@@ -177,3 +177,52 @@ function board_favorite(array $fav, array $monitor): array
 
     return ['id' => (int) $fav['id'], 'title' => (string) $fav['title'], 'stations' => $stations];
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// Auswahl
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Favoriten nach dem ?fav=-Parameter auswählen.
+ *
+ * $alle ist die Liste aus favorites_get() — sie enthält bereits NUR die
+ * Favoriten des Token-Benutzers. Unbekannte IDs werden still übergangen:
+ * ein Fehler oder eine abweichende Antwort verriete, ob eine fremde ID
+ * existiert.
+ *
+ * Leerer Parameter → alle, in der Reihenfolge von favorites_get() (sort, id).
+ */
+function board_selected_favorites(array $alle, string $favParam): array
+{
+    $favParam = trim($favParam);
+    if ($favParam === '') return $alle;
+
+    $nachId = [];
+    foreach ($alle as $f) $nachId[(int) $f['id']] = $f;
+
+    $out = [];
+    foreach (explode(',', $favParam) as $roh) {
+        $roh = trim($roh);
+        if ($roh === '' || !ctype_digit($roh)) continue;
+        $id = (int) $roh;
+        if (isset($nachId[$id])) $out[] = $nachId[$id];
+    }
+    return $out;
+}
+
+/**
+ * Alle DIVAs der gewählten Favoriten als kommaseparierte Liste, entdoppelt.
+ * Eine Haltestelle, die in zwei Favoriten vorkommt, wird bei der WL-API nur
+ * einmal angefragt.
+ */
+function board_all_divas(array $favs): string
+{
+    $divas = [];
+    foreach ($favs as $f) {
+        foreach (explode(',', (string) ($f['diva'] ?? '')) as $d) {
+            $d = preg_replace('/[^0-9]/', '', $d);
+            if ($d !== '' && !in_array($d, $divas, true)) $divas[] = $d;
+        }
+    }
+    return implode(',', $divas);
+}
