@@ -1,0 +1,265 @@
+<?php
+/**
+ * inc/board.php — Aufbereitung der Monitordaten für den Board-Endpunkt.
+ *
+ * Ausschliesslich reine Funktionen: Eingabe Daten, Ausgabe Daten. Kein Netz,
+ * keine DB, keine Superglobals — damit ist die Filtersemantik ohne laufende
+ * Infrastruktur testbar.
+ *
+ * Bildet web/js/wl-monitor.js:325-330 nach. Solange der Browser-Filter noch
+ * existiert, sind das zwei Implementierungen derselben Regel; Abweichungen
+ * hier wären auf dem Display unsichtbar falsch.
+ */
+declare(strict_types=1);
+
+/** Schlüssel, die monitor_get() neben den Stationen in dieselbe Map legt. */
+const BOARD_META_KEYS = ['alerts', 'trains', 'update_at', 'api_ping'];
+
+/**
+ * Stationen aus der monitor_get()-Map lösen — als Liste, nicht als Map.
+ *
+ * monitor_get() mischt Stationen (Schlüssel = DIVA) und Metadaten in einer
+ * flachen Struktur. Ein Client müsste sonst raten, was eine Station ist.
+ *
+ * @return list<array{id: string, diva: string, station_name: string, lines: array}>
+ */
+function board_stations_only(array $monitor): array
+{
+    $out = [];
+    foreach ($monitor as $key => $value) {
+        if (in_array($key, BOARD_META_KEYS, true)) continue;
+        if (!is_array($value) || !isset($value['lines']) || !is_array($value['lines'])) continue;
+        $out[] = $value;
+    }
+    return $out;
+}
+
+/**
+ * Zeitwert einer rohen Abfahrt (Form von monitor_get()) in Minuten, zum
+ * Sortieren/Entdoppeln. '*' ("faehrt jetzt") zaehlt als 0, wie in
+ * board_departure().
+ */
+function board_departure_time(array $dep): int
+{
+    $t = (string) ($dep['t'] ?? '0');
+    return $t === '*' ? 0 : (int) $t;
+}
+
+/**
+ * Zeilen entdoppeln. Identität ist (Linie, Steig, Ziel); die Abfahrten
+ * gleicher Einträge werden zusammengeführt statt der Folgeeintrag verworfen —
+ * sonst gehen echte Abfahrten verloren.
+ *
+ * Am Westbahnhof liefert die Kette "U3 Steig 1 Simmering" zweimal (beobachtet
+ * 2026-08-01), und am 2026-08-02 live gemessen: "E3|1|Breitensee S" doppelt,
+ * mit der einzigen 66-Minuten-Abfahrt NUR im zweiten Eintrag — ein simples
+ * Verwerfen hätte sie verschluckt.
+ */
+function board_dedupe_lines(array $lines): array
+{
+    $out = [];
+    foreach ($lines as $l) {
+        $key = ($l['name'] ?? '') . "\0" . ($l['platform'] ?? '') . "\0" . ($l['towards'] ?? '');
+        if (!isset($out[$key])) {
+            $out[$key] = $l;
+            continue;
+        }
+        $merged = array_merge($out[$key]['departures'] ?? [], $l['departures'] ?? []);
+        usort($merged, static fn (array $a, array $b): int => board_departure_time($a) <=> board_departure_time($b));
+
+        $ohneDubletten = [];
+        $gesehen       = [];
+        foreach ($merged as $dep) {
+            $t = board_departure_time($dep);
+            if (isset($gesehen[$t])) continue;
+            $gesehen[$t] = true;
+            $ohneDubletten[] = $dep;
+        }
+        $out[$key]['departures'] = $ohneDubletten;
+    }
+    return array_values($out);
+}
+
+/**
+ * Filter einer Haltestelle anwenden.
+ *
+ * $stationFilter ist die Positivliste dieser DIVA aus filter_json, oder null,
+ * wenn die DIVA dort NICHT vorkommt — dann gilt: kein Filter, alle Linien.
+ *
+ * Rückgabe null bedeutet: Karte entfällt. Das passiert NUR bei ungefilterten
+ * Stationen ohne Linien. Eine gefilterte Station bleibt auch leer stehen —
+ * verschwände sie, sähe der Ausfall ihrer einzigen Linie aus wie Normalbetrieb.
+ *
+ * @param ?list<array{line: string, platform: string|int}> $stationFilter
+ */
+function board_filter_station(array $station, ?array $stationFilter): ?array
+{
+    $lines = board_dedupe_lines($station['lines'] ?? []);
+
+    if ($stationFilter !== null) {
+        $lines = array_values(array_filter($lines, static function (array $l) use ($stationFilter): bool {
+            foreach ($stationFilter as $f) {
+                if (($f['line'] ?? null) === ($l['name'] ?? null)
+                    && (string) ($f['platform'] ?? '') === (string) ($l['platform'] ?? '')) {
+                    return true;
+                }
+            }
+            return false;
+        }));
+    } elseif ($lines === []) {
+        return null;
+    }
+
+    $station['lines'] = $lines;
+    return $station;
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Antwortform
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Verkehrsmittel-Typ der WL-API auf vier Werte normalisieren.
+ * Die WL-Kürzel (ptMetro, ptBusCity, ptTramWLB …) sind Aufrufer-Ballast.
+ */
+function board_type(string $wlType): string
+{
+    if (str_starts_with($wlType, 'ptMetro')) return 'metro';
+    if (str_starts_with($wlType, 'ptTram'))  return 'tram';
+    if (str_starts_with($wlType, 'ptBus'))   return 'bus';
+    if (str_starts_with($wlType, 'ptTrain')) return 'train';
+    return 'other';
+}
+
+/**
+ * Eine Abfahrt in die schlanke Form bringen.
+ *
+ * 'in' ist eine Zahl in Minuten; "fährt jetzt" ist 0 (die alte API kodiert
+ * das als String '*').
+ *
+ * 'towards' und 'line' erscheinen NUR bei Abweichung von der Zeile
+ * (Kurzführung, Ersatzverkehr). Ohne sie zeigte das Display „U6 →
+ * Siebenhirten in 7 min", während der Zug in Alterlaa endet — eine falsche
+ * Zeile ist schlimmer als eine fehlende.
+ *
+ * 'delayed' markiert die Abfahrt, die das Display invertiert darstellt.
+ *
+ * @return array{in: int, towards?: string, line?: string, delayed?: true}
+ */
+function board_departure(array $dep): array
+{
+    $t   = (string) ($dep['t'] ?? '0');
+    $out = ['in' => $t === '*' ? 0 : (int) $t];
+
+    if (!empty($dep['towards_override'])) $out['towards'] = (string) $dep['towards_override'];
+    if (!empty($dep['name_override']))    $out['line']    = (string) $dep['name_override'];
+    if (!empty($dep['jam']))              $out['delayed'] = true;
+
+    return $out;
+}
+
+/**
+ * Eine Linienzeile in die schlanke Form bringen.
+ *
+ * Weggelassen: direction, barrier_free, trafficjam — weder das Display noch
+ * Home Assistant benutzen sie. platform BLEIBT: es ist der Filterschlüssel
+ * und die stabile Identität der Zeile.
+ */
+function board_line(array $line): array
+{
+    return [
+        'line'       => (string) ($line['name'] ?? ''),
+        'platform'   => (string) ($line['platform'] ?? ''),
+        'towards'    => (string) ($line['towards'] ?? ''),
+        'type'       => board_type((string) ($line['type'] ?? '')),
+        'realtime'   => (bool) ($line['realtime_supported'] ?? true),
+        'alert'      => (bool) ($line['alert'] ?? false),
+        'departures' => array_map('board_departure', $line['departures'] ?? []),
+    ];
+}
+
+/**
+ * Einen Favoriten samt seiner Haltestellen in die Antwortform bringen.
+ *
+ * $fav ist eine Zeile aus favorites_get(): ['id', 'title', 'diva', 'filter'].
+ * $monitor ist die unveränderte Ausgabe von monitor_get().
+ */
+function board_favorite(array $fav, array $monitor): array
+{
+    $filter   = is_array($fav['filter'] ?? null) ? $fav['filter'] : [];
+    $stations = [];
+
+    $byDiva = [];
+    foreach (board_stations_only($monitor) as $station) {
+        $byDiva[(string) ($station['diva'] ?? '')] = $station;
+    }
+
+    // $monitor is shared across ALL selected favorites (web/board.php fetches
+    // one monitor for the union of their DIVAs). Iterate the FAVORITE's own
+    // DIVA list, not the shared map — otherwise a sibling favorite's stations
+    // leak in here with no filter entry of their own, i.e. unfiltered.
+    foreach (explode(',', (string) ($fav['diva'] ?? '')) as $diva) {
+        $diva = trim($diva);
+        if ($diva === '' || !isset($byDiva[$diva])) continue;
+
+        $gefiltert = board_filter_station($byDiva[$diva], $filter[$diva] ?? null);
+        if ($gefiltert === null) continue;
+
+        $stations[] = [
+            'diva'  => $diva,
+            'name'  => (string) ($gefiltert['station_name'] ?? ''),
+            'lines' => array_map('board_line', $gefiltert['lines']),
+        ];
+    }
+
+    return ['id' => (int) $fav['id'], 'title' => (string) $fav['title'], 'stations' => $stations];
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Auswahl
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Favoriten nach dem ?fav=-Parameter auswählen.
+ *
+ * $alle ist die Liste aus favorites_get() — sie enthält bereits NUR die
+ * Favoriten des Token-Benutzers. Unbekannte IDs werden still übergangen:
+ * ein Fehler oder eine abweichende Antwort verriete, ob eine fremde ID
+ * existiert.
+ *
+ * Leerer Parameter → alle, in der Reihenfolge von favorites_get() (sort, id).
+ */
+function board_selected_favorites(array $alle, string $favParam): array
+{
+    $favParam = trim($favParam);
+    if ($favParam === '') return $alle;
+
+    $nachId = [];
+    foreach ($alle as $f) $nachId[(int) $f['id']] = $f;
+
+    $out = [];
+    foreach (explode(',', $favParam) as $roh) {
+        $roh = trim($roh);
+        if ($roh === '' || !ctype_digit($roh)) continue;
+        $id = (int) $roh;
+        if (isset($nachId[$id])) $out[] = $nachId[$id];
+    }
+    return $out;
+}
+
+/**
+ * Alle DIVAs der gewählten Favoriten als kommaseparierte Liste, entdoppelt.
+ * Eine Haltestelle, die in zwei Favoriten vorkommt, wird bei der WL-API nur
+ * einmal angefragt.
+ */
+function board_all_divas(array $favs): string
+{
+    $divas = [];
+    foreach ($favs as $f) {
+        foreach (explode(',', (string) ($f['diva'] ?? '')) as $d) {
+            $d = preg_replace('/[^0-9]/', '', $d);
+            if ($d !== '' && !in_array($d, $divas, true)) $divas[] = $d;
+        }
+    }
+    return implode(',', $divas);
+}
