@@ -37,8 +37,13 @@ function board_out(array $payload, int $status = 200): never
 
 $userId = auth_api_request_user();
 if ($userId === null) {
-    appendLog($con, 'board', 'Zugriff ohne gueltiges Token'
-        . (auth_api_token_presented() ? ' (Token vorgelegt, aber ungueltig)' : ' (kein Token)'));
+    // Nur ein VORGELEGTES, aber ungueltiges Token ist die berichtenswerte
+    // Anomalie. Fehlt der Header ganz, ist das ein alter Client waehrend der
+    // Umstellung auf Token-Pflicht — jeder seiner Polls sonst eine
+    // auth_log-Zeile in einer Tabelle, die sich sieben Apps teilen.
+    if (auth_api_token_presented()) {
+        appendLog($con, 'board', 'Zugriff ohne gueltiges Token (Token vorgelegt, aber ungueltig)');
+    }
     board_out(['error' => 'unauthorized'], 401);
 }
 
