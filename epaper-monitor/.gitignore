@@ -1,2 +1,8 @@
 include/config.h
 .pio/
+
+# Kompiliertes Image brennt config.h-Secrets (WLAN-Passwort, API-Token) als
+# Klartext-Strings ein -- darf nie in ein Repo (2026-08-03 versehentlich
+# gepusht, siehe Git-History-Bereinigung). Bleibt nur lokal fuer den
+# USB-Stick-Transfer.
+firmware/*.bin
