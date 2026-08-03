@@ -28,9 +28,13 @@ static bool connectWifi() {
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     uint32_t start = millis();
     while (WiFi.status() != WL_CONNECTED) {
-        if (millis() - start > WIFI_TIMEOUT_MS) return false;
+        if (millis() - start > WIFI_TIMEOUT_MS) {
+            Serial.printf("[wifi] Zeitueberschreitung, letzter Status: %d\n", WiFi.status());
+            return false;
+        }
         delay(200);
     }
+    Serial.printf("[wifi] verbunden, IP %s, %lums\n", WiFi.localIP().toString().c_str(), (unsigned long) (millis() - start));
     return true;
 }
 
@@ -41,32 +45,48 @@ static void goToSleep() {
 }
 
 void setup() {
+    Serial.begin(115200);
+    delay(300);
+    Serial.println("[boot] setup() start");
+
     uint64_t now = uptimeMs();
     time_t estimatedNow = (rtcAnchorGeneratedEpoch == 0)
         ? 0
         : estimateNow(rtcAnchorGeneratedEpoch, rtcAnchorUptimeMs, now);
 
+    Serial.println("[display] initDisplay()");
     initDisplay();
+    Serial.println("[display] initDisplay() zurueck");
 
     if (!connectWifi()) {
         ErrorState st = nextErrorState(FetchOutcome::NetworkUnavailable, rtcConsecutiveFailures);
         rtcConsecutiveFailures = st.consecutiveFailures;
+        Serial.printf("[error] kein WLAN, consecutiveFailures=%d, banner=%d\n", st.consecutiveFailures, (int) st.banner);
         if (st.banner != ErrorBanner::None && rtcAnchorGeneratedEpoch != 0) {
             BoardResponse empty;
+            Serial.println("[display] renderBoard() (Fehlerbanner)");
             renderBoard(empty, rtcAnchorGeneratedEpoch, estimatedNow, st.banner);
+            Serial.println("[display] renderBoard() zurueck");
         }
+        Serial.println("[sleep] goToSleep()");
         goToSleep();
         return;
     }
 
     std::string body;
+    Serial.println("[http] fetchBoard()");
     BoardFetchResult fetch = fetchBoard(BOARD_HOST, BOARD_PORT, BOARD_FAV_IDS, BOARD_TOKEN, HTTP_TIMEOUT_MS, body);
+    Serial.printf("[http] Ergebnis=%d, Antwortlaenge=%d\n", (int) fetch, (int) body.size());
+    if (!body.empty()) {
+        Serial.printf("[http] Antwort (erste 200 Zeichen): %s\n", body.substr(0, 200).c_str());
+    }
 
     FetchOutcome outcome;
     BoardResponse board;
 
     if (fetch == BoardFetchResult::Ok) {
         ParseStatus parseStatus = parseBoardResponse(body, board);
+        Serial.printf("[parse] ParseStatus=%d, Favoriten=%d\n", (int) parseStatus, (int) board.favorites.size());
         outcome = (parseStatus == ParseStatus::Ok) ? FetchOutcome::Success : FetchOutcome::UnreadableResponse;
     } else if (fetch == BoardFetchResult::Unauthorized) {
         outcome = FetchOutcome::Unauthorized;
@@ -77,6 +97,7 @@ void setup() {
 
     ErrorState st = nextErrorState(outcome, rtcConsecutiveFailures);
     rtcConsecutiveFailures = st.consecutiveFailures;
+    Serial.printf("[state] outcome=%d, consecutiveFailures=%d, banner=%d\n", (int) outcome, st.consecutiveFailures, (int) st.banner);
 
     if (outcome == FetchOutcome::Success) {
         time_t generatedEpoch;
@@ -85,14 +106,19 @@ void setup() {
             rtcAnchorUptimeMs = now;
             estimatedNow = generatedEpoch;
         }
+        Serial.println("[display] renderBoard() (Erfolg)");
         renderBoard(board, rtcAnchorGeneratedEpoch, estimatedNow, ErrorBanner::None);
+        Serial.println("[display] renderBoard() zurueck");
     } else if (st.banner != ErrorBanner::None && rtcAnchorGeneratedEpoch != 0) {
         // Nur neu zeichnen, wenn es etwas zu melden gibt (Spec §9: "Bild
         // bleiben lassen" unterhalb der Fehlerschwelle).
         BoardResponse empty;
+        Serial.println("[display] renderBoard() (Fehlerbanner)");
         renderBoard(empty, rtcAnchorGeneratedEpoch, estimatedNow, st.banner);
+        Serial.println("[display] renderBoard() zurueck");
     }
 
+    Serial.println("[sleep] goToSleep()");
     goToSleep();
 }
 
