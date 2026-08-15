@@ -54,7 +54,9 @@ try {
     ) === false) {
         throw new RuntimeException('Cache-Datei nicht schreibbar: ' . $tmpFile);
     }
-    rename($tmpFile, WEATHER_CACHE_FILE);
+    if (!rename($tmpFile, WEATHER_CACHE_FILE)) {
+        throw new RuntimeException('Cache-Datei konnte nicht ersetzt werden: ' . $tmpFile . ' -> ' . WEATHER_CACHE_FILE);
+    }
 
     fwrite(STDOUT, "Wetter-Cache aktualisiert: {$cache['fetched_at']}\n");
 } catch (Throwable $e) {
