@@ -149,3 +149,41 @@ function weather_map_icon_code(string $code): array
     }
     return ['category' => 'unbekannt', 'known' => false];
 }
+
+/**
+ * Waehlt aus dem Wetter-Cache die fuer JETZT richtige Anzeige-Scheibe:
+ * vor 19:00 Europe/Vienna "today", ab 19:00 "tomorrow" (Spec §8). Ist der
+ * Cache aelter als 6h, wird NUR der Fliesstext durch eine Fehlermeldung
+ * ersetzt -- Icon und Temperatur bleiben unveraendert stehen.
+ *
+ * @param ?array{fetched_at: string, today: array, tomorrow: array} $cache
+ * @return array{available: bool, icon_category?: string, temp_min?: int, temp_max?: int, text?: ?string, text_error?: ?string}
+ */
+function weather_select_display(?array $cache, DateTimeImmutable $now): array
+{
+    if ($cache === null) {
+        return ['available' => false];
+    }
+
+    $vienna = new DateTimeZone('Europe/Vienna');
+    $localNow = $now->setTimezone($vienna);
+    $period = ((int) $localNow->format('H') < 19) ? 'today' : 'tomorrow';
+    $slice = $cache[$period];
+
+    $mapping = weather_map_icon_code($slice['icon_code']);
+
+    $fetchedAt = new DateTimeImmutable($cache['fetched_at']);
+    $ageSeconds = $now->getTimestamp() - $fetchedAt->getTimestamp();
+    $stale = $ageSeconds > 6 * 3600;
+
+    return [
+        'available' => true,
+        'icon_category' => $mapping['category'],
+        'temp_min' => $slice['temp_min'],
+        'temp_max' => $slice['temp_max'],
+        'text' => $stale ? null : $slice['text'],
+        'text_error' => $stale
+            ? 'Wetterbericht veraltet seit ' . $fetchedAt->setTimezone($vienna)->format('H:i')
+            : null,
+    ];
+}
