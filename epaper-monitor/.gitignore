@@ -6,3 +6,4 @@ include/config.h
 # gepusht, siehe Git-History-Bereinigung). Bleibt nur lokal fuer den
 # USB-Stick-Transfer.
 firmware/*.bin
+tools/__pycache__/
