@@ -120,3 +120,32 @@ function weather_extract_text_blocks(DOMXPath $xpath): array
     }
     return $blocks;
 }
+
+/**
+ * ORF liefert einen 6-stelligen numerischen Icon-Code (Klasse "c123456").
+ * Diese Tabelle bildet ihn auf eine von neun Anzeige-Kategorien ab (Spec §8)
+ * und waechst anhand geloggter, bislang unbekannter Codes -- kein
+ * vollstaendiges Reverse-Engineering des ORF-Codesystems. Startwerte sind die
+ * am 15.8.2026 auf der echten Seite beobachteten Codes.
+ *
+ * Kategorien: klar, leicht_bewoelkt, bewoelkt, bedeckt, regen_leicht,
+ * regen_stark, schnee, gewitter, nebel, unbekannt (Fallback).
+ */
+const WEATHER_ICON_CATEGORIES = [
+    '100000' => 'klar',
+    '110000' => 'leicht_bewoelkt',
+    '112000' => 'regen_leicht',   // "leicht bewölkt mit (starkem) Niederschlag"
+    '122000' => 'regen_stark',    // "stark bewölkt mit starkem Niederschlag"
+    '122001' => 'gewitter',       // "stark bewölkt mit starkem Niederschlag und Gewitter"
+];
+
+/**
+ * @return array{category: string, known: bool}
+ */
+function weather_map_icon_code(string $code): array
+{
+    if (isset(WEATHER_ICON_CATEGORIES[$code])) {
+        return ['category' => WEATHER_ICON_CATEGORIES[$code], 'known' => true];
+    }
+    return ['category' => 'unbekannt', 'known' => false];
+}
