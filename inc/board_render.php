@@ -45,3 +45,58 @@ function svg_to_png(string $svg): string
 
     return $png;
 }
+
+/**
+ * Liest PNG-Bytes und packt sie in gepackte 1bpp-Rohdaten: MSB-first,
+ * zeilenweise, Breite auf ein Vielfaches von 8 aufgerundet. Bit-Konvention:
+ * 1 = Weiss, 0 = Schwarz (siehe Global Constraints). Harter Schwellwert bei
+ * Helligkeit >= 128 (ITU-R BT.601) -- bewusst kein Dithering (Spec §7).
+ *
+ * @throws RuntimeException wenn das PNG unlesbar ist oder nicht die
+ *         erwartete Groesse hat
+ */
+function png_to_1bpp_packed(string $pngBinary, int $width, int $height): string
+{
+    $image = @imagecreatefromstring($pngBinary);
+    if ($image === false) {
+        throw new RuntimeException('PNG konnte nicht gelesen werden');
+    }
+
+    if (imagesx($image) !== $width || imagesy($image) !== $height) {
+        $actualWidth = imagesx($image);
+        $actualHeight = imagesy($image);
+        throw new RuntimeException(sprintf(
+            'PNG-Groesse (%dx%d) passt nicht zur erwarteten Groesse (%dx%d)',
+            $actualWidth, $actualHeight, $width, $height
+        ));
+    }
+
+    $rowBytes = (int) ceil($width / 8);
+    $out = '';
+
+    for ($y = 0; $y < $height; $y++) {
+        $row = str_repeat("\x00", $rowBytes);
+        for ($byteIndex = 0; $byteIndex < $rowBytes; $byteIndex++) {
+            $byte = 0;
+            for ($bit = 0; $bit < 8; $bit++) {
+                $x = $byteIndex * 8 + $bit;
+                $isWhite = true; // Fuell-Pixel jenseits der Bildbreite sind weiss
+                if ($x < $width) {
+                    $rgb = imagecolorat($image, $x, $y);
+                    $r = ($rgb >> 16) & 0xFF;
+                    $g = ($rgb >> 8) & 0xFF;
+                    $b = $rgb & 0xFF;
+                    $luminance = 0.299 * $r + 0.587 * $g + 0.114 * $b;
+                    $isWhite = $luminance >= 128.0;
+                }
+                if ($isWhite) {
+                    $byte |= (1 << (7 - $bit));
+                }
+            }
+            $row[$byteIndex] = chr($byte);
+        }
+        $out .= $row;
+    }
+
+    return $out;
+}

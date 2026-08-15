@@ -39,4 +39,67 @@ class BoardRenderTest extends TestCase
         $this->expectException(RuntimeException::class);
         svg_to_png('<svg><this is not valid xml');
     }
+
+    /** Erzeugt ein echtes PNG (ueber ext-gd) mit einer Pixel-Farbfunktion. */
+    private function makeTestPng(int $width, int $height, callable $pixelColor): string
+    {
+        $im = imagecreatetruecolor($width, $height);
+        for ($y = 0; $y < $height; $y++) {
+            for ($x = 0; $x < $width; $x++) {
+                [$r, $g, $b] = $pixelColor($x, $y);
+                imagesetpixel($im, $x, $y, imagecolorallocate($im, $r, $g, $b));
+            }
+        }
+        ob_start();
+        imagepng($im);
+        $png = (string) ob_get_clean();
+        return $png;
+    }
+
+    public function test_all_black_8x8_packs_to_zero_bytes(): void
+    {
+        $png = $this->makeTestPng(8, 8, fn($x, $y) => [0, 0, 0]);
+        $packed = png_to_1bpp_packed($png, 8, 8);
+
+        $this->assertSame(8, strlen($packed), '8 Zeilen a 1 Byte bei Breite 8');
+        $this->assertSame(str_repeat("\x00", 8), $packed, 'schwarz = Bit 0');
+    }
+
+    public function test_all_white_8x8_packs_to_0xff_bytes(): void
+    {
+        $png = $this->makeTestPng(8, 8, fn($x, $y) => [255, 255, 255]);
+        $packed = png_to_1bpp_packed($png, 8, 8);
+
+        $this->assertSame(str_repeat("\xFF", 8), $packed, 'weiss = Bit 1');
+    }
+
+    public function test_half_black_half_white_row_packs_msb_first(): void
+    {
+        // Spalten 0-3 schwarz, 4-7 weiss. MSB-first: Bit 7 = Spalte 0 (schwarz=0)
+        // ... Bit 0 = Spalte 7 (weiss=1) -> 0b00001111 = 0x0F.
+        $png = $this->makeTestPng(8, 1, fn($x, $y) => $x < 4 ? [0, 0, 0] : [255, 255, 255]);
+        $packed = png_to_1bpp_packed($png, 8, 1);
+
+        $this->assertSame("\x0F", $packed);
+    }
+
+    public function test_width_not_multiple_of_8_pads_with_white_bits(): void
+    {
+        // Breite 5, alle 5 echten Pixel schwarz. Zeile wird auf 1 Byte (8 Bit)
+        // aufgerundet, die 3 Fuell-Bits jenseits von Spalte 4 sind weiss (1):
+        // Bits 7..3 (Spalten 0-4) = 0, Bits 2..0 (Fuellung) = 1 -> 0b00000111 = 0x07.
+        $png = $this->makeTestPng(5, 1, fn($x, $y) => [0, 0, 0]);
+        $packed = png_to_1bpp_packed($png, 5, 1);
+
+        $this->assertSame(1, strlen($packed), 'ceil(5/8) = 1 Byte pro Zeile');
+        $this->assertSame("\x07", $packed);
+    }
+
+    public function test_throws_on_dimension_mismatch(): void
+    {
+        $png = $this->makeTestPng(8, 8, fn($x, $y) => [0, 0, 0]);
+
+        $this->expectException(RuntimeException::class);
+        png_to_1bpp_packed($png, 16, 16);
+    }
 }
