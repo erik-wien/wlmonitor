@@ -174,9 +174,9 @@ Content-Length: <n>
 
 Body: **1bpp, MSB-first, zeilenweise, Breite auf ein Vielfaches von 8
 aufgerundet** — das native Pufferformat, das Seeed_GFX für Partial-Update-
-Aufrufe erwartet. Bei `X-Board-Mode: full` deckt der Body die volle
-1872×1404-Fläche ab, bei `patch` nur das per `X-Board-X/Y/W/H` angegebene
-Rechteck.
+Aufrufe erwartet. Bit-Konvention: **1 = Weiß, 0 = Schwarz**. Bei
+`X-Board-Mode: full` deckt der Body die volle 1872×1404-Fläche ab, bei
+`patch` nur das per `X-Board-X/Y/W/H` angegebene Rechteck.
 
 **Wichtig — kein klassisches HTTP-Caching:** `If-None-Match`/`ETag` werden
 hier zweckentfremdet. Es gibt bei jedem Poll neue Daten (die Minuten-
