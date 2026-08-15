@@ -102,4 +102,27 @@ class BoardRenderTest extends TestCase
         $this->expectException(RuntimeException::class);
         png_to_1bpp_packed($png, 16, 16);
     }
+
+    public function test_full_pipeline_svg_to_packed_bits(): void
+    {
+        // 16x8, linke Haelfte schwarz, rechte weiss -- wie test_half_black...,
+        // aber diesmal durch echtes rsvg-convert gerendert statt synthetisch
+        // per ext-gd erzeugt.
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="8" viewBox="0 0 16 8">'
+             . '<rect width="8" height="8" fill="black"/>'
+             . '<rect x="8" width="8" height="8" fill="white"/>'
+             . '</svg>';
+
+        $png = svg_to_png($svg);
+        $packed = png_to_1bpp_packed($png, 16, 8);
+
+        // 16 px Breite = 2 Byte pro Zeile, 8 Zeilen = 16 Byte gesamt.
+        $this->assertSame(16, strlen($packed));
+        // Jede Zeile: erstes Byte (Spalten 0-7, alle schwarz) = 0x00,
+        // zweites Byte (Spalten 8-15, alle weiss) = 0xFF.
+        for ($row = 0; $row < 8; $row++) {
+            $this->assertSame("\x00", $packed[$row * 2], "Zeile $row, erstes Byte");
+            $this->assertSame("\xFF", $packed[$row * 2 + 1], "Zeile $row, zweites Byte");
+        }
+    }
 }
