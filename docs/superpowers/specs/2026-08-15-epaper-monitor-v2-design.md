@@ -200,12 +200,18 @@ Neue Datei `inc/board_render.php`:
 1. SVG-Template (Platzhalter für Stationskarten, Wetterkarte, Statuszeile)
    wird mit den Daten aus `inc/board.php` + `inc/weather.php` + den
    Statuszeilen-Werten befüllt.
-2. `rsvg-convert` rendert das SVG zu PNG (1872×1404).
-3. ImageMagick `convert … -monochrome` (Schwellwert-Dithering) reduziert auf
-   1bpp.
-4. Ein kleines PHP-Hilfsstück liest das 1bpp-PNG aus und packt es ins
-   Rohformat aus §6 (MSB-first, zeilenweise).
-5. Dieselbe Datei (`inc/board_render.php`) übernimmt danach auch den
+2. `rsvg-convert` rendert das SVG zu PNG (1872×1404) — auf dem Zielsystem
+   vorhanden (`brew install librsvg`, siehe `epaper-monitor/README.md`).
+3. PHP/GD (kein ImageMagick — auf dem Zielsystem nicht installiert, `ext-gd`
+   dagegen bereits vorhanden) liest das PNG, wendet einen **harten
+   Schwellwert** pro Pixel an (Luminanz < 128 → Schwarz, sonst Weiß) und
+   packt direkt ins Rohformat aus §6 (MSB-first, zeilenweise, Breite auf ein
+   Vielfaches von 8 aufgerundet). Bewusst **kein** Error-Diffusion-Dithering:
+   das würde Text-/Icon-Kanten körnig statt scharf machen — auf einem
+   200-DPI-Monochrom-Panel schlechter lesbar als ein harter Schwellwert.
+   Kein Zwischenschritt über eine „1bpp-PNG"-Datei nötig, GD liest das
+   Antialiasing-PNG direkt und packt in einem Durchgang.
+4. Dieselbe Datei (`inc/board_render.php`) übernimmt danach auch den
    Frame-Vergleich aus §5 Schritt 5 (neuer Frame gegen `data/board_state/`,
    ETag-Abgleich, Bounding-Box-Bildung) — Rendern und Diffen sind ein
    zusammenhängender Schritt, kein separates Modul.
