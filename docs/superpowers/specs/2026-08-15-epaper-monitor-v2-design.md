@@ -90,10 +90,14 @@ war ohnehin nötig), wird aber mit dem neuen Panel zum Normalfall.
   des Panels) → effektive Zeichenfläche **1872×1404**.
 - **Bibliothek:** [Seeed_GFX](https://github.com/Seeed-Studio/Seeed_GFX)
   (`EPaper`-Klasse: Dual-Buffer-Rendering, regionsbasiertes Partial-Update).
-- **Offen, vor dem ersten Flashen zu prüfen:** exakte GxEPD2-kompatible
-  Panel-Revision spielt hier keine Rolle (Seeed_GFX statt GxEPD2), aber Pin-Belegung
-  des EE03-TTL-Interface zum Panel ist aus der Recherche nicht vollständig bekannt
-  und muss beim Board-Eintreffen aus dem EE03-Schaltplan übernommen werden.
+- **Pin-Belegung:** kein offener Punkt mehr — der [Seeed_GFX-Online-
+  Konfigurationsgenerator](https://seeed-studio.github.io/Seeed_GFX/) erzeugt
+  für „XIAO ePaper Display Board EE03" + 10,3″-Panel eine fertige `driver.h`
+  mit allen Pin-Definitionen. Das Panel hängt zudem über einen festen
+  40-Pin-0,5mm-FPC-Steckverbinder am EE03, keine lose Verdrahtung. Schaltplan-
+  PDF und PCBA-Dateien liegen bei Bedarf unter
+  `files.seeedstudio.com/wiki/Epaper/EE03/` (verlinkt von der
+  [Getting-Started-Seite](https://wiki.seeedstudio.com/getting_started_with_ee03/)).
 
 ---
 
@@ -364,9 +368,8 @@ gerade".
 - **Zugangsdaten** weiterhin in `firmware/include/config.h` (gitignored).
 - **Verbindung:** LAN-Listener auf akadbrain wie v1
   (`docs/deploy-board-endpunkt.md`), Klartext-HTTP, feste IP.
-- **Offener Punkt:** exakte TTL-Pin-Belegung des EE03 zum Panel — aus der
-  Recherche nicht vollständig bekannt, muss beim Hardware-Eintreffen aus dem
-  EE03-Schaltplan übernommen werden (§4).
+- **Pin-Belegung:** kommt aus der generierten `driver.h` (§4), kein manuelles
+  Übernehmen aus dem Schaltplan nötig.
 
 ---
 
@@ -410,8 +413,6 @@ lügt nie über den Zustand der Daten.
 
 ## 13. Nicht Teil dieses Entwurfs
 
-- Exakte EE03-Pin-Belegung (§4, §10) — folgt aus dem Schaltplan beim
-  Hardware-Eintreffen, nicht aus dieser Spec.
 - Akkubetrieb-Feinschliff (Lade-Charakteristik, Spannungs-zu-Prozent-Kurve
   kalibrieren) — die Statuszeile zeigt einen groben Prozentwert, keine
   präzise Fuel-Gauge-Kalibrierung.
