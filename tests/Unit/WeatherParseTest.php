@@ -70,4 +70,34 @@ class WeatherParseTest extends TestCase
         $this->expectException(RuntimeException::class);
         weather_parse_forecast($broken);
     }
+
+    public function test_ignores_malformed_third_column(): void
+    {
+        // Die echte Seite hat 5 Tages-Spalten, genutzt werden aber nur die
+        // ersten zwei (heute/morgen). Kaputtes Markup in Spalte 3 darf den
+        // Abruf nicht mehr scheitern lassen.
+        $html = $this->fixtureHtml();
+
+        $html = preg_replace(
+            '/(<span class="offscreen">Prognose für Wien-Hohe Warte<\/span><\/th>.*?<\/td>)\s*<\/tr>/s',
+            '$1<td><div class="iconRow temperatureRow">kaputt</div></td></tr>',
+            $html,
+            1
+        );
+        $html = preg_replace(
+            '/(<span class="offscreen">Temperatur für <\/span>Wien-Hohe Warte<\/th>.*?<\/td>)\s*<\/tr>/s',
+            '$1<td>kaputt</td></tr>',
+            $html,
+            1
+        );
+
+        $result = weather_parse_forecast($html);
+
+        $this->assertSame('100000', $result['today']['icon_code']);
+        $this->assertSame(18, $result['today']['temp_min']);
+        $this->assertSame(35, $result['today']['temp_max']);
+        $this->assertSame('100000', $result['tomorrow']['icon_code']);
+        $this->assertSame(22, $result['tomorrow']['temp_min']);
+        $this->assertSame(37, $result['tomorrow']['temp_max']);
+    }
 }

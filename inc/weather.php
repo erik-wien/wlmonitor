@@ -40,8 +40,13 @@ function weather_parse_forecast(string $html): array
         throw new RuntimeException('Wetter-Tabelle fuer Wien-Hohe Warte nicht gefunden');
     }
 
+    // Nur die ersten zwei Spalten (heute/morgen) werden ausgewertet -- ein
+    // fehlerhaftes Markup in Spalte 3-5 soll den Abruf nicht scheitern lassen.
     $iconCodes = [];
     foreach ($xpath->query('.//td', $iconRow) as $td) {
+        if (count($iconCodes) >= 2) {
+            break;
+        }
         $sp = $xpath->query('.//span[contains(concat(" ", normalize-space(@class), " "), " weatherIcon ")]', $td)->item(0);
         if ($sp === null || !preg_match('/(?:^|\s)c(\d{6})(?:\s|$)/', (string) $sp->getAttribute('class'), $m)) {
             throw new RuntimeException('Icon-Code nicht gefunden');
@@ -51,6 +56,9 @@ function weather_parse_forecast(string $html): array
 
     $temps = [];
     foreach ($xpath->query('.//td', $tempRow) as $td) {
+        if (count($temps) >= 2) {
+            break;
+        }
         $highest = $xpath->query('.//span[contains(@class,"highest")]', $td)->item(0);
         if ($highest === null) {
             throw new RuntimeException('Hoechsttemperatur nicht gefunden');
