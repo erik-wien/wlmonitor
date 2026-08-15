@@ -59,8 +59,14 @@ function weather_parse_forecast(string $html): array
         // manchmal weg. Fehlt sie, faellt temp_min auf temp_max zurueck, statt
         // den ganzen Abruf scheitern zu lassen.
         $morning = $xpath->query('.//span[contains(@class,"morning")]', $td)->item(0);
-        $max = (int) preg_replace('/\D+/', '', $highest->textContent);
-        $min = $morning !== null ? (int) preg_replace('/\D+/', '', $morning->textContent) : $max;
+        preg_match('/-?\d+/', $highest->textContent, $maxMatch);
+        $max = (int) $maxMatch[0];
+        if ($morning !== null) {
+            preg_match('/-?\d+/', $morning->textContent, $minMatch);
+            $min = (int) $minMatch[0];
+        } else {
+            $min = $max;
+        }
         $temps[] = ['min' => $min, 'max' => $max];
     }
 

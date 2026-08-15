@@ -43,10 +43,25 @@ class WeatherParseTest extends TestCase
     public function test_missing_morning_temp_falls_back_to_max(): void
     {
         // ORF laesst die Tages-Tiefsttemperatur beim laufenden Tag manchmal weg.
-        $html = preg_replace('/<span class="morning">.*?<\/span>/s', '', $this->fixtureHtml(), 1);
+        // Scope auf den ersten "morning"-Span NACH "Wien-Hohe Warte", damit der Test
+        // unabhaengig von der Reihenfolge der Regionsbloecke im Fixture bleibt.
+        $html = preg_replace('/(Wien-Hohe Warte.*?)<span class="morning">.*?<\/span>/s', '$1', $this->fixtureHtml(), 1);
         $result = weather_parse_forecast($html);
         $this->assertSame(35, $result['today']['temp_min']); // == temp_max
         $this->assertSame(35, $result['today']['temp_max']);
+    }
+
+    public function test_negative_temperature_keeps_minus_sign(): void
+    {
+        // "-2" darf beim Ziffern-Extrahieren nicht zu "2" werden (\D matcht auch "-").
+        $html = preg_replace(
+            '/(<span class="morning">)18(&thinsp;)/',
+            '${1}-2${2}',
+            $this->fixtureHtml(),
+            1
+        );
+        $result = weather_parse_forecast($html);
+        $this->assertSame(-2, $result['today']['temp_min']);
     }
 
     public function test_throws_when_hohe_warte_table_is_missing(): void
