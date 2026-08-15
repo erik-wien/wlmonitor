@@ -22,7 +22,7 @@ function svg_to_png(string $svg): string
         2 => ['pipe', 'w'],
     ];
 
-    $process = proc_open(['rsvg-convert', '-f', 'png'], $descriptors, $pipes);
+    $process = proc_open(['rsvg-convert', '-f', 'png', '-b', 'white'], $descriptors, $pipes);
     if (!is_resource($process)) {
         throw new RuntimeException('rsvg-convert konnte nicht gestartet werden');
     }

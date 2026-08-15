@@ -125,4 +125,27 @@ class BoardRenderTest extends TestCase
             $this->assertSame("\xFF", $packed[$row * 2 + 1], "Zeile $row, zweites Byte");
         }
     }
+
+    public function test_uncovered_svg_region_renders_white_not_transparent(): void
+    {
+        // 16x8, nur die linke Haelfte wird bemalt (schwarz), die rechte
+        // Haelfte bleibt im SVG unbemalt/transparent. rsvg-convert muss mit
+        // "-b white" aufgerufen werden, sonst rendert der unbemalte Bereich
+        // transparent (RGB 0,0,0, Alpha 0) und imagecolorat() liest davon nur
+        // die ignorierte RGB-Komponente -> faelschlich Schwarz statt Weiss.
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="8" viewBox="0 0 16 8">'
+             . '<rect width="8" height="8" fill="black"/>'
+             . '</svg>';
+
+        $png = svg_to_png($svg);
+        $packed = png_to_1bpp_packed($png, 16, 8);
+
+        $this->assertSame(16, strlen($packed));
+        // Jede Zeile: erstes Byte (Spalten 0-7, bemalt schwarz) = 0x00,
+        // zweites Byte (Spalten 8-15, unbemalt) muss WEISS sein = 0xFF.
+        for ($row = 0; $row < 8; $row++) {
+            $this->assertSame("\x00", $packed[$row * 2], "Zeile $row, erstes Byte (bemalt)");
+            $this->assertSame("\xFF", $packed[$row * 2 + 1], "Zeile $row, zweites Byte (unbemalt -> muss weiss sein)");
+        }
+    }
 }
