@@ -233,10 +233,19 @@ Gerät oder Flash-Vorgang.
 
 ### Scraping (`inc/weather.php`, neu)
 
-- Quelle: `https://wetter.orf.at/wien/prognose` (Desktop-Version).
+- Quelle: `https://wetter.orf.at/wien/prognose` (Desktop-Version). **Achtung:**
+  die Desktop-Seite kodiert das Icon als `<span class="weatherIcon c123456">`,
+  die mobile `/m/`-Variante dagegen als `<img …/123456.svg>` — der Parser muss
+  die Desktop-Form (Span-Klasse `c` + 6 Ziffern) lesen. ORF liefert dieses
+  Desktop-Markup auch dem Cron-User-Agent (kein UA-Switch, kein `/m/`-Redirect,
+  verifiziert 2026-08-15).
 - Icon + Temperatur: `<tr class="forecastIconRow">` bzw.
   `<tr class="temperatureRow">`, identifiziert über `th.legendCol` mit Text
-  „…Wien-Hohe Warte". Erste `<td>` = heute, zweite `<td>` = morgen.
+  „…Wien-Hohe Warte". Erste `<td>` = heute, zweite `<td>` = morgen. Icon =
+  `span.weatherIcon`-Klasse `c` + 6 Ziffern; Temperatur =
+  `span.morning` (Tagestief) / `span.highest` (Tageshoch). **`morning` kann
+  beim laufenden Tag fehlen**, sobald das Tief vorbei ist — dann `temp_min =
+  temp_max`, kein Fehler.
 - Text: `.fulltextWrapper` → Paare aus `<h2>` + `<p>`. Erstes Paar = heute,
   zweites = morgen — **positional**, nicht über den Überschriftentext
   geparst (der wechselt je nach Tageszeit/Feiertag: „Heute Nachmittag" vs.
@@ -251,14 +260,16 @@ Gerät oder Flash-Vorgang.
 
 ### Icon-Mapping
 
-ORF liefert einen 6-stelligen numerischen Code (z. B. `100000` = wolkenlos,
-`110000` = leicht bewölkt, `112000` = leicht bewölkt mit Niederschlag). Eigenes
-Icon-Set mit 9 Kategorien + Fallback, vorkonvertiert wie das WL-Logo:
+ORF liefert einen 6-stelligen numerischen Code (am 15.8.2026 real beobachtet:
+`100000` = wolkenlos, `110000` = leicht bewölkt, `112000` = leicht bewölkt mit
+Niederschlag, `122000` = stark bewölkt mit starkem Niederschlag, `122001` =
+stark bewölkt mit starkem Niederschlag und Gewitter). Eigenes Icon-Set mit 9
+Kategorien + Fallback, vorkonvertiert wie das WL-Logo:
 
 klar · leicht bewölkt · bewölkt · bedeckt · Regen leicht · Regen stark ·
 Schnee · Gewitter · Nebel · **unbekannt** (Fallback)
 
-Mapping-Tabelle in `inc/weather.php`, startend mit den drei oben belegten
+Mapping-Tabelle in `inc/weather.php`, startend mit den fünf oben belegten
 Codes. Ein nicht gemappter Code fällt auf „unbekannt" zurück **und** erzeugt
 einen `appendLog()`-Eintrag (Fehler-Regeln-Konvention, wie in v1 für
 `board.php`) — so wächst die Tabelle anhand echter Beobachtung, ohne dass

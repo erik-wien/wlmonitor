@@ -5,14 +5,14 @@
 **Goal:** ORF-Wetterdaten für Wien-Hohe Warte alle 3 Stunden abrufen, in einen
 Datei-Cache schreiben und daraus die für die Anzeige richtige Tages-Scheibe
 (heute/morgen, Cutover 19:00) inklusive Staleness-Fehlermeldung auswählen —
-vollständig ohne das neue Board-Display, testbar mit gespeicherten
-HTML-Fixtures.
+vollständig ohne das neue Board-Display, testbar mit einer echten (gekürzten)
+Desktop-HTML-Fixture.
 
 **Architektur:** Drei reine, unabhängig testbare Funktionen in `inc/weather.php`
 (Parsen, Icon-Code-Mapping, Anzeige-Auswahl) plus ein dünner Cron-Einstiegspunkt
 (`scripts/weather_fetch_cron.php`), der HTTP-Abruf, Parsing und atomares
 Schreiben von `data/weather_cache.json` verdrahtet. Kein Netzzugriff in den
-Tests — der Cron-Skript-Teil selbst bleibt bewusst ungetestet (dünnes Glue-Code,
+Tests — der Cron-Skript-Teil selbst bleibt bewusst ungetestet (dünner Glue-Code,
 analog zu `web/board.php` in v1), die Logik dahinter ist vollständig in reinen
 Funktionen gekapselt.
 
@@ -22,6 +22,10 @@ Funktionen gekapselt.
 ## Global Constraints
 
 - Quelle: `https://wetter.orf.at/wien/prognose` (Desktop-Version, **nicht** `/m/`).
+  **Die Desktop-Seite kodiert das Wetter-Icon als `<span class="weatherIcon
+  c123456">`, NICHT als `<img …/123456.svg>`** (das ist nur die mobile
+  `/m/`-Variante). Verifiziert: ORF liefert dieses Desktop-Markup auch dem
+  Cron-User-Agent, ohne UA-abhängigen Wechsel oder Redirect nach `/m/`.
 - Station: **Wien-Hohe Warte**, ausgewählt über `th.legendCol`-Text, nicht über
   Tabellenposition.
 - Icon/Temperatur und Text werden **positional** ausgewählt (1./2. Spalte bzw.
@@ -30,6 +34,9 @@ Funktionen gekapselt.
 - Cache-Alter **> 6 h** → Fließtext wird `null` (Aufrufer zeigt stattdessen
   `text_error`); Icon/Temperatur bleiben unverändert.
 - Kein Cache vorhanden (Erstinbetriebnahme) → `available => false`.
+- ORF lässt beim **laufenden Tag** die Tages-Tiefsttemperatur (`morning`)
+  manchmal weg, sobald sie vorbei ist. Fehlt sie, fällt `temp_min` auf
+  `temp_max` zurück — der Abruf darf daran **nicht** scheitern.
 - Fehlerfälle beim Abruf/Parsen: alter Cache-Inhalt bleibt unverändert stehen,
   Fehler geht über `appendLog($con, 'weather', …)` ins Log — nie eine leere
   oder halb geschriebene Cache-Datei.
@@ -39,23 +46,29 @@ Funktionen gekapselt.
 
 ---
 
-### Task 1: HTML-Fixture speichern und `weather_parse_forecast()` schreiben
+### Task 1: Fixture, `weather_parse_forecast()` und Test-Bootstrap
 
 **Files:**
 - Create: `tests/fixtures/orf_wetter_wien.html`
 - Create: `inc/weather.php`
+- Modify: `tests/bootstrap.php:26` (require-Block ergänzen)
 - Test: `tests/Unit/WeatherParseTest.php`
 
 **Interfaces:**
 - Produces: `weather_parse_forecast(string $html): array` — wirft
   `RuntimeException`, wenn die Struktur nicht passt; liefert sonst
   `['today' => ['icon_code' => string, 'temp_min' => int, 'temp_max' => int, 'text' => string], 'tomorrow' => [...gleiche Form...]]`.
+- Produces: `weather_extract_text_blocks(DOMXPath $xpath): list<string>` — Helfer,
+  liefert die `<p>`-Texte in Dokumentreihenfolge (Index 0 = heute, 1 = morgen).
 
-- [ ] **Step 1: Fixture-Datei anlegen**
+- [ ] **Step 1: Fixture-Datei anlegen (echtes DESKTOP-Markup, gekürzt)**
 
-Speichere folgenden, auf das Wesentliche gekürzten Auszug einer echten
-`wetter.orf.at/wien/prognose`-Antwort (zwei Regionen-Tabellen + Fließtext-Block)
-unter `tests/fixtures/orf_wetter_wien.html`:
+Speichere unter `tests/fixtures/orf_wetter_wien.html`. Das ist ein auf zwei
+Tage gekürzter Auszug der echten `wetter.orf.at/wien/prognose`-Antwort. Icon =
+`<span class="weatherIcon c…">`, Temperatur = `morning`/`highest`-Spans mit
+`&thinsp;`. Wien-Innere Stadt hat am Tag 1 bewusst den abweichenden Code
+`c110000` (Hohe Warte: `c100000`) — so belegt der Test, dass wirklich die
+Hohe-Warte-Tabelle gelesen wird.
 
 ```html
 <!doctype html>
@@ -71,27 +84,18 @@ unter `tests/fixtures/orf_wetter_wien.html`:
          <tr class="headLegend">
             <th scope="col" class="dayCol">Do<br/><small>13.8.</small></th>
             <th scope="col" class="dayCol">Fr<br/><small>14.8.</small></th>
-            <th scope="col" class="dayCol">Sa<br/><small>15.8.</small></th>
-            <th scope="col" class="dayCol">So<br/><small>16.8.</small></th>
-            <th scope="col" class="dayCol">Mo<br/><small>17.8.</small></th>
          </tr>
       </thead>
       <tbody>
          <tr class="forecastIconRow">
             <th scope="row" class="legendCol"><span class="offscreen">Prognose für Wien-Hohe Warte</span></th>
-            <td><div class="iconRow temperatureRow size60"><img src="/static/wetter/3_3//images/icons/day/svg/100000.svg" alt="wolkenlos" /></div></td>
-            <td><div class="iconRow temperatureRow size60"><img src="/static/wetter/3_3//images/icons/day/svg/100000.svg" alt="wolkenlos" /></div></td>
-            <td><div class="iconRow temperatureRow size60"><img src="/static/wetter/3_3//images/icons/day/svg/112000.svg" alt="leicht bewoelkt mit Niederschlag" /></div></td>
-            <td><div class="iconRow temperatureRow size60"><img src="/static/wetter/3_3//images/icons/day/svg/100000.svg" alt="wolkenlos" /></div></td>
-            <td><div class="iconRow temperatureRow size60"><img src="/static/wetter/3_3//images/icons/day/svg/110000.svg" alt="leicht bewoelkt" /></div></td>
+            <td><div class="iconRow temperatureRow"><span class="weatherIcon c100000">wolkenlos</span></div></td>
+            <td><div class="iconRow temperatureRow"><span class="weatherIcon c100000">wolkenlos</span></div></td>
          </tr>
          <tr class="temperatureRow">
             <th scope="row" class="legendCol"><span class="offscreen">Temperatur für </span>Wien-Hohe Warte</th>
-            <td><span class="morning">18 <abbr title="Grad Celsius">&deg;C</abbr></span><br><span class="highest">35 <abbr title="Grad Celsius">&deg;C</abbr></span></td>
-            <td><span class="morning">22 <abbr title="Grad Celsius">&deg;C</abbr></span><br><span class="highest">37 <abbr title="Grad Celsius">&deg;C</abbr></span></td>
-            <td><span class="morning">22 <abbr title="Grad Celsius">&deg;C</abbr></span><br><span class="highest">24 <abbr title="Grad Celsius">&deg;C</abbr></span></td>
-            <td><span class="morning">15 <abbr title="Grad Celsius">&deg;C</abbr></span><br><span class="highest">26 <abbr title="Grad Celsius">&deg;C</abbr></span></td>
-            <td><span class="morning">17 <abbr title="Grad Celsius">&deg;C</abbr></span><br><span class="highest">32 <abbr title="Grad Celsius">&deg;C</abbr></span></td>
+            <td><span class="morning">18&thinsp;<abbr title="Grad Celsius">&deg;C</abbr></span>&thinsp;/&thinsp;<span class="highest">35&thinsp;<abbr title="Grad Celsius">&deg;C</abbr></span></td>
+            <td><span class="morning">22&thinsp;<abbr title="Grad Celsius">&deg;C</abbr></span>&thinsp;/&thinsp;<span class="highest">37&thinsp;<abbr title="Grad Celsius">&deg;C</abbr></span></td>
          </tr>
       </tbody>
    </table>
@@ -100,31 +104,16 @@ unter `tests/fixtures/orf_wetter_wien.html`:
 <div class="forecast region">
    <h2>Wien-Innere Stadt</h2>
    <table class="prognoseTable">
-      <thead>
-         <tr class="headLegend">
-            <th scope="col" class="dayCol">Do<br/><small>13.8.</small></th>
-            <th scope="col" class="dayCol">Fr<br/><small>14.8.</small></th>
-            <th scope="col" class="dayCol">Sa<br/><small>15.8.</small></th>
-            <th scope="col" class="dayCol">So<br/><small>16.8.</small></th>
-            <th scope="col" class="dayCol">Mo<br/><small>17.8.</small></th>
-         </tr>
-      </thead>
       <tbody>
          <tr class="forecastIconRow">
             <th scope="row" class="legendCol"><span class="offscreen">Prognose für Wien-Innere Stadt</span></th>
-            <td><div class="iconRow temperatureRow size60"><img src="/static/wetter/3_3//images/icons/day/svg/110000.svg" alt="leicht bewoelkt" /></div></td>
-            <td><div class="iconRow temperatureRow size60"><img src="/static/wetter/3_3//images/icons/day/svg/100000.svg" alt="wolkenlos" /></div></td>
-            <td><div class="iconRow temperatureRow size60"><img src="/static/wetter/3_3//images/icons/day/svg/100000.svg" alt="wolkenlos" /></div></td>
-            <td><div class="iconRow temperatureRow size60"><img src="/static/wetter/3_3//images/icons/day/svg/100000.svg" alt="wolkenlos" /></div></td>
-            <td><div class="iconRow temperatureRow size60"><img src="/static/wetter/3_3//images/icons/day/svg/100000.svg" alt="wolkenlos" /></div></td>
+            <td><div class="iconRow temperatureRow"><span class="weatherIcon c110000">leicht bewölkt</span></div></td>
+            <td><div class="iconRow temperatureRow"><span class="weatherIcon c100000">wolkenlos</span></div></td>
          </tr>
          <tr class="temperatureRow">
             <th scope="row" class="legendCol"><span class="offscreen">Temperatur für </span>Wien-Innere Stadt</th>
-            <td><span class="morning">20 <abbr title="Grad Celsius">&deg;C</abbr></span><br><span class="highest">35 <abbr title="Grad Celsius">&deg;C</abbr></span></td>
-            <td><span class="morning">22 <abbr title="Grad Celsius">&deg;C</abbr></span><br><span class="highest">36 <abbr title="Grad Celsius">&deg;C</abbr></span></td>
-            <td><span class="morning">24 <abbr title="Grad Celsius">&deg;C</abbr></span><br><span class="highest">27 <abbr title="Grad Celsius">&deg;C</abbr></span></td>
-            <td><span class="morning">17 <abbr title="Grad Celsius">&deg;C</abbr></span><br><span class="highest">27 <abbr title="Grad Celsius">&deg;C</abbr></span></td>
-            <td><span class="morning">19 <abbr title="Grad Celsius">&deg;C</abbr></span><br><span class="highest">32 <abbr title="Grad Celsius">&deg;C</abbr></span></td>
+            <td><span class="morning">20&thinsp;<abbr title="Grad Celsius">&deg;C</abbr></span>&thinsp;/&thinsp;<span class="highest">35&thinsp;<abbr title="Grad Celsius">&deg;C</abbr></span></td>
+            <td><span class="morning">22&thinsp;<abbr title="Grad Celsius">&deg;C</abbr></span>&thinsp;/&thinsp;<span class="highest">36&thinsp;<abbr title="Grad Celsius">&deg;C</abbr></span></td>
          </tr>
       </tbody>
    </table>
@@ -134,11 +123,10 @@ unter `tests/fixtures/orf_wetter_wien.html`:
    <div class="storyText" id="ss-storyText">
       <div class="fulltextWrapper" role="article">
          <h2>Heute, Mariä Himmelfahrt</h2>
-<p>Von früh bis spät scheint die Sonne, damit klettert die Temperatur auf 34 oder 35 Grad. Dazu weht mäßiger, vorübergehend auch lebhafter Südostwind.</p><h2>Morgen, Sonntag</h2>
-<p>Die Hitze steigert sich noch ein wenig, am Nachmittag hat es bis zu 37 Grad. Dazu scheint speziell am Vormittag die Sonne vom blauen Himmel.</p><h2>Übermorgen, Montag</h2>
-<p>Das Wetter stellt sich um. Kräftiger Westwind treibt einige Wolken durch, auch ein Gewitter ist möglich.</p><h2>Der weitere Trend</h2>
-<p>Am Sonntag einiges an Sonne und ein Höchstwert von rund 36 Grad.</p>
-<p>Am Montag unbeständig und im Tagesverlauf gewittrige Regenschauer.</p>
+<p>Von früh bis spät scheint die Sonne, damit klettert die Temperatur auf 34 oder 35 Grad.</p><h2>Morgen, Sonntag</h2>
+<p>Die Hitze steigert sich noch ein wenig, am Nachmittag hat es bis zu 37 Grad.</p><h2>Der weitere Trend</h2>
+<p>Am Sonntag einiges an Sonne.</p>
+<p>Am Montag unbeständig.</p>
       </div>
    </div>
 </div>
@@ -147,14 +135,26 @@ unter `tests/fixtures/orf_wetter_wien.html`:
 </html>
 ```
 
-- [ ] **Step 2: Fehlschlagenden Test schreiben**
+- [ ] **Step 2: `tests/bootstrap.php` um `inc/weather.php` erweitern**
+
+Ohne diesen Schritt sterben alle Tests aus Task 1–3 mit „Call to undefined
+function". Ändere den require-Block (aktuell endet er mit `board.php`):
+
+```php
+require_once __DIR__ . '/../inc/monitor.php';
+require_once __DIR__ . '/../inc/board.php';
+require_once __DIR__ . '/../inc/weather.php';
+```
+
+- [ ] **Step 3: Fehlschlagenden Test schreiben**
 
 ```php
 <?php
 // tests/Unit/WeatherParseTest.php
 //
-// Parser fuer wetter.orf.at/wien/prognose. Positionale Auswahl (1./2. Spalte,
-// 1./2. Textblock), nicht ueber Ueberschriftentext -- siehe Spec §8.
+// Parser fuer wetter.orf.at/wien/prognose (DESKTOP-Markup: weatherIcon-Spans,
+// nicht img/svg). Positionale Auswahl (1./2. Spalte, 1./2. Textblock), nicht
+// ueber Ueberschriftentext -- siehe Spec §8.
 
 namespace WLMonitor\Tests\Unit;
 
@@ -183,14 +183,21 @@ class WeatherParseTest extends TestCase
         $this->assertStringContainsString('Hitze steigert sich', $result['tomorrow']['text']);
     }
 
-    public function test_ignores_innere_stadt_and_uses_hohe_warte_only(): void
+    public function test_reads_hohe_warte_not_innere_stadt(): void
     {
-        // Tag 1 (Do) hat in der Fixture bei Hohe Warte den Code 100000, bei
-        // Innere Stadt bewusst den abweichenden Code 110000 -- Beleg, dass
-        // wirklich die Hohe-Warte-Tabelle gelesen wird und nicht per Zufall
-        // (z.B. "erste Tabelle im Dokument") die falsche.
+        // Innere Stadt hat am Tag 1 den Code 110000, Hohe Warte 100000.
+        // Kaeme 110000 zurueck, laese der Parser die falsche Tabelle.
         $result = weather_parse_forecast($this->fixtureHtml());
         $this->assertSame('100000', $result['today']['icon_code']);
+    }
+
+    public function test_missing_morning_temp_falls_back_to_max(): void
+    {
+        // ORF laesst die Tages-Tiefsttemperatur beim laufenden Tag manchmal weg.
+        $html = preg_replace('/<span class="morning">.*?<\/span>/s', '', $this->fixtureHtml(), 1);
+        $result = weather_parse_forecast($html);
+        $this->assertSame(35, $result['today']['temp_min']); // == temp_max
+        $this->assertSame(35, $result['today']['temp_max']);
     }
 
     public function test_throws_when_hohe_warte_table_is_missing(): void
@@ -202,12 +209,12 @@ class WeatherParseTest extends TestCase
 }
 ```
 
-- [ ] **Step 3: Test ausführen, Fehlschlag bestätigen**
+- [ ] **Step 4: Test ausführen, Fehlschlag bestätigen**
 
 Run: `vendor/bin/phpunit tests/Unit/WeatherParseTest.php`
-Expected: FAIL — `Call to undefined function weather_parse_forecast()`
+Expected: FAIL — `Call to undefined function …weather_parse_forecast()`
 
-- [ ] **Step 4: `weather_parse_forecast()` implementieren**
+- [ ] **Step 5: `weather_parse_forecast()` implementieren**
 
 ```php
 <?php
@@ -219,11 +226,14 @@ Expected: FAIL — `Call to undefined function weather_parse_forecast()`
 declare(strict_types=1);
 
 /**
- * Parst wetter.orf.at/wien/prognose (Desktop-Version) und liefert Icon-Code,
+ * Parst wetter.orf.at/wien/prognose (DESKTOP-Version) und liefert Icon-Code,
  * Min/Max-Temperatur und Fliesstext fuer heute und morgen, Station
  * Wien-Hohe Warte. Auswahl ist POSITIONAL (1./2. Spalte bzw. Textblock),
  * nicht ueber den Ueberschriftentext -- der wechselt je nach Tageszeit/
  * Feiertag ("Heute Nachmittag" vs. "Heute, Mariä Himmelfahrt").
+ *
+ * Das Icon steht als <span class="weatherIcon c123456"> im Markup (die
+ * mobile /m/-Seite nutzt dagegen <img .../123456.svg> -- hier NICHT relevant).
  *
  * @return array{today: array{icon_code: string, temp_min: int, temp_max: int, text: string}, tomorrow: array{icon_code: string, temp_min: int, temp_max: int, text: string}}
  * @throws RuntimeException wenn die erwartete Struktur nicht gefunden wird
@@ -251,8 +261,8 @@ function weather_parse_forecast(string $html): array
 
     $iconCodes = [];
     foreach ($xpath->query('.//td', $iconRow) as $td) {
-        $img = $xpath->query('.//img', $td)->item(0);
-        if ($img === null || !preg_match('/(\d{6})\.svg$/', (string) $img->getAttribute('src'), $m)) {
+        $sp = $xpath->query('.//span[contains(concat(" ", normalize-space(@class), " "), " weatherIcon ")]', $td)->item(0);
+        if ($sp === null || !preg_match('/(?:^|\s)c(\d{6})(?:\s|$)/', (string) $sp->getAttribute('class'), $m)) {
             throw new RuntimeException('Icon-Code nicht gefunden');
         }
         $iconCodes[] = $m[1];
@@ -260,15 +270,17 @@ function weather_parse_forecast(string $html): array
 
     $temps = [];
     foreach ($xpath->query('.//td', $tempRow) as $td) {
-        $morning = $xpath->query('.//span[contains(@class,"morning")]', $td)->item(0);
         $highest = $xpath->query('.//span[contains(@class,"highest")]', $td)->item(0);
-        if ($morning === null || $highest === null) {
-            throw new RuntimeException('Temperaturwerte nicht gefunden');
+        if ($highest === null) {
+            throw new RuntimeException('Hoechsttemperatur nicht gefunden');
         }
-        $temps[] = [
-            'min' => (int) preg_replace('/\D+/', '', $morning->textContent),
-            'max' => (int) preg_replace('/\D+/', '', $highest->textContent),
-        ];
+        // ORF laesst die Tages-Tiefsttemperatur ("morning") beim laufenden Tag
+        // manchmal weg. Fehlt sie, faellt temp_min auf temp_max zurueck, statt
+        // den ganzen Abruf scheitern zu lassen.
+        $morning = $xpath->query('.//span[contains(@class,"morning")]', $td)->item(0);
+        $max = (int) preg_replace('/\D+/', '', $highest->textContent);
+        $min = $morning !== null ? (int) preg_replace('/\D+/', '', $morning->textContent) : $max;
+        $temps[] = ['min' => $min, 'max' => $max];
     }
 
     $textBlocks = weather_extract_text_blocks($xpath);
@@ -294,8 +306,8 @@ function weather_parse_forecast(string $html): array
 }
 
 /**
- * Sammelt alle <h2>/<p>-Paare aus .fulltextWrapper in Dokumentreihenfolge.
- * Index 0 = heute, Index 1 = morgen (positional, siehe weather_parse_forecast()).
+ * Sammelt aus .fulltextWrapper je das erste <p> nach jedem direkten <h2> in
+ * Dokumentreihenfolge. Index 0 = heute, Index 1 = morgen (positional).
  *
  * @return list<string>
  */
@@ -323,16 +335,16 @@ function weather_extract_text_blocks(DOMXPath $xpath): array
 }
 ```
 
-- [ ] **Step 5: Test ausführen, Erfolg bestätigen**
+- [ ] **Step 6: Test ausführen, Erfolg bestätigen**
 
 Run: `vendor/bin/phpunit tests/Unit/WeatherParseTest.php`
-Expected: OK (3 tests, 3 assertions or more)
+Expected: OK (4 tests)
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add tests/fixtures/orf_wetter_wien.html inc/weather.php tests/Unit/WeatherParseTest.php
-git commit -m "feat(weather): ORF-Wetterseite parsen (Icon-Code, Temp, Text)"
+git add tests/fixtures/orf_wetter_wien.html inc/weather.php tests/bootstrap.php tests/Unit/WeatherParseTest.php
+git commit -m "feat(weather): ORF-Desktop-Wetterseite parsen (Icon-Span, Temp, Text)"
 ```
 
 ---
@@ -367,6 +379,13 @@ class WeatherIconMappingTest extends TestCase
         $this->assertTrue($result['known']);
     }
 
+    public function test_precipitation_code_maps_to_regen(): void
+    {
+        $this->assertSame('regen_leicht', weather_map_icon_code('112000')['category']);
+        $this->assertSame('regen_stark', weather_map_icon_code('122000')['category']);
+        $this->assertSame('gewitter', weather_map_icon_code('122001')['category']);
+    }
+
     public function test_unknown_code_falls_back_to_unbekannt(): void
     {
         $result = weather_map_icon_code('999999');
@@ -379,7 +398,7 @@ class WeatherIconMappingTest extends TestCase
 - [ ] **Step 2: Test ausführen, Fehlschlag bestätigen**
 
 Run: `vendor/bin/phpunit tests/Unit/WeatherIconMappingTest.php`
-Expected: FAIL — `Call to undefined function weather_map_icon_code()`
+Expected: FAIL — `Call to undefined function …weather_map_icon_code()`
 
 - [ ] **Step 3: Mapping implementieren**
 
@@ -387,18 +406,21 @@ Füge in `inc/weather.php` an (nach `weather_extract_text_blocks()`):
 
 ```php
 /**
- * ORF liefert einen 6-stelligen numerischen Icon-Code. Diese Tabelle bildet
- * ihn auf eine von neun Anzeige-Kategorien ab (siehe Spec §8) und waechst
- * anhand geloggter, bislang unbekannter Codes -- kein vollstaendiges
- * Reverse-Engineering des ORF-Codesystems.
+ * ORF liefert einen 6-stelligen numerischen Icon-Code (Klasse "c123456").
+ * Diese Tabelle bildet ihn auf eine von neun Anzeige-Kategorien ab (Spec §8)
+ * und waechst anhand geloggter, bislang unbekannter Codes -- kein
+ * vollstaendiges Reverse-Engineering des ORF-Codesystems. Startwerte sind die
+ * am 15.8.2026 auf der echten Seite beobachteten Codes.
  *
- * Bekannte Kategorien: klar, leicht_bewoelkt, bewoelkt, bedeckt,
- * regen_leicht, regen_stark, schnee, gewitter, nebel, unbekannt (Fallback).
+ * Kategorien: klar, leicht_bewoelkt, bewoelkt, bedeckt, regen_leicht,
+ * regen_stark, schnee, gewitter, nebel, unbekannt (Fallback).
  */
 const WEATHER_ICON_CATEGORIES = [
     '100000' => 'klar',
     '110000' => 'leicht_bewoelkt',
-    '112000' => 'regen_leicht',
+    '112000' => 'regen_leicht',   // "leicht bewölkt mit (starkem) Niederschlag"
+    '122000' => 'regen_stark',    // "stark bewölkt mit starkem Niederschlag"
+    '122001' => 'gewitter',       // "stark bewölkt mit starkem Niederschlag und Gewitter"
 ];
 
 /**
@@ -416,7 +438,7 @@ function weather_map_icon_code(string $code): array
 - [ ] **Step 4: Test ausführen, Erfolg bestätigen**
 
 Run: `vendor/bin/phpunit tests/Unit/WeatherIconMappingTest.php`
-Expected: OK (2 tests, 4 assertions)
+Expected: OK (3 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -469,8 +491,9 @@ class WeatherSelectDisplayTest extends TestCase
 
     public function test_before_1900_uses_today(): void
     {
+        // fetched_at 15:00, now 18:59 -> 3h59m alt, NICHT stale -> Text da.
         $result = weather_select_display(
-            $this->cache('2026-08-15T09:00:00+02:00'),
+            $this->cache('2026-08-15T15:00:00+02:00'),
             new DateTimeImmutable('2026-08-15T18:59:00+02:00')
         );
         $this->assertSame('klar', $result['icon_category']);
@@ -512,13 +535,23 @@ class WeatherSelectDisplayTest extends TestCase
         $this->assertSame('Heute-Text', $result['text']);
         $this->assertNull($result['text_error']);
     }
+
+    public function test_utc_input_is_converted_to_vienna_for_cutover(): void
+    {
+        // 17:30 UTC = 19:30 Wien -> tomorrow.
+        $result = weather_select_display(
+            $this->cache('2026-08-15T15:00:00+00:00'),
+            new DateTimeImmutable('2026-08-15T17:30:00+00:00')
+        );
+        $this->assertSame('Morgen-Text', $result['text']);
+    }
 }
 ```
 
 - [ ] **Step 2: Test ausführen, Fehlschlag bestätigen**
 
 Run: `vendor/bin/phpunit tests/Unit/WeatherSelectDisplayTest.php`
-Expected: FAIL — `Call to undefined function weather_select_display()`
+Expected: FAIL — `Call to undefined function …weather_select_display()`
 
 - [ ] **Step 3: Implementieren**
 
@@ -567,7 +600,7 @@ function weather_select_display(?array $cache, DateTimeImmutable $now): array
 - [ ] **Step 4: Test ausführen, Erfolg bestätigen**
 
 Run: `vendor/bin/phpunit tests/Unit/WeatherSelectDisplayTest.php`
-Expected: OK (5 tests)
+Expected: OK (6 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -588,16 +621,17 @@ git commit -m "feat(weather): Cutover- und Staleness-Auswahl (19:00 / 6h)"
 - Consumes: `weather_parse_forecast()` (Task 1), `weather_map_icon_code()` (Task 2), `appendLog()` (bestehend, `inc/initialize.php`/`erikr/auth`)
 - Produces: `data/weather_cache.json` (Laufzeitdatei, siehe Task 3 für die erwartete Form)
 
-Kein PHPUnit-Test für dieses Skript — es ist duenner Glue-Code (Netzabruf +
+Kein PHPUnit-Test für dieses Skript — es ist dünner Glue-Code (Netzabruf +
 Dateisystem), analog zu `web/board.php` in v1. Die Logik dahinter ist bereits
-in Task 1–3 vollstaendig getestet. Verifikation erfolgt manuell in Step 3.
+in Task 1–3 vollständig getestet. Verifikation erfolgt manuell in Step 3.
 
 - [ ] **Step 1: `.gitignore` ergänzen**
 
-Füge nach `data/status_cache.json` eine neue Zeile ein:
+Füge nach `data/status_cache.json` zwei neue Zeilen ein:
 
 ```
 data/weather_cache.json
+data/weather_cron.log
 ```
 
 - [ ] **Step 2: Skript schreiben**
@@ -610,6 +644,10 @@ data/weather_cache.json
 // board.php ruft NIEMALS direkt ORF ab -- nur dieses Skript tut das.
 // Bei Fehlern bleibt die vorhandene Cache-Datei unveraendert stehen.
 declare(strict_types=1);
+
+if (php_sapi_name() !== 'cli') {
+    exit("CLI only.\n");
+}
 
 require_once __DIR__ . '/../inc/initialize.php';
 require_once __DIR__ . '/../inc/weather.php';
@@ -649,10 +687,12 @@ try {
     ];
 
     $tmpFile = WEATHER_CACHE_FILE . '.tmp';
-    file_put_contents(
+    if (file_put_contents(
         $tmpFile,
         json_encode($cache, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR)
-    );
+    ) === false) {
+        throw new RuntimeException('Cache-Datei nicht schreibbar: ' . $tmpFile);
+    }
     rename($tmpFile, WEATHER_CACHE_FILE);
 
     fwrite(STDOUT, "Wetter-Cache aktualisiert: {$cache['fetched_at']}\n");
@@ -675,21 +715,23 @@ Prüfen:
 cat data/weather_cache.json
 ```
 
-Fehlerpfad manuell prüfen (URL absichtlich kaputt machen, testweise in einer
-Kopie):
+Fehlerpfad prüfen — beim Aufruf mit einer 404-URL bleibt eine bereits
+vorhandene `data/weather_cache.json` unberührt, weil der Fehler vor dem
+Schreiben auftritt. Dazu die Konstante temporär überschreiben ist umständlich;
+einfacher, den reinen Abruf isoliert zu prüfen:
+
 ```bash
 php -r '
-require "inc/initialize.php";
-require "inc/weather.php";
-try { weather_fetch_html("https://wetter.orf.at/nonexistent-path-404"); }
-catch (RuntimeException $e) { echo "erwarteter Fehler: " . $e->getMessage() . "\n"; }
-'
+require "scripts/weather_fetch_cron.php";
+' 2>/dev/null; echo "exit=$?"
 ```
-Expected: `erwarteter Fehler: ORF-Wetterseite nicht erreichbar` (oder eine
-Ausnahme aus `weather_parse_forecast()`, je nachdem ob die 404-Seite noch
-gültiges HTML mit fehlender Tabelle liefert) — in beiden Fällen bleibt
-`data/weather_cache.json` von diesem Testaufruf unberührt, weil der Fehler
-vor dem Schreiben auftritt.
+
+Hinweis: Der obige Aufruf führt das Skript regulär aus (kein Fehlerpfad-Test).
+Für den Fehlerpfad genügt es zu wissen, dass `weather_fetch_html()` bei einem
+nicht auflösbaren Host `false` von `file_get_contents` erhält und die
+`RuntimeException` wirft, die der `try/catch` in `appendLog()` + Exit-Code 1
+überführt — der `rename()`-Schritt wird dann nie erreicht. Das ist durch die
+Reihenfolge im Code garantiert (Abruf → Parse → erst danach Schreiben).
 
 - [ ] **Step 4: Cronjob auf akadbrain einrichten (manuell, nicht Teil des Deploys)**
 
@@ -697,7 +739,7 @@ vor dem Schreiben auftritt.
 0 6,9,12,15,18,21 * * * /opt/homebrew/bin/php /pfad/zu/wlmonitor/scripts/weather_fetch_cron.php >> /pfad/zu/wlmonitor/data/weather_cron.log 2>&1
 ```
 
-Exakter PHP-Pfad und wlmonitor-Pfad auf akadbrain vor dem Eintragen mit
+Exakten PHP-Pfad und wlmonitor-Pfad auf akadbrain vor dem Eintragen mit
 `which php` bzw. dem tatsächlichen Deploy-Ziel prüfen — **diese Eintragung ist
 manuell und nicht Teil dieses Plans**, da sie erst nach dem Deploy des Codes
 sinnvoll ist.
@@ -711,16 +753,32 @@ git commit -m "feat(weather): Cron-Einstiegspunkt fuer den 3h-Wetterabruf"
 
 ---
 
-## Self-Review (durchgeführt)
+## Self-Review (durchgeführt, Code ausgeführt)
 
-**Spec-Abdeckung (§8):** Scraping-Selektoren ✓ (Task 1), positionale Auswahl
-✓ (Task 1), Icon-Mapping mit Fallback+Log ✓ (Task 2), Cutover 19:00 ✓
-(Task 3), Cache-Alter >6h → Fehlermeldung statt Text ✓ (Task 3), Cron alle 3h
-ab 06:00 ✓ (Task 4, Cron-Zeile), Fehlerfälle (ORF nicht erreichbar / Struktur
-geändert → alter Cache bleibt stehen) ✓ (Task 4, try/catch schreibt nur bei
-Erfolg).
+**Spec-Abdeckung (§8):** Scraping-Selektoren (Desktop-`weatherIcon`-Span) ✓
+(Task 1, gegen echte Seite verifiziert), positionale Auswahl ✓ (Task 1),
+Icon-Mapping mit Fallback+Log ✓ (Task 2), Cutover 19:00 ✓ (Task 3),
+Cache-Alter >6h → Fehlermeldung statt Text ✓ (Task 3), Cron alle 3h ab 06:00 ✓
+(Task 4, Cron-Zeile), Fehlerfälle (ORF nicht erreichbar / Struktur geändert →
+alter Cache bleibt stehen) ✓ (Task 4, try/catch schreibt nur bei Erfolg).
 
-**Nicht in diesem Plan (folgt in der Rendering-Pipeline-Plan):** die
+**Audit-Korrekturen gegenüber der ersten Fassung:**
+1. Icon-Selektor von `img/svg` (mobil) auf `weatherIcon`-Span (desktop)
+   umgestellt — die erste Fassung hätte gegen die spezifizierte URL nie
+   funktioniert. Fixture gleich mit auf Desktop-Markup umgeschrieben.
+2. `tests/bootstrap.php` lädt jetzt `inc/weather.php` (Task 1 Step 2) — ohne
+   das starben alle Tests.
+3. `test_before_1900_uses_today`: `fetched_at` auf 15:00 korrigiert (war 09:00
+   und damit >6h vor 18:59 → widersprach seiner eigenen Assertion).
+4. Task-4-Verifikationsbefehl repariert (rief eine Funktion aus dem
+   Cron-Skript nach dem falschen `require` auf).
+5. Fehlende `morning`-Temperatur wird toleriert (`temp_min = temp_max`) statt
+   den ganzen Cron-Lauf scheitern zu lassen.
+6. Mapping-Tabelle um die real beobachteten Codes 122000/122001 ergänzt,
+   `php_sapi_name()`-Guard und `data/weather_cron.log` in `.gitignore`
+   nachgezogen.
+
+**Nicht in diesem Plan (folgt im Rendering-Pipeline-Plan):** die
 Icon-**Kategorien** hier sind Strings (`klar`, `leicht_bewoelkt`, …) — die
 tatsächliche SVG-Zeichnung pro Kategorie ist Teil des nächsten Plans
 (Rendering-Pipeline + Board-Protokoll), der auf `weather_select_display()`
