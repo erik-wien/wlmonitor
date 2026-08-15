@@ -1,6 +1,8 @@
 backups/
 data/ratelimit.json
 data/status_cache.json
+data/weather_cache.json
+data/weather_cron.log
 deprecated/
 web/Archiv/
 app.prod
