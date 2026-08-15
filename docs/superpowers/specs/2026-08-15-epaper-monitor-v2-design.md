@@ -376,11 +376,45 @@ gerade".
 - **Kein NTP.** Wie v1: der „Stand"-Zeitstempel kommt aus `X-Board-Generated`;
   die Uhrzeit in der Fußzeile rendert der Server, die Firmware muss dafür
   selbst keine Uhr führen.
-- **Zugangsdaten** weiterhin in `firmware/include/config.h` (gitignored).
 - **Verbindung:** LAN-Listener auf akadbrain wie v1
   (`docs/deploy-board-endpunkt.md`), Klartext-HTTP, feste IP.
 - **Pin-Belegung:** kommt aus der generierten `driver.h` (§4), kein manuelles
   Übernehmen aus dem Schaltplan nötig.
+
+### Provisionierung: WiFiManager statt `config.h`
+
+**Löst ab:** die bisherige Annahme „WLAN-Zugangsdaten, Token und
+Favoriten-IDs fix in `firmware/include/config.h`, vor jedem Flash von Hand
+eingetragen" (v1 §8). Grund: pro Gerät neu flashen zu müssen, nur um WLAN,
+Token oder Favoriten zu ändern, ist unnötiger Aufwand — und `config.h` mit
+Geheimnissen drin ist schon einmal versehentlich gepusht worden
+(`epaper-monitor/.gitignore`-Kommentar zu `firmware/*.bin`).
+
+- **Bibliothek:** [WiFiManager](https://github.com/tzapu/WiFiManager)
+  (tzapu). Beim allerersten Boot (bzw. wenn keine gespeicherten
+  WLAN-Zugangsdaten gefunden werden) spannt das Gerät einen eigenen Access
+  Point auf, man verbindet sich damit vom Handy/Laptop, ein Captive Portal
+  öffnet automatisch ein Formular.
+- **Erweitert um eigene Formularfelder** (`WiFiManagerParameter`, dafür
+  vorgesehen): zusätzlich zu SSID/Passwort werden **API-Token** und
+  **Favoriten-IDs** (kommagetrennt, wie bisher `BOARD_FAV_IDS`) im selben
+  Formular abgefragt — eine Provisionierung für alles, keine zweite
+  Konfigurationsebene.
+- **Persistenz:** WiFiManager speichert WLAN-Zugangsdaten selbst
+  (ESP32-eigener WLAN-Stack, NVS-Flash). Die zusätzlichen Felder (Token,
+  Favoriten-IDs) werden im Save-Callback selbst persistiert — über die
+  ESP32-`Preferences`-Bibliothek (NVS-Namespace), nicht als Datei. Damit
+  überlebt alles denselben Tiefschlaf-/Neustart-Zyklus wie die WLAN-Daten.
+- **Neu-Provisionierung ohne Reflash:** GPIO 32/33 (in v1 „für späteres
+  Nachrüsten" freigehalten, siehe v1 §8) lösen künftig genau das aus — ein
+  langer Tastendruck beim Boot zwingt WiFiManager zurück in den
+  Access-Point-Modus, WLAN **und** Token/Favoriten lassen sich so jederzeit
+  neu eingeben, ohne einen Rechner mit USB-Kabel zu brauchen.
+- **`firmware/include/config.h` bleibt bestehen, aber schrumpft** auf reine
+  Infrastruktur-Konstanten, die für alle Geräte gleich und nicht geheim sind:
+  `BOARD_HOST`, `BOARD_PORT`, `POLL_INTERVAL_SEC`. WLAN, Token und
+  Favoriten-IDs — die tatsächlich pro Gerät unterschiedlichen bzw. geheimen
+  Werte — kommen nicht mehr aus dem Quellcode.
 
 ---
 
