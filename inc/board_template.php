@@ -287,3 +287,96 @@ function board_render_touch_bar_svg(array $favoriteTitles, int $activeIndex): st
 
     return $out;
 }
+
+/**
+ * Verfuegbare Spaltenbreite der Wetterkarte (706px, x=1150 bis x=1856)
+ * geteilt durch die gemessene mittlere Zeichenbreite bei 39px Atkinson
+ * Hyperlegible (17,37px/Zeichen, s. Task 4 Step 3), 8% Sicherheitsabstand
+ * gegen ueberdurchschnittlich breite Saetze: floor(706 / 17.37 * 0.92).
+ */
+const BOARD_WEATHER_TEXT_MAX_CHARS_PER_LINE = 37;
+
+/**
+ * Greedy Wortumbruch, mb-safe. SVG <text> bricht nicht von selbst um --
+ * diese Funktion ersetzt den in den Mockups von Hand gesetzten Umbruch
+ * durch eine fuer beliebigen (sich alle 3h aendernden) Fliesstext
+ * reproduzierbare Regel. Kein Silbentrennen: ein einzelnes Wort, das laenger
+ * als $maxCharsPerLine ist, bleibt unveraendert auf einer eigenen Zeile.
+ *
+ * @return list<string>
+ */
+function board_wrap_text(string $text, int $maxCharsPerLine): array
+{
+    $words = preg_split('/\s+/u', trim($text));
+    $lines = [];
+    $current = '';
+
+    foreach ($words as $word) {
+        $candidate = $current === '' ? $word : $current . ' ' . $word;
+        if (mb_strlen($candidate, 'UTF-8') <= $maxCharsPerLine || $current === '') {
+            $current = $candidate;
+        } else {
+            $lines[] = $current;
+            $current = $word;
+        }
+    }
+    if ($current !== '') {
+        $lines[] = $current;
+    }
+
+    return $lines;
+}
+
+/**
+ * Wetterkarte aus Spec §9: Icon, Temperatur "von-bis", Ueberschrift "Heute",
+ * Fliesstext mit manuellem Zeilenumbruch. $weather ist die Rueckgabe von
+ * weather_select_display() (inc/weather.php) -- 'available' => false heisst
+ * "noch nie erfolgreich abgerufen" (z.B. vor dem ersten Cron-Lauf), nicht
+ * dasselbe wie der ">6h veraltet"-Fall (dort bleiben Icon/Temp erhalten,
+ * nur der Text wird ersetzt, s. Spec §8).
+ */
+function board_render_weather_svg(array $weather): string
+{
+    if ($weather['available'] === false) {
+        return board_render_weather_card('icon_unbekannt', null, null, ['Wetterdaten werden geladen …']);
+    }
+
+    $iconId = BOARD_ICON_ID_BY_CATEGORY[$weather['icon_category']] ?? BOARD_ICON_ID_BY_CATEGORY['unbekannt'];
+    $bodyText = $weather['text'] ?? $weather['text_error'] ?? '';
+    $lines = board_wrap_text($bodyText, BOARD_WEATHER_TEXT_MAX_CHARS_PER_LINE);
+
+    return board_render_weather_card($iconId, $weather['temp_min'], $weather['temp_max'], $lines);
+}
+
+/** @param list<string> $bodyLines */
+function board_render_weather_card(string $iconId, ?int $tempMin, ?int $tempMax, array $bodyLines): string
+{
+    $tempSvg = $tempMin !== null && $tempMax !== null
+        ? sprintf(
+            '<text x="1492" y="290" font-family="Atkinson Hyperlegible" font-weight="bold" font-size="40" fill="black" text-anchor="middle">%d° – %d°C</text>',
+            $tempMin, $tempMax
+        )
+        : '';
+
+    $headingSvg = $tempMin !== null
+        ? '<text x="1150" y="366" font-family="Atkinson Hyperlegible" font-weight="bold" font-size="30" fill="black">Heute</text>'
+        : '';
+
+    $bodySvg = '';
+    foreach ($bodyLines as $i => $line) {
+        $y = 422 + $i * 46;
+        $bodySvg .= sprintf(
+            '<text x="1150" y="%d" font-family="Atkinson Hyperlegible" font-size="39" fill="black">%s</text>',
+            $y, htmlspecialchars($line, ENT_XML1)
+        );
+    }
+
+    return <<<SVG
+<g transform="translate(1492,180) scale(1.8)">
+  <use href="#{$iconId}"/>
+</g>
+{$tempSvg}
+{$headingSvg}
+{$bodySvg}
+SVG;
+}
