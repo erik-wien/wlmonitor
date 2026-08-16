@@ -216,9 +216,13 @@ Neue Datei `inc/board_render.php`:
    ETag-Abgleich, Bounding-Box-Bildung) — Rendern und Diffen sind ein
    zusammenhängender Schritt, kein separates Modul.
 
-Icons (Wetter, Wiener-Linien-Logo) liegen als vorbereitete Bitmaps im
-Template, analog zur bestehenden Logo-Konvertierung
-(`epaper-monitor/tools/convert_logo.py`).
+Icons liegen **nicht** als Bitmaps vor, sondern als Vektor-Primitive direkt
+im SVG-Template — Wettericons aus einfachen Grundformen (Sonne = Kreis +
+Strahlen, Wolke = Outline-Pfad, s. §8), das WL-Logo als eingebettetes
+5-Pfad-SVG (s. §9). Das ersetzt die bitmapbasierte Logo-Konvertierung aus
+v1 (`epaper-monitor/tools/convert_logo.py`) — auf einem 1-Bit-Panel ohne
+Farbverläufe bringt eine Bitmap keinen Vorteil, Vektorform bleibt bei jeder
+Neuberechnung scharf und ist im SVG-Template direkt editierbar.
 
 ### Debug-Ausgabe im Browser
 
@@ -309,60 +313,140 @@ einen ORF-Abruf aus.
 
 ## 9. Layout (1872 × 1404, Querformat)
 
+Pixelgenau durch iteratives Rendern über die echte Pipeline (`svg_to_png()` +
+`png_to_1bpp_packed()`, SVG → rsvg-convert → GD-Schwellenwert → visuelle
+Kontrolle) erarbeitet, mit den beiden echten Favoriten „Westbahnhof"
+(1 Station) und „Nach Hause" (3 Stationsgruppen) verifiziert. Alle Werte
+unten sind verbindlich, nicht Richtwerte — jede Zahl wurde am gerenderten
+Bild nachgemessen (Pixelscan über `imagecolorat()`), nicht geschätzt.
+
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
-│ ▛▜ WIENER LINIEN                                            Stand 19:13    │  ~60 px
+│ ▛▜ WIENER LINIEN                                            Stand 19:13    │  90 px
 ├───────────────────────────────────────────────────────────┬───────────────┤
-│  Aßmayergasse                                               │      ☀        │
-│  ⬤ 59A 1  Bhf. Meidling S U                     4 · 23      │   18°–35°C    │
-│  ◯ 62  1  Lainz, Wolkersbergenstraße             1 · 10     │               │
-│                                                               │  Von früh    │
-│  Flurschützstraße                                            │  bis spät    │
-│  ◯ 62  2  Quartier Belvedere                     2 · 14      │  scheint …   │
-│  ⬤ 59A 2  Oper, Karlsplatz U                     ✱ · 3       │               │
-│                                                               │               │
-│  (eine durchgehende Liste aus Stationskarten, volle Breite,  │               │
-│   Reihenfolge wie v1: Favoriten in `sort`-Reihenfolge)       │               │
+│  WESTBAHNHOF S U                                             │      ☀        │
+│  ⬤18 1  Schlachthausgasse U                        7 · 22   │   18°–35°C    │
+│  ⬤ 6 1  Geiereckstraße                             1 · 14   │  Heute        │
+│  ⬤ 9 2  Gersthof S                                 9 · 16   │  Von früh bis │
+│  ▪U3 1  Simmering                                  ✱ · 8    │  spät scheint │
+│  ▪U6 1  Floridsdorf                                ✱ · 6    │  die Sonne…   │
+│  ▪U6 2  Siebenhirten                               5 · 12   │               │
 ├───────────────────────────────────────────────────────────┴───────────────┤
 │ ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔  │
-│ 🔋 78 %                    19:14                          📶 −62 dBm       │  ~32 px
+│ 🔋 78 %                    19:14                          📶 (nur Balken)  │  94 px
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Abfahrtenliste** (ersetzt die v1-Zweispaltenlogik, §7 der v1-Spec): eine
-durchgehende Liste von Stationskarten über die volle Breite (~1470 px, Rest
-für die Wetterkarte), Karten-Struktur wie `renderMonitor()` im Web-UI
-(`web/js/wl-monitor.js:307`) — Stationsname, darunter je Linie ein Eintrag mit
-Richtungs-Badge, Ziel, Abfahrtszeiten. **Keine** Bindung an eine bestimmte
-Spalte pro Favorit mehr.
+### Kopfzeile (0–90 px)
 
-**Typografie** (Richtwerte, Feinjustierung beim Rendern):
+- Trennlinie bei y=90 (2px), darunter/-über nichts weiter.
+- Echtes WL-Logo (`assets/img/wl-logo.svg`, 5 Pfade — Hintergrund, weißes
+  Innenfeld, Möwe-Zeichen in zwei Teilen, Wortmarke „WIENER LINIEN" als
+  eigener Pfad). Alle 5 Pfade sind Pflicht — fehlt die Wortmarke, bleibt nur
+  ein schwarzes Rechteck (beobachteter Fehler beim manuellen Kopieren).
+  Eingebettet via `<g transform="translate(24,12) scale(0.5025)">`
+  (Quell-viewBox 561,3×131,6).
+- „Stand HH:MM" rechtsbündig: `x=1857 y=60`, 39px fett (Zeitpunkt der
+  WL-Datenabfrage, s. Staleness-Hinweis unten).
 
-| Element | v1 (800×480) | v2 (Vorschlag) |
-|---|---|---|
-| Nächste Abfahrt, live (fett) | 24 pt, rot | 40 pt, **fett**, schwarz |
-| Nächste Abfahrt, nur Fahrplan | 24 pt, kursiv | 40 pt, kursiv |
-| Folgeabfahrten | 9 pt | 16 pt |
-| Linie/Steig/Ziel | 9 pt bold | 16 pt bold |
-| Stationsname | 9 pt bold | 18 pt bold |
-| gestörte Abfahrt | weiß auf rotem Block | weiß auf **schwarzem** Block (invertiert) |
-| `"in": 0` ("fährt jetzt") | `✱`, Zeilenfarbe | `✱`, schwarz |
+### Trennlinie Abfahrten|Wetter
 
-Tie-Break unverändert aus v1: ist die nächste Abfahrt live *und* gestört,
-gewinnt die Invertierung (weiß auf schwarz) vor Fett.
+Vertikal bei `x=1113` (2px), volle Höhe zwischen Kopf- und Fußzeile.
+Beide Spalten halten **≥30px Abstand** zu dieser Linie (nicht nur zum
+Canvas-Rand!) — Abfahrten-Inhalt endet bei `x=1083` (33px Abstand),
+Wetter-Inhalt beginnt bei `x=1150` (37px Abstand).
 
-**Wetterkarte** (dritte Spalte, ~350–400 px breit, volle Höhe zwischen Kopf-
-und Fußzeile): Icon oben, Temperatur „von–bis" darunter, danach der
-Fließtext mit Zeilenumbruch über die volle verfügbare Höhe (kein
-Hart-Abschneiden wie im ursprünglich diskutierten Streifen-Layout).
+### Abfahrtenliste (links, x=16–1083)
 
-**Statuszeile** (Fußzeile, ~32 px, dünner Strich darüber): Akku-Icon + `%`
-links, Uhrzeit mittig, WLAN-Icon + Signalstärke rechts. Die Uhrzeit hier ist
-die **Serverzeit beim Rendern** — eine andere Angabe als „Stand HH:MM" in der
-Kopfzeile, die weiterhin den Zeitpunkt der WL-Datenabfrage markiert
-(Staleness-Anzeige für die Abfahrtsdaten, wie in v1 §7/§9). Beide bewusst
-nebeneinander: oben „wie aktuell sind die Daten", unten „läuft das Gerät
-gerade".
+Ersetzt die v1-Zweispaltenlogik (§7 der v1-Spec): eine durchgehende Liste
+aus Stationsblöcken. Jeder Block hat eine ALL-CAPS-Kopfzeile (Stationsname)
+und darunter eine Zeile pro Linie/Richtung. Bei mehrstationigen Favoriten
+(z. B. „Nach Hause": Bhf. Meidling S U, Siebenhirten, Vösendorf-SCS) folgt
+Block auf Block ohne zusätzliche Trennung außer dem normalen Abstand —
+**keine** übergreifende Favoriten-Überschrift, wie im Web-UI.
+
+**Vertikales Raster** — alles über eine Cursor-Regel aus zwei Konstanten
+hergeleitet (60 %/30 % von 96px Zeilenraster, s. u.):
+
+1. Kopfzeile-Trennlinie (y=90) bzw. das untere Ende des vorigen Blocks ist
+   der Cursor.
+2. **Vor** jedem Stationskopf: 58px (60 % von 96) Abstand vom Cursor bis zum
+   **Cap-Top** des Kopftexts (nicht bis zur Baseline!). Cap-Top wird mit dem
+   ungünstigsten Fall (Umlaut-Trema, 48px ab Baseline) berechnet, damit die
+   Zeile bei jedem Stationsnamen gleich viel Luft hat, unabhängig davon, ob
+   er ein Ü/Ä/Ö enthält — Ausschuss "schwankt" sonst mit dem Textinhalt.
+   Kopftext: 55px fett, ALL-CAPS.
+3. **Nach** dem Stationskopf: 29px (30 % von 96) Abstand von der
+   Kopf-Baseline bis zum **höchsten sichtbaren Element der ersten Zeile**.
+   Das ist bei Standard-Badges (68px hoch) IMMER das Badge, nie der
+   Fahrtrichtung-Text (37px Cap-Höhe) — ein früherer Entwurfsfehler maß
+   diesen Abstand am Text und ließ das Badge kollisionsnah an den
+   Stationsnamen heranrücken.
+4. **Zeilenraster:** 96px von Badge-Mitte zu Badge-Mitte, solange Zeilen
+   derselben Station folgen.
+5. Cursor nach dem letzten Element eines Blocks = Badge-Unterkante der
+   letzten Zeile (`R+34`) — Ausgangspunkt für den nächsten Stationskopf.
+
+**Zeilen-interne Ausrichtung** — alle Elemente einer Zeile werden auf die
+**optische Mitte des Badges** zentriert (Baseline = `R + capHeight/2`,
+gemessene Cap-Höhen pro Schriftgröße: 55px→37, 46px→31,5, 32px→22, 26px→18,
+22px→15). Das ist bewusst **nicht** dieselbe Baseline für alle Elemente —
+unterschiedliche Schriftgrößen haben unterschiedliche Cap-Höhen, eine
+gemeinsame Baseline sieht bei stark unterschiedlichen Größen "hochgezogen"
+statt zentriert aus. Bei R = Badge-Mitte (`translate(54,R)`):
+
+| Element | x | Baseline-y | Schrift |
+|---|---|---|---|
+| Badge-Label (Liniennummer, weiß im Badge) | 54 (mittig) | `R+9` | 26px fett |
+| Steig-Nummer | 110 | `R+8` | 22px fett |
+| Fahrtrichtung | 145 | `R+19` | 55px |
+| Live-Abfahrt (Zahl oder `✱`) | 1000 (rechtsbündig) | `R+16` | 46px fett |
+| Trennpunkt „·" | 1015 | `R+7` | 20px |
+| Folgeabfahrt | 1083 (rechtsbündig) | `R+11` | 32px |
+
+Unter jeder Zeile ein 1px-Strich (`x=16` bis `x=1083`) bei `R+48`.
+
+**Badges** (4 Typen, monochrom, keine Farbe — Unterscheidung ausschließlich
+über Form):
+
+| Typ | Form |
+|---|---|
+| `metro` | gefülltes Quadrat 68×68 |
+| `tram` | gefüllter Kreis, r=34 |
+| `bus` | gefülltes Rechteck 68×68, rx=14 |
+| `train` | **ungefülltes** Rechteck 68×68 rx=14, 5px schwarzer Rand (einzige Outline-Form) |
+
+WLB (Wiener Lokalbahnen) normalisiert über `board_type()` auf `tram` →
+Kreis-Badge mit Label „WLB" (24px statt 26px, da 3-stellig).
+
+**Typografie-Sonderfälle:**
+- `"in": 0` ("fährt jetzt") → `✱` an Stelle der Live-Abfahrtszahl, gleiche
+  46px/fett-Formatierung.
+- Gestörte Abfahrt (`delayed`): weiß auf schwarzem Block (invertiert,
+  Tie-Break wie v1 — Invertierung schlägt Fett, falls beides zuträfe).
+- Alles einfarbig Schwarz auf Weiß — keine Graustufen, keine Farbe.
+
+### Wetterkarte (rechts, x=1150–1856)
+
+Icon oben (aus einfachen Grundformen generiert, z. B. Sonne = Kreis + 8
+Strahlen, `scale(1.8)`, zentriert um `x=1492`), darunter Temperatur „von–bis"
+zentriert (40px fett). Danach Überschrift „Heute" (30px fett) und
+Fließtext (39px, Zeilenumbruch von Hand an der verfügbaren Spaltenbreite
+ausgerichtet — kein automatischer Textumbruch in SVG).
+
+### Statuszeile (Fußzeile, 1310–1404, 94px)
+
+Trennlinie bei y=1310. Akku-Icon + `%` links, Uhrzeit mittig (Serverzeit
+beim Rendern — bewusst getrennt von „Stand HH:MM" oben, das den Zeitpunkt
+der WL-Datenabfrage markiert), WLAN rechts nur als Balken-Icon (kein dBm-Text).
+
+### Referenz-Assets
+
+- `assets/fonts/board/Atkinson-Hyperlegible-{Regular,Bold,Italic,BoldItalic}-102.ttf`
+- `assets/img/wl-logo.svg` (5-Pfad-Original, s. o.)
+
+Beide sind zum Zeitpunkt dieser Spec-Version noch **nicht committed** —
+Task 1 der Implementierungsplan muss sie ins Repo aufnehmen.
 
 ---
 
