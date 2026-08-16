@@ -18,7 +18,7 @@ class BoardTemplateChromeTest extends TestCase
         $this->assertSame(5, substr_count($paths, '<path'), 'alle 5 Pfade (Hintergrund, Innenfeld, 2x Moewe, Wortmarke) muessen vorhanden sein');
         $this->assertStringNotContainsString('<svg', $paths, 'die aeusseren svg-Tags duerfen nicht mitkommen (wird selbst in eine <g> eingebettet)');
         $this->assertStringNotContainsString('<?xml', $paths);
-        $this->assertStringContainsString('WIENER LINIEN', $paths, 'die Wortmarke (letzter Pfad) muss enthalten sein -- ohne sie bleibt nur ein schwarzes Rechteck (siehe Spec §9)');
+        $this->assertStringContainsString('m335.4 65.96', $paths, 'die Wortmarke (letzter Pfad, beginnt mit "m335.4 65.96") muss enthalten sein -- ohne sie bleibt nur ein schwarzes Rechteck (siehe Spec §9)');
     }
 
     public function test_battery_fill_width_scales_with_percent(): void
