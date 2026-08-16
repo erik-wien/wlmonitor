@@ -476,19 +476,26 @@ Formeln beziehen sich auf `R` = Badge-Mitte der jeweiligen Zeile):
   (lokaler Koordinatenraum -15..15, passend zur 46px-Zeile):
 
   ```svg
-  <g id="starNow" stroke="black" stroke-width="7" stroke-linecap="round">
+  <g id="starNow" stroke-width="7" stroke-linecap="round">
     <line x1="0" y1="-15" x2="0" y2="15"/>
     <line x1="-13" y1="-7.5" x2="13" y2="7.5"/>
     <line x1="-13" y1="7.5" x2="13" y2="-7.5"/>
   </g>
   ```
 
-  Einbettung, rechtsbündig auf dieselbe x-Position wie die Zahl, die sie
-  ersetzt, vertikal auf `R` zentriert:
+  **Keine feste Strichfarbe** — `#starNow` erbt `stroke` vom aufrufenden
+  `<use>`. Grund: bei „gestört UND fährt gerade jetzt" sitzt der Stern auf
+  dem schwarzen Invertierungsblock der Live-Abfahrt und braucht
+  `stroke="white"`, sonst wäre er unsichtbar (schwarz auf Schwarz) — am
+  gerenderten Bild geprüft und korrigiert. Einbettung, rechtsbündig auf
+  dieselbe x-Position wie die Zahl, die sie ersetzt, vertikal auf `R`
+  zentriert, `stroke` = dieselbe Farbe, die die ersetzte Zahl dort hätte
+  (schwarz normal, grau bei „nur Fahrplan", weiß beim Live-Slot einer
+  gestörten Zeile — „gestört" betrifft nie die Folgeabfahrt):
   - Live-Abfahrt (46px-Slot, `x=1000` rechtsbündig):
-    `<use href="#starNow" transform="translate(985,R)"/>`
+    `<use href="#starNow" transform="translate(985,R)" stroke="..."/>`
   - Folgeabfahrt (32px-Slot, `x=1083` rechtsbündig):
-    `<use href="#starNow" transform="translate(1073,R) scale(0.696)"/>`
+    `<use href="#starNow" transform="translate(1073,R) scale(0.696)" stroke="..."/>`
     (0,696 = 32/46, gleiches Größenverhältnis wie die Schriftgrößen der
     beiden Slots)
 - **Nur Fahrplan** (`realtime === false`): die ganze Zeile bis auf das Badge

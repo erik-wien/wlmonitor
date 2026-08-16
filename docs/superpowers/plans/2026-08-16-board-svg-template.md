@@ -110,8 +110,16 @@ Liste und einer Taskbeschreibung gilt die Spec:
 - `"in": 0` → Jetzt-Symbol `#starNow` (selbst gezeichneter Stern aus 3
   dicken Linien, `stroke-width=7`, lokaler Koordinatenraum -15..15) statt
   Zahl — **kein Unicode-Zeichen** („✱" fällt im Font-Fallback zu dünn aus,
-  „✳︎" hat kein Glyph, am gerenderten Bild geprüft). Live-Slot:
-  `translate(985,R)`. Folgeabfahrt-Slot: `translate(1073,R) scale(0.696)`.
+  „✳︎" hat kein Glyph, am gerenderten Bild geprüft). `#starNow` hat
+  **keine eigene Strichfarbe** — jeder `<use>`-Aufruf muss `stroke="..."`
+  selbst mitgeben (sonst unsichtbar, `stroke` default `none`), denn bei
+  „gestört UND fährt gerade jetzt" sitzt der Stern auf dem schwarzen
+  Invertierungsblock und braucht `stroke="white"` statt `stroke="black"`
+  (Review-Befund aus Task 6, per Pipeline verifiziert). Live-Slot:
+  `translate(985,R)` mit `stroke` = dieselbe Farbe wie die Live-Abfahrt
+  sonst hätte (schwarz normal, weiß bei „gestört"). Folgeabfahrt-Slot:
+  `translate(1073,R) scale(0.696)` mit `stroke` = Zeilenfarbe (schwarz
+  oder grau bei „nur Fahrplan" — „gestört" betrifft nie die Folgeabfahrt).
 - Wetterkarte: Icon `translate(1492,180) scale(1.8)`. Temperatur
   `x=1492 y=290`, 40px fett, zentriert. „Heute" `x=1150 y=366`, 30px fett.
   Fließtext ab `x=1150 y=422`, 46px Zeilenabstand, 39px Schrift. Bleibt beim
