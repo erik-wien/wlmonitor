@@ -1,160 +1,169 @@
-# E-Paper-Monitor v2 — neues Panel, serverseitiges Rendering, Wetter
+# E-Paper-Abfahrtsmonitor — Design
 
-**Stand:** 2026-08-15 · entworfen, nicht umgesetzt
-**Umfang:** Hardware-Wechsel, neuer Bild-Vertrag für `web/board.php` (löst den
-JSON-Vertrag aus der v1-Spec ab), serverseitige Rendering-Pipeline, Wetter-Integration,
-ESP32-Firmware-Neubau
-**Ersetzt/erweitert:** `docs/superpowers/specs/2026-08-01-epaper-abfahrtsmonitor-design.md`
-(„v1"). v1 ist bereits umgesetzt (`web/board.php`, `inc/board.php` — Token-Auth,
-serverseitige Favoritenfilterung, Entdopplung). **§5 „Serverseitige Filterung" und
-§6 „monitor_json.php-Härtung" der v1-Spec bleiben unverändert gültig** — diese
-Spec ändert nur, *was* `board.php` als Antwort liefert (Bild statt JSON) und *was*
-zusätzlich hineinfließt (Wetter). Home Assistant (`monitor_json.php`) ist von
-alldem nicht betroffen.
-**Hardware:** Seeed Studio 10,3″ Monochrome eInk, 1404×1872 px, TTL, Treiberboard
-**EE03** mit **XIAO ESP32-S3 Plus** (löst das Waveshare 7.5″-B-Panel der v1-Spec ab)
+**Stand:** 2026-08-16 · entworfen, teilweise umgesetzt (Rendering-Template
+in Arbeit, siehe `docs/superpowers/plans/2026-08-16-board-svg-template.md`)
+**Umfang:** Hardware, Bild-Protokoll für `web/board.php`, serverseitige
+Rendering-Pipeline (SVG → 16-Graustufen-Bild), Touch-Navigation
+(Favoritenwechsel, Seiten, Störungen), Wetter-Integration, ESP32-Firmware
 
 ---
 
 ## 1. Ziel
 
-Zusätzlich zu den Abfahrten (v1) zeigt das Display eine **Wetterkarte** (Icon,
-Temperatur von–bis, kurzer Fließtext — heute bis 19:00, danach morgen) und eine
-**Statuszeile** (Akku, Uhrzeit, WLAN-Signal). Das neue Panel unterstützt
-**Partial Refresh**; das wird genutzt, um bei den meisten Polls nur die
-geänderten Minutenzahlen neu zu zeichnen statt das ganze Bild.
-
-Zweites Ziel, das die Umstellung erst ermöglicht: die Firmware verliert ihre
-Layout-/Font-Logik (`lib/boardlogic/layout.cpp`, `display.cpp` der v1-Spec
-entfallen). Sie wird zu „Bilddaten empfangen, aufs Panel schreiben" reduziert;
-das gesamte Rendering wandert auf den Server.
+Ein wandmontierter E-Paper-Monitor zeigt Wiener-Linien-Abfahrten für bis zu
+drei Favoriten (umschaltbar per Touch), eine Wetterkarte und — bei Bedarf —
+aktuelle Störungsmeldungen. Sämtliches Rendering (Layout, Schrift, Icons)
+passiert **serverseitig**: die Firmware bekommt fertige Pixeldaten und
+schreibt sie aufs Panel, ohne selbst Text oder Layout zu kennen. Das Panel
+unterstützt **Partial Refresh** und **16 Graustufen**; beides wird genutzt
+— Partial Refresh für die meisten Polls (nur geänderte Minutenzahlen),
+Graustufen für nicht-Echtzeit-Abfahrten und die Touch-Bedienelemente.
 
 ---
 
-## 2. Ausgangslage
-
-v1 ist umgesetzt: `board.php` liefert JSON (Favoriten, Stationen, Linien,
-Abfahrten, serverseitig gefiltert und entdoppelt), Token-Auth über
-`erikr/auth`, LAN-Listener auf akadbrain (`docs/deploy-board-endpunkt.md`).
-Die Firmware existiert als Entwurf für das alte Waveshare-Panel (800×480,
-3-Farb, kein Partial Refresh) und rendert Text/Layout selbst über GxEPD2 +
-Adafruit_GFX-Fonts.
-
-Zwei unabhängige Entscheidungen lösen diese Spec aus:
-
-1. **Panel-Wechsel** auf das Seeed 10,3″ Monochrome (siehe §4) — ein anderer
-   Formfaktor (hochkant-nativ, quer montiert), Partial-Refresh-fähig, aber ohne
-   Rot/Graustufen.
-2. **Wetter als neue Datenquelle** (ORF, siehe §8) — kein API, HTML-Scraping.
-
-Der Panel-Wechsel allein macht die JSON→Firmware-Rendering-Architektur aus v1
-unpraktisch (jede Panel-Bibliothek bräuchte ihre eigene Layout-Portierung in
-C++). Deshalb wird das Rendering komplett auf den Server verlagert — das war
-für v1 keine Option (kein Partial Refresh, ein Vollbild-Redraw alle 2 Minuten
-war ohnehin nötig), wird aber mit dem neuen Panel zum Normalfall.
-
----
-
-## 3. Entscheidungen im Überblick
+## 2. Entscheidungen im Überblick
 
 | Frage | Entscheidung | Begründung |
 |---|---|---|
-| Wo wird gerendert? | **Server**, SVG-Template → `rsvg-convert` → 1bpp | Layout als Template lesbarer als GD-Koordinaten-Code; kein Chromium-Prozess nötig; `librsvg` ist bereits im Toolchain (Logo-Pipeline, `epaper-monitor/README.md`) |
-| Panel-Bibliothek | **Seeed_GFX** | First-class Partial-Update- und Dual-Buffer-Unterstützung, extra für Seeed-Hardware gebaut (Alternative: Seeed-Fork von GxEPD2) |
-| Montage | **Querformat** (Panel physisch gedreht) | Bisherige Zweispalten-Denke bleibt sinnvoll übertragbar; volles Hochformat hätte das Layout stärker umgekrempelt |
-| „Live"-Kennzeichnung | **Fett** statt Rot | Panel ist monochrom, kein Rot mehr verfügbar |
-| Gestörte Abfahrt | **Invertiert** (weiß auf schwarzem Block) bleibt, wie in v1 — nur ohne Rot | Eigenständiges Signal neben „fett"; Tie-Break wie v1: ist die nächste Abfahrt live *und* gestört, gewinnt die Invertierung |
-| Partial-Update-Mechanik | **Server diffed, ETag-Selbstheilung, Zwangs-Vollbild alle 30 Min** (§6) | Firmware bleibt dumm; ETag verhindert stille Drift zwischen Server- und Geräte-Zustand, falls ein Poll ausfällt |
-| Abfahrten-Layout | **Eine durchgehende Liste** von Stationskarten (wie `renderMonitor()` im Web-UI), volle Breite, größere Schrift — **keine** festen Favoriten-Spalten mehr | Bei 1470 px Breite verschenkt eine enge Spalte Platz; die Karten-Logik existiert im Web-UI schon |
-| Wetterkarte | **Dritte, schmale Spalte** neben der Abfahrtenliste, nicht als Streifen darüber | Nutzt die Breite, die die einspaltige Abfahrtenliste sonst übrig lässt |
-| Wetterquelle | `wetter.orf.at/wien/prognose` (Desktop, nicht `/m/`), Station **Wien-Hohe Warte**, **positionale** Auswahl (1./2. Spalte bzw. Textblock) | Robuster als Textmatching auf wechselnde Überschriften („Heute Nachmittag" vs. „Heute, Mariä Himmelfahrt") |
+| Wo wird gerendert? | **Server**, SVG-Template → `rsvg-convert` → Graustufen-Rohformat | Layout als Template lesbarer als GD-Koordinaten-Code; kein Chromium-Prozess nötig; `librsvg` ist bereits im Toolchain |
+| Panel-Bibliothek | **Seeed_GFX** | First-class Partial-Update-, Dual-Buffer- und Graustufen-Unterstützung, für Seeed-Hardware gebaut |
+| Montage | **Querformat** (Panel physisch gedreht) | Zweispalten-Layout (Abfahrten/Wetter) bleibt sinnvoll übertragbar |
+| „Live"-Kennzeichnung | **Fett**, Schwarz | Panel ist monochrom/graustufig, kein Rot verfügbar |
+| Nur Fahrplan (kein Echtzeit-Datensatz) | **Mittleres Grau**, aufrecht (nicht kursiv) | Nutzt die neu verfügbaren Graustufen für einen dritten, weniger dringlichen Zustand |
+| Gestörte Abfahrt | **Invertiert** (weiß auf schwarzem Block) | Alarm-Signal, muss sich von „nur Grau" klar abheben — Tie-Break: Invertierung schlägt „nur Fahrplan" |
+| Partial-Update-Mechanik | **Server diffed, ETag-Selbstheilung, Zwangs-Vollbild alle 30 Min** | Firmware bleibt dumm; ETag verhindert stille Drift zwischen Server- und Geräte-Zustand, falls ein Poll ausfällt |
+| Favoriten am Gerät | **Touch-Leiste mit den ersten 3 Favoriten** (nach `sort`) des Geräte-Nutzers, Single-Select | Eigener wlmonitor-Nutzer pro Gerät; Umschalten wie im Web-UI, aber auf das Wesentliche reduziert |
+| Mehr Inhalt als eine Seite | **Kanonische Pagination** (Pfeile + Seitenzahlen, aktuelle Seite als gefüllter Kreis) am Ende der Abfahrtenspalte | Bekanntes UI-Muster, per Touch **und** über zwei dedizierte Hardware-Tasten am Gerät bedienbar |
+| Störungen | **Eigene Seite(n)** nach den Abfahrten-Seiten des aktiven Favoriten, gefiltert auf dessen Linien/Stationen | Nutzt `monitor_get()`s bereits vorhandenes `alerts`-Feld, bisher ungenutzt |
+| Abfahrten-Layout | **Eine durchgehende Liste** von Stationskarten, volle Spaltenbreite, große Schrift | Bei ~1067px Breite verschenkt eine enge Spalte Platz |
+| Wetterkarte | **Dritte, schmale Spalte**, bleibt beim Blättern statisch | Nutzt die Breite, die die einspaltige Abfahrtenliste sonst übrig lässt; unabhängig vom gewählten Favoriten |
+| Wetterquelle | `wetter.orf.at/wien/prognose` (Desktop, nicht `/m/`), Station **Wien-Hohe Warte**, **positionale** Auswahl (1./2. Spalte bzw. Textblock) | Robuster als Textmatching auf wechselnde Überschriften |
 | Wetter-Cutover | **19:00 Wien-Zeit**: davor heute, danach morgen — Icon/Temp *und* Text gemeinsam | Nutzervorgabe |
-| Wetter-Abruf | Cron **alle 3 h ab 06:00** (06/09/12/15/18/21 Uhr), Datei-Cache | Wetter ändert sich langsam; schont ORF zusätzlich zum ohnehin unauffälligen `User-Agent: *`-Zugriff laut `robots.txt` |
+| Wetter-Abruf | Cron **alle 3 h ab 06:00** (06/09/12/15/18/21 Uhr), Datei-Cache | Wetter ändert sich langsam |
 | Wetter zu alt | **>6 h**: Fließtext wird durch Fehlermeldung ersetzt (Icon/Temp bleiben stehen) | Nutzervorgabe |
-| Statuszeile | Server rendert sie mit; Firmware liefert Akkuspannung + RSSI als Request-Header | Konsistent mit „Firmware misst, Server zeichnet" |
+| Statuszeile | In die Kopfzeile integriert (Uhrzeit zentriert, Akku+WLAN rechts); Fußzeile gehört jetzt der Touch-Leiste | Die Fußzeile wird für die Favoriten-Buttons gebraucht |
 
 ---
 
-## 4. Hardware
+## 3. Hardware
 
-- **Panel:** Seeed Studio 10,3″ Monochrome eInk/ePaper, 1404×1872 px, TTL-Interface.
-  [Produktseite](https://www.seeedstudio.com/10-3inch-Monochrome-eInk-ePaper-Display-with-1404x1872-Pixels-p-6568.html)
-- **Treiberboard:** EE03, mit **XIAO ESP32-S3 Plus**, eingebautem T-CON
-  (Timing-Kontrolle) und SHT40-Temperatursensor für Waveform-Kompensation.
-  [EE03-Übersicht](https://wiki.seeedstudio.com/xiao_epaper_display_board_overview/)
-- **Batterie:** EE03 hat JST-2.0-Anschluss + Lade-IC; kein Fuel-Gauge-Chip.
-  Spannungsmessung über `ADC_BAT` auf **GPIO10** des XIAO ESP32-S3 Plus
-  (Spannungsteiler), ausgelesen per `analogReadMilliVolts()`.
-  [Forum-Beleg](https://forum.seeedstudio.com/t/xiao-esp32s3-plus-adc-bat-on-gpio10/291965)
-- **Montage:** quer (90° gedreht gegenüber der nativen Hochformat-Ausrichtung
-  des Panels) → effektive Zeichenfläche **1872×1404**.
-- **Bibliothek:** [Seeed_GFX](https://github.com/Seeed-Studio/Seeed_GFX)
-  (`EPaper`-Klasse: Dual-Buffer-Rendering, regionsbasiertes Partial-Update).
-- **Pin-Belegung:** kein offener Punkt mehr — der [Seeed_GFX-Online-
-  Konfigurationsgenerator](https://seeed-studio.github.io/Seeed_GFX/) erzeugt
-  für „XIAO ePaper Display Board EE03" + 10,3″-Panel eine fertige `driver.h`
-  mit allen Pin-Definitionen. Das Panel hängt zudem über einen festen
-  40-Pin-0,5mm-FPC-Steckverbinder am EE03, keine lose Verdrahtung. Schaltplan-
-  PDF und PCBA-Dateien liegen bei Bedarf unter
-  `files.seeedstudio.com/wiki/Epaper/EE03/` (verlinkt von der
-  [Getting-Started-Seite](https://wiki.seeedstudio.com/getting_started_with_ee03/)).
+**Gerät:** [Seeed Studio reTerminal E1003](https://wiki.seeedstudio.com/getting_started_with_reterminal_e1003/)
+— ein fertiges, gehäustes Komplettgerät (kein Selbstbau aus Einzelteilen).
+
+- **Display:** 10,3″ Monochrom-ePaper, Panel ED103TC2, Controller **IT8951**,
+  Auflösung **1404×1872 px** (nativ Hochformat), **16-stufige Graustufen**,
+  Vollbild-Refresh ca. 3 s.
+- **Montage:** quer (90° gedreht gegenüber der nativen Ausrichtung) →
+  effektive Zeichenfläche **1872×1404**. Gerät liefert einen eigenen
+  3D-gedruckten Standfuß mit Montagebohrungen auf der Rückseite (Wandmontage
+  möglich).
+- **MCU:** ESP32-S3R8 (WiFi/BLE dual-mode), 8 MB OPI-PSRAM, 32 MB Flash.
+  Framebuffer (~321 kB) liegt in PSRAM.
+- **Touch:** kapazitiv, Controller **GT911** (Goodix), I²C0, Adresse `0x5D`
+  oder `0x14` (Auto-Erkennung). Pins: SDA=GPIO19, SCL=GPIO20, INT=GPIO2,
+  RESET=GPIO48 (Bus geteilt mit RTC/Sensor). Bibliothek: `Seeed_GFX`
+  (`mapTouchToDisplay()`, `readTouchPoint()`).
+- **Physische Tasten:** grüne „Refresh"-Taste (oben, weckt aus Tiefschlaf,
+  GPIO3/KEY0) + zwei weiße Seiten-Navigationstasten (oben) — deren genaue
+  GPIO-Zuordnung wird bei der Firmware-Implementierung aus der
+  Seeed_GFX-Beispielfirmware für E1003 übernommen, nicht hier vorab geraten.
+  Dazu ein rückseitiger Netzschalter, rote Lade-LED, grüne Status-LED.
+- **Batterie:** 3000 mAh, Laden über USB-C (5V/1A). Bis zu 6 Monate Laufzeit
+  bei einem Refresh/Tag (Herstellerangabe). Wie genau der Ladezustand
+  softwareseitig ausgelesen wird (Fuel-Gauge vs. Spannungsteiler), klärt
+  sich bei der Firmware-Implementierung anhand der Seeed_GFX-Beispiele.
+- **Sensoren:** Temperatur, Luftfeuchtigkeit (ungenutzt in dieser Spec).
+- **Erweiterungs-Header (J2, 6-polig):** 3,3V, GND, GPIO47 (analog),
+  GPIO6 (analog), GPIO20 (I²C SCL), GPIO19 (I²C SDA) — wird für diese Spec
+  nicht gebraucht, alle nötigen Peripherien (Display, Touch, Tasten) sind
+  bereits intern verdrahtet.
+- **WLAN:** 2,4 GHz 802.11 b/g/n (kein 5 GHz).
+- **Bibliothek:** [Seeed_GFX](https://github.com/Seeed-Studio/Seeed_GFX) —
+  Dual-Buffer-Rendering, regionsbasiertes Partial-Update, Graustufen-Modus
+  (`initGrayMode(GRAY_LEVEL16)`), Touch-Abfrage. Arduino-kompatibel
+  programmierbar.
 
 ---
 
-## 5. Architektur — Ablauf je Zyklus
+## 4. Architektur — Ablauf je Zyklus
 
-Wie v1: aufwachen → WLAN → HTTP-Request → zeichnen → Tiefschlaf (2 Min). Kein
-Dauerbetrieb, RTC-Speicher übersteht Tiefschlaf.
+Aufwachen (Timer **oder** Tastendruck/Touch) → WLAN → HTTP-Request →
+zeichnen → Tiefschlaf. Kein Dauerbetrieb, RTC-Speicher übersteht Tiefschlaf.
 
-1. Firmware liest Akkuspannung (GPIO10) und WLAN-RSSI (`WiFi.RSSI()`, nach
-   Connect verfügbar).
-2. `GET /board.php?fav=<ids>`, Header:
+1. Firmware liest Batteriestand und WLAN-RSSI (`WiFi.RSSI()`, nach Connect
+   verfügbar). Falls das Aufwachen durch Touch oder eine der beiden
+   Seiten-Tasten ausgelöst wurde, wird das erkannte Ereignis gemerkt
+   (Favoriten-Button 0/1/2, „Seite zurück", „Seite vor").
+2. `GET /board.php`, Header:
    `Authorization: Bearer <token>`,
    `X-Device-Battery-mV: <n>`,
    `X-Device-RSSI: <n>`,
+   `X-Device-Touch: <fav0|fav1|fav2|page_prev|page_next>` (nur bei
+   Touch-/Tasten-Auslösung, sonst weggelassen),
    `If-None-Match: <letzter bekannter ETag>` (leer beim allerersten Poll).
-3. Server holt Abfahrten wie in v1 (`inc/board.php`, Filterung/Entdopplung
-   unverändert) + liest den Wetter-Cache (`data/weather_cache.json`, §8) +
-   verarbeitet die Statuszeilen-Header aus Schritt 2.
-4. Server rendert das komplette Board als SVG-Template → `rsvg-convert` → PNG
-   → 1bpp-Reduktion (§7).
-5. Server vergleicht den neuen Frame mit dem zwischengespeicherten letzten
-   Frame für dieses Gerät (Cache-Key: SHA-256 des Tokens + `fav`-Liste, Datei
-   in `data/board_state/`):
-   - `If-None-Match` passt zum dort gespeicherten ETag **und** der letzte
-     Vollbild-Refresh liegt < 30 Min zurück → **Patch**: Bounding-Box aller
-     geänderten Pixel + deren Rohdaten.
-   - `If-None-Match` fehlt, passt nicht, oder die 30-Min-Grenze ist erreicht,
-     oder es gibt noch keinen gespeicherten Zustand → **Vollbild**.
-   - Nach dem Senden wird der neue Frame + ETag + Zeitpunkt (bei Vollbild) in
-     `data/board_state/<hash>` abgelegt.
-6. Firmware (Seeed_GFX) schreibt die empfangenen Pixeldaten in den
+   Kein `fav`-Parameter mehr nötig — der Server ermittelt die Favoriten des
+   Geräte-Nutzers direkt aus dem Token.
+3. Server lädt die Favoriten des Token-Nutzers (`favorites_get()`), nimmt
+   die ersten drei nach `sort` als Touch-Leisten-Kandidaten. Anhand des
+   gespeicherten Geräte-Zustands (`data/board_state/<hash>`, Schlüssel =
+   SHA-256 des Tokens) und eines eventuellen `X-Device-Touch` bestimmt er
+   den aktiven Favoriten-Index (0/1/2, Default 0) und die aktive Seite
+   (Default 1) — `page_prev`/`page_next` verschieben die Seite,
+   `fav0`/`fav1`/`fav2` wechseln den Favoriten und setzen die Seite auf 1
+   zurück.
+4. Server holt Abfahrten (`inc/board.php`, `board_favorite()`, Filterung/
+   Entdopplung wie gehabt) für den aktiven Favoriten, liest den
+   Wetter-Cache (`data/weather_cache.json`, §7) und — falls die aktive
+   Seite eine Störungsseite ist — die zu den Linien/Stationen des aktiven
+   Favoriten passenden Einträge aus `monitor_get()['alerts']`.
+5. Server rendert das komplette Board als SVG-Template → `rsvg-convert` →
+   16-Graustufen-Rohformat (§6).
+6. Server vergleicht den neuen Frame mit dem zwischengespeicherten letzten
+   Frame für dieses Gerät:
+   - `If-None-Match` passt zum gespeicherten ETag **und** der letzte
+     Vollbild-Refresh liegt < 30 Min zurück **und** weder Favorit noch
+     Seite haben gewechselt → **Patch**: Bounding-Box aller geänderten
+     Pixel + deren Rohdaten.
+   - Sonst (ETag passt nicht, 30-Min-Grenze erreicht, Favoriten-/
+     Seitenwechsel, oder noch kein gespeicherter Zustand) → **Vollbild**.
+     Ein Favoriten- oder Seitenwechsel ändert praktisch die ganze Fläche —
+     die allgemeine Diff-Logik erkennt das ohnehin von selbst über die
+     Bounding-Box, es braucht keinen Sonderfall.
+   - Nach dem Senden wird der neue Frame + ETag + Zeitpunkt (bei Vollbild)
+     + aktiver Favoriten-Index + aktive Seite in `data/board_state/<hash>`
+     abgelegt.
+7. Firmware (Seeed_GFX) schreibt die empfangenen Pixeldaten in den
    angegebenen Ausschnitt und ruft je nach `X-Board-Mode` ein Partial- oder
    Vollbild-Update auf.
 
-**Kein `$_SESSION`.** Der neue Pro-Gerät-Zustand ist ein Dateicache in `data/`
-(analog zu `RATE_LIMIT_FILE`/`data/ratelimit.json`), keine PHP-Session — das
-Cookie-Problem aus der v1-Ausgangslage (§2 dort) wird dadurch nicht wieder
-eingeführt.
+**Kein `$_SESSION`.** Der Pro-Gerät-Zustand ist ein Dateicache in `data/`
+(analog zu `RATE_LIMIT_FILE`/`data/ratelimit.json`), keine PHP-Session.
+
+**Bekannte Einschränkung:** der Cache-Key (SHA-256 des Tokens) setzt genau
+ein Gerät pro Token voraus — zwei Geräte mit demselben Token würden sich
+Favoriten-Index und Seitenzustand teilen. Für den vorgesehenen
+Einsatz (ein Gerät, ein eigener wlmonitor-Nutzer) unproblematisch, aber
+nicht Teil dieser Spec, mehrere Geräte pro Token zu unterstützen.
 
 ---
 
-## 6. Bild-Protokoll: `web/board.php`
+## 5. Bild-Protokoll: `web/board.php`
 
 ### Anfrage
 
 ```
-GET /board.php?fav=<id>[,<id>…]
+GET /board.php
 Authorization: Bearer <token>
 X-Device-Battery-mV: 4012
 X-Device-RSSI: -62
+X-Device-Touch: fav1
 If-None-Match: "a1b2c3…"
 ```
 
-`fav`, Token-Prüfung, Fehlerkörper bei 401/503/500 bleiben wie in v1 (§4 dort)
-— diese Fehler haben weiterhin **keinen** Bildkörper, nur Statuscode +
-kleinen JSON-Fehlertext (`{"error":"unauthorized"}` etc.), damit die Firmware
-sie ohne Bildparser erkennen kann.
+Token-Prüfung und Fehlerkörper bei 401/503/500 bleiben unverändert — diese
+Fehler haben **keinen** Bildkörper, nur Statuscode + kleinen JSON-Fehlertext
+(`{"error":"unauthorized"}` etc.), damit die Firmware sie ohne Bildparser
+erkennen kann.
 
 ### Antwort (Erfolg, HTTP 200)
 
@@ -163,7 +172,7 @@ Metadaten als Header, Body = rohe Pixeldaten:
 ```
 X-Board-Mode: full | patch
 X-Board-ETag: "<sha256 der Frame-Daten>"
-X-Board-Generated: 2026-08-15T19:13:47+02:00
+X-Board-Generated: 2026-08-16T19:13:47+02:00
 X-Board-X: 0            (nur bei patch relevant)
 X-Board-Y: 0
 X-Board-W: 1872
@@ -172,87 +181,89 @@ Content-Type: application/octet-stream
 Content-Length: <n>
 ```
 
-Body: **1bpp, MSB-first, zeilenweise, Breite auf ein Vielfaches von 8
-aufgerundet** — das native Pufferformat, das Seeed_GFX für Partial-Update-
-Aufrufe erwartet. Bit-Konvention: **1 = Weiß, 0 = Schwarz**. Bei
+Body: **Graustufen-Rohformat, das native Pufferformat, das Seeed_GFX für
+Partial-Update-Aufrufe erwartet** (16 Stufen/4 Bit pro Pixel — exakte
+Byte-Packung wird bei der Firmware-Implementierung anhand der
+Seeed_GFX-Quelle verifiziert, analog zur bereits verifizierten
+1bpp-Packung aus einer früheren Rendering-Iteration, s. §6). Bei
 `X-Board-Mode: full` deckt der Body die volle 1872×1404-Fläche ab, bei
 `patch` nur das per `X-Board-X/Y/W/H` angegebene Rechteck.
 
-**Wichtig — kein klassisches HTTP-Caching:** `If-None-Match`/`ETag` werden
-hier zweckentfremdet. Es gibt bei jedem Poll neue Daten (die Minuten-
-Countdowns laufen weiter), ein `304 Not Modified` würde also nie passen. Der
-ETag dient ausschließlich dazu, dass der Server erkennt, ob sein
-Vorzustand für dieses Gerät noch stimmt, bevor er einen Patch statt eines
-Vollbilds schickt.
+**Kein klassisches HTTP-Caching:** `If-None-Match`/`ETag` werden hier
+zweckentfremdet. Es gibt bei jedem Poll neue Daten (Minuten-Countdowns
+laufen weiter), ein `304 Not Modified` würde also nie passen. Der ETag
+dient ausschließlich dazu, dass der Server erkennt, ob sein Vorzustand für
+dieses Gerät noch stimmt, bevor er einen Patch statt eines Vollbilds
+schickt.
 
-**Kein separater Fehlerbanner-Header.** Alle Fehlerfälle laufen entweder über
-den HTTP-Status ohne Bildkörper (401/503/500) oder werden direkt in die Pixel
-gerendert (invertierter Zeitstempel bei veralteten Abfahrtsdaten, Fehlertext
-in der Wetterkarte bei veraltetem Wetter-Cache, §8/§11) — die Firmware muss
-dafür keinen zusätzlichen Header auswerten.
+**Kein separater Fehlerbanner-Header.** Alle Fehlerfälle laufen entweder
+über den HTTP-Status ohne Bildkörper (401/503/500) oder werden direkt in
+die Pixel gerendert (invertierter Zeitstempel bei veralteten
+Abfahrtsdaten, Fehlertext in der Wetterkarte bei veraltetem Wetter-Cache,
+§7/§11) — die Firmware muss dafür keinen zusätzlichen Header auswerten.
 
 ---
 
-## 7. Rendering-Pipeline
+## 6. Rendering-Pipeline
 
-Neue Datei `inc/board_render.php`:
+Neue Datei `inc/board_render.php` (Grundfunktionen bereits vorhanden:
+`svg_to_png()`, `png_to_1bpp_packed()`):
 
-1. SVG-Template (Platzhalter für Stationskarten, Wetterkarte, Statuszeile)
-   wird mit den Daten aus `inc/board.php` + `inc/weather.php` + den
-   Statuszeilen-Werten befüllt.
-2. `rsvg-convert` rendert das SVG zu PNG (1872×1404) — auf dem Zielsystem
-   vorhanden (`brew install librsvg`, siehe `epaper-monitor/README.md`).
+1. SVG-Template wird mit den Daten aus `inc/board.php` + `inc/weather.php`
+   + den Statuszeilen-/Touch-Werten befüllt (`inc/board_template.php`,
+   in Arbeit, s. Implementierungsplan).
+2. `rsvg-convert` rendert das SVG zu PNG (1872×1404).
    **Font-Einbindung:** `rsvg-convert` nutzt system-installierte Schriften
-   über Fontconfig, nicht `<link>`/`@font-face`. Damit „Atkinson
-   Hyperlegible" ohne System-Installation verfügbar ist, setzt
-   `svg_to_png()` die Umgebungsvariable `FONTCONFIG_FILE` (als expliziter
-   `$env`-Parameter an `proc_open()`, nicht global via `putenv()` — sonst
-   verschmutzt der Wert den Prozess über den Aufruf hinaus) auf eine zur
-   Laufzeit erzeugte Fontconfig-XML, die auf `assets/fonts/board/`
-   verweist (Pfad relativ zu `__DIR__`, funktioniert unverändert in Dev
-   und Prod). Ohne dieses Env-Var fällt `rsvg-convert` still auf eine
-   System-Schrift zurück — sichtbar nur als „falsche Schriftart", nicht als
-   Fehler.
+   über Fontconfig, nicht `<link>`/`@font-face`. `svg_to_png()` setzt dafür
+   die Umgebungsvariable `FONTCONFIG_FILE` als expliziten `$env`-Parameter
+   an `proc_open()` (nicht global via `putenv()`, sonst verschmutzt der
+   Wert den Prozess über den Aufruf hinaus) auf eine zur Laufzeit erzeugte
+   Fontconfig-XML, die auf `assets/fonts/board/` verweist.
 3. PHP/GD (kein ImageMagick — auf dem Zielsystem nicht installiert, `ext-gd`
-   dagegen bereits vorhanden) liest das PNG, wendet einen **harten
-   Schwellwert** pro Pixel an (Luminanz < 128 → Schwarz, sonst Weiß) und
-   packt direkt ins Rohformat aus §6 (MSB-first, zeilenweise, Breite auf ein
-   Vielfaches von 8 aufgerundet). Bewusst **kein** Error-Diffusion-Dithering:
-   das würde Text-/Icon-Kanten körnig statt scharf machen — auf einem
-   200-DPI-Monochrom-Panel schlechter lesbar als ein harter Schwellwert.
-   Kein Zwischenschritt über eine „1bpp-PNG"-Datei nötig, GD liest das
-   Antialiasing-PNG direkt und packt in einem Durchgang.
-4. Dieselbe Datei (`inc/board_render.php`) übernimmt danach auch den
-   Frame-Vergleich aus §5 Schritt 5 (neuer Frame gegen `data/board_state/`,
-   ETag-Abgleich, Bounding-Box-Bildung) — Rendern und Diffen sind ein
-   zusammenhängender Schritt, kein separates Modul.
+   dagegen vorhanden) liest das PNG und packt es fürs Panel:
+   - **1bpp-Pfad** (`png_to_1bpp_packed()`, bereits implementiert und
+     getestet): harter Schwellwert pro Pixel (Luminanz < 128 → Schwarz,
+     sonst Weiß), MSB-first, zeilenweise. Bleibt als einfachster,
+     verifizierter Pfad bestehen, falls sich das 4bpp-Graustufenformat als
+     unpraktikabel erweist oder für Debug-Zwecke ein reiner Schwarz/Weiß-
+     Vergleich gebraucht wird.
+   - **4bpp-Graustufen-Pfad** (neu, für den eigentlichen Board-Betrieb):
+     quantisiert jeden Pixel anhand seiner Luminanz auf einen von 16
+     Grautönen (0=Schwarz…15=Weiß, nächstliegende Stufe), gepackt nach dem
+     Pufferlayout, das Seeed_GFX/IT8951 für Graustufen-Schreibvorgänge
+     erwartet — die exakte Byte-Anordnung ist beim jetzigen Planungsstand
+     nicht verifiziert und wird beim Firmware-/Protokoll-Task anhand der
+     Seeed_GFX-Quelle geklärt, nicht geraten.
+   Bewusst **kein** Error-Diffusion-Dithering: das würde Text-/Icon-Kanten
+   körnig statt scharf machen.
+4. Dieselbe Datei übernimmt danach auch den Frame-Vergleich aus §4 Schritt 6
+   (neuer Frame gegen `data/board_state/`, ETag-Abgleich,
+   Bounding-Box-Bildung) — Rendern und Diffen sind ein zusammenhängender
+   Schritt, kein separates Modul.
 
 Icons liegen **nicht** als Bitmaps vor, sondern als Vektor-Primitive direkt
 im SVG-Template — Wettericons aus einfachen Grundformen (Sonne = Kreis +
-Strahlen, Wolke = Outline-Pfad, s. §8), das WL-Logo als eingebettetes
-5-Pfad-SVG (s. §9). Das ersetzt die bitmapbasierte Logo-Konvertierung aus
-v1 (`epaper-monitor/tools/convert_logo.py`) — auf einem 1-Bit-Panel ohne
-Farbverläufe bringt eine Bitmap keinen Vorteil, Vektorform bleibt bei jeder
-Neuberechnung scharf und ist im SVG-Template direkt editierbar.
+Strahlen, Wolke = Outline-Pfad, s. §7), das WL-Logo als eingebettetes
+5-Pfad-SVG (s. §9). Auf einem Graustufen-Panel ohne Farbverläufe bringt
+eine Bitmap keinen Vorteil, Vektorform bleibt bei jeder Neuberechnung
+scharf und ist im SVG-Template direkt editierbar.
 
 ### Debug-Ausgabe im Browser
 
-`GET /board.php?fav=<ids>&debug=svg` (gleiche Token-Auth wie sonst) liefert
-das rohe SVG **vor** der `rsvg-convert`/1bpp-Reduktion, mit
+`GET /board.php?debug=svg` (gleiche Token-Auth wie sonst) liefert das rohe
+SVG **vor** der `rsvg-convert`/Graustufen-Reduktion, mit
 `Content-Type: image/svg+xml` — direkt im Browser-Tab zu öffnen und dort
 sogar per DevTools zu inspizieren. `&debug=png` liefert entsprechend das
-Zwischenergebnis nach `rsvg-convert`, aber vor der 1bpp-Reduktion (zeigt
-Antialiasing/Graustufen, wie es vor dem Schwellwert aussieht). Beide
-Debug-Zweige durchlaufen **nicht** die Diff-/Patch- oder ETag-Logik aus §5 —
-sie sind ein reiner Rendering-Test, kein Geräte-Zustand. Damit lässt sich das
-Template ändern und das Ergebnis sofort per Browser-Reload prüfen, ganz ohne
-Gerät oder Flash-Vorgang.
+Zwischenergebnis nach `rsvg-convert`, aber vor der Reduktion (zeigt
+Antialiasing, wie es vor der Quantisierung aussieht). Beide Debug-Zweige
+durchlaufen **nicht** die Diff-/Patch- oder ETag-Logik aus §4 — sie sind
+ein reiner Rendering-Test, kein Geräte-Zustand.
 
 ---
 
-## 8. Wetter-Integration
+## 7. Wetter-Integration
 
-### Scraping (`inc/weather.php`, neu)
+### Scraping (`inc/weather.php`)
 
 - Quelle: `https://wetter.orf.at/wien/prognose` (Desktop-Version). **Achtung:**
   die Desktop-Seite kodiert das Icon als `<span class="weatherIcon c123456">`,
@@ -269,15 +280,13 @@ Gerät oder Flash-Vorgang.
   temp_max`, kein Fehler.
 - Text: `.fulltextWrapper` → Paare aus `<h2>` + `<p>`. Erstes Paar = heute,
   zweites = morgen — **positional**, nicht über den Überschriftentext
-  geparst (der wechselt je nach Tageszeit/Feiertag: „Heute Nachmittag" vs.
-  „Heute, Mariä Himmelfahrt").
+  geparst (der wechselt je nach Tageszeit/Feiertag).
 - Cutover **19:00 Wien-Zeit**: davor heute-Werte (Icon, Temp, Text), ab 19:00
   morgen-Werte — alle drei Felder wechseln gemeinsam, nicht einzeln.
 - **`robots.txt`-Hinweis:** `wetter.orf.at` sperrt benannte KI-Crawler
-  (`anthropic-ai`, `ClaudeBot`, `GPTBot` u. a.) vollständig, erlaubt aber
-  `User-Agent: *` bis auf `/full` und `/oon/media/`. Der Cron-Scraper tritt
-  mit einem gewöhnlichen, nicht als Bot ausgewiesenen UA-String auf und
-  ruft nur 6×/Tag ab — das fällt unter den generellen `*`-Eintrag.
+  vollständig, erlaubt aber `User-Agent: *` bis auf `/full` und
+  `/oon/media/`. Der Cron-Scraper tritt mit einem gewöhnlichen UA-String
+  auf und ruft nur 6×/Tag ab — das fällt unter den generellen `*`-Eintrag.
 
 ### Icon-Mapping
 
@@ -285,20 +294,20 @@ ORF liefert einen 6-stelligen numerischen Code (am 15.8.2026 real beobachtet:
 `100000` = wolkenlos, `110000` = leicht bewölkt, `112000` = leicht bewölkt mit
 Niederschlag, `122000` = stark bewölkt mit starkem Niederschlag, `122001` =
 stark bewölkt mit starkem Niederschlag und Gewitter). Eigenes Icon-Set mit 9
-Kategorien + Fallback, vorkonvertiert wie das WL-Logo:
+Kategorien + Fallback:
 
 klar · leicht bewölkt · bewölkt · bedeckt · Regen leicht · Regen stark ·
 Schnee · Gewitter · Nebel · **unbekannt** (Fallback)
 
 Mapping-Tabelle in `inc/weather.php`, startend mit den fünf oben belegten
 Codes. Ein nicht gemappter Code fällt auf „unbekannt" zurück **und** erzeugt
-einen `appendLog()`-Eintrag (Fehler-Regeln-Konvention, wie in v1 für
-`board.php`) — so wächst die Tabelle anhand echter Beobachtung, ohne dass
-sich das Rendering deswegen sichtbar verhält wie ein Fehler.
+einen `appendLog()`-Eintrag — so wächst die Tabelle anhand echter
+Beobachtung, ohne dass sich das Rendering deswegen sichtbar verhält wie ein
+Fehler.
 
 ### Cache & Abruf-Rhythmus
 
-Neue Datei `scripts/weather_fetch_cron.php`, per Cron **alle 3 h ab 06:00**
+Datei `scripts/weather_fetch_cron.php`, per Cron **alle 3 h ab 06:00**
 (06/09/12/15/18/21 Uhr). Schreibt `data/weather_cache.json`:
 
 ```json
@@ -322,77 +331,103 @@ einen ORF-Abruf aus.
 
 ---
 
+## 8. Störungsmeldungen
+
+Nutzt `monitor_get()['alerts']` (`inc/monitor.php`, bereits vorhanden,
+bisher ungenutzt) — Liste realer WL-Störungen mit `title`, `description`,
+`priority`, `lines`, `stops`. Für den aktiven Favoriten werden nur die
+Einträge übernommen, deren `lines` mindestens eine der Linien des
+Favoriten enthalten (Filterung analog zu `board_filter_station()`).
+
+Angezeigt als eigene Seite(n) am Ende der Abfahrten-Seiten des aktiven
+Favoriten (Pagination zeigt sie mit), Layout wie eine Abfahrtenzeile:
+Titel fett, darunter gekürzter Beschreibungstext (max. 3 Zeilen, „…" bei
+Kürzung — reale ORF-Störungstexte können mehrere hundert Zeichen lang
+sein). Kein automatischer Zeilenumbruch in SVG, gleiche
+Wortumbruch-Logik wie beim Wetter-Fließtext (§9), auf die schmalere
+Abfahrtenspalten-Breite angepasst.
+
+Gibt es für den aktiven Favoriten keine passenden Störungen, entfällt die
+Störungsseite ersatzlos (keine leere Seite mit „keine Störungen").
+
+---
+
 ## 9. Layout (1872 × 1404, Querformat)
 
-Pixelgenau durch iteratives Rendern über die echte Pipeline (`svg_to_png()` +
-`png_to_1bpp_packed()`, SVG → rsvg-convert → GD-Schwellenwert → visuelle
-Kontrolle) erarbeitet, mit den beiden echten Favoriten „Westbahnhof"
-(1 Station) und „Nach Hause" (3 Stationsgruppen) verifiziert. Alle Werte
-unten sind verbindlich, nicht Richtwerte — jede Zahl wurde am gerenderten
-Bild nachgemessen (Pixelscan über `imagecolorat()`), nicht geschätzt.
+Pixelgenau durch iteratives Rendern über die echte Pipeline erarbeitet und
+am gerenderten Bild abgenommen — mit echten Favoriten („Westbahnhof",
+„Nach Hause") und echten WL-Störungsmeldungen verifiziert. Alle Werte
+unten sind verbindlich, nicht Richtwerte.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
-│ ▛▜ WIENER LINIEN                                            Stand 19:13    │  90 px
+│ ▛▜ WIENER LINIEN            19:14                    ▂▄▆ [🔋78%]           │  90 px
 ├───────────────────────────────────────────────────────────┬───────────────┤
 │  WESTBAHNHOF S U                                             │      ☀        │
 │  ⬤18 1  Schlachthausgasse U                        7 · 22   │   18°–35°C    │
 │  ⬤ 6 1  Geiereckstraße                             1 · 14   │  Heute        │
-│  ⬤ 9 2  Gersthof S                                 9 · 16   │  Von früh bis │
-│  ▪U3 1  Simmering                                  ✱ · 8    │  spät scheint │
+│  ⬤ 9 2  Gersthof S (grau, nur Fahrplan)             9 · 16   │  Von früh bis │
+│  ▪U3 1  Simmering (gestört, invertiert)             ✱ · 8    │  spät scheint │
 │  ▪U6 1  Floridsdorf                                ✱ · 6    │  die Sonne…   │
 │  ▪U6 2  Siebenhirten                               5 · 12   │               │
+│                                                                │               │
+│  Stand 19:13                              ← 1 (2) 3 →       │               │
 ├───────────────────────────────────────────────────────────┴───────────────┤
-│ ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔  │
-│ 🔋 78 %                    19:14                          📶 (nur Balken)  │  94 px
+│ [ Arbeit ]        [ Nach Hause — aktiv ]        [ Westbahnhof ]            │  84 px
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Kopfzeile (0–90 px)
 
-- Trennlinie bei y=90 (2px), darunter/-über nichts weiter.
-- Echtes WL-Logo (`assets/img/wl-logo.svg`, 5 Pfade — Hintergrund, weißes
+- Trennlinie bei y=90 (2px).
+- WL-Logo links (`assets/img/wl-logo.svg`, 5 Pfade — Hintergrund, weißes
   Innenfeld, Möwe-Zeichen in zwei Teilen, Wortmarke „WIENER LINIEN" als
-  eigener Pfad). Alle 5 Pfade sind Pflicht — fehlt die Wortmarke, bleibt nur
-  ein schwarzes Rechteck (beobachteter Fehler beim manuellen Kopieren).
-  Eingebettet via `<g transform="translate(24,12) scale(0.5025)">`
-  (Quell-viewBox 561,3×131,6).
-- „Stand HH:MM" rechtsbündig: `x=1857 y=60`, 39px fett (Zeitpunkt der
-  WL-Datenabfrage, s. Staleness-Hinweis unten).
+  eigener Pfad). Alle 5 Pfade sind Pflicht — fehlt die Wortmarke, bleibt
+  nur ein schwarzes Rechteck. **Rein schwarz/weiß eingebettet**, nicht in
+  den Original-Markenfarben — bei 16 Graustufen würden Rot (`#e3000f`) und
+  Dunkelblau (`#240c4b`) sonst zu uneinheitlichen mittleren Grautönen
+  quantisiert statt sauber Schwarz zu bleiben. Eingebettet via
+  `<g transform="translate(24,12) scale(0.5025)">` (Quell-viewBox
+  561,3×131,6).
+- Server-Renderzeit zentriert: `x=936 y=55`, 34px fett (Uhrzeit, zu der
+  dieses Bild gerendert wurde — nicht zu verwechseln mit „Stand HH:MM" am
+  Ende der Abfahrtenspalte, das den Zeitpunkt der WL-Datenabfrage markiert,
+  s. u.).
+- Akku + WLAN rechts, **eine Zeile**, rechtsbündig auf `x=1856`: WLAN-Balken
+  (`translate(1665,46)`, 3 Balken wie gehabt), dann Akku-Icon
+  (`translate(1713,42)`, Umriss + Füllbalken proportional zum Ladestand,
+  Füllbreite `max(2, round(48 · Prozent/100))`), dann „Prozent %"-Text
+  rechtsbündig bei `x=1856 y=63`, 24px fett.
 
 ### Trennlinie Abfahrten|Wetter
 
 Vertikal bei `x=1113` (2px), volle Höhe zwischen Kopf- und Fußzeile.
-Beide Spalten halten **≥30px Abstand** zu dieser Linie (nicht nur zum
-Canvas-Rand!) — Abfahrten-Inhalt endet bei `x=1083` (33px Abstand),
-Wetter-Inhalt beginnt bei `x=1150` (37px Abstand).
+Beide Spalten halten **≥30px Abstand** zu dieser Linie — Abfahrten-Inhalt
+endet bei `x=1083` (33px Abstand), Wetter-Inhalt beginnt bei `x=1150`
+(37px Abstand).
 
 ### Abfahrtenliste (links, x=16–1083)
 
-Ersetzt die v1-Zweispaltenlogik (§7 der v1-Spec): eine durchgehende Liste
-aus Stationsblöcken. Jeder Block hat eine ALL-CAPS-Kopfzeile (Stationsname)
-und darunter eine Zeile pro Linie/Richtung. Bei mehrstationigen Favoriten
-(z. B. „Nach Hause": Bhf. Meidling S U, Siebenhirten, Vösendorf-SCS) folgt
-Block auf Block ohne zusätzliche Trennung außer dem normalen Abstand —
-**keine** übergreifende Favoriten-Überschrift, wie im Web-UI.
+Eine durchgehende Liste aus Stationsblöcken. Jeder Block hat eine
+ALL-CAPS-Kopfzeile (Stationsname) und darunter eine Zeile pro
+Linie/Richtung. Bei mehrstationigen Favoriten folgt Block auf Block ohne
+zusätzliche Trennung außer dem normalen Abstand — keine übergreifende
+Favoriten-Überschrift.
 
-**Vertikales Raster** — alles über eine Cursor-Regel aus zwei Konstanten
-hergeleitet (60 %/30 % von 96px Zeilenraster, s. u.):
+**Vertikales Raster** — über eine Cursor-Regel aus zwei Konstanten
+hergeleitet (60 %/30 % von 96px Zeilenraster):
 
 1. Kopfzeile-Trennlinie (y=90) bzw. das untere Ende des vorigen Blocks ist
    der Cursor.
-2. **Vor** jedem Stationskopf: 58px (60 % von 96) Abstand vom Cursor bis zum
-   **Cap-Top** des Kopftexts (nicht bis zur Baseline!). Cap-Top wird mit dem
-   ungünstigsten Fall (Umlaut-Trema, 48px ab Baseline) berechnet, damit die
-   Zeile bei jedem Stationsnamen gleich viel Luft hat, unabhängig davon, ob
-   er ein Ü/Ä/Ö enthält — Ausschuss "schwankt" sonst mit dem Textinhalt.
-   Kopftext: 55px fett, ALL-CAPS.
+2. **Vor** jedem Stationskopf: 58px (60 % von 96) Abstand vom Cursor bis
+   zum **Cap-Top** des Kopftexts (nicht bis zur Baseline!). Cap-Top wird
+   mit dem ungünstigsten Fall (Umlaut-Trema, 48px ab Baseline) berechnet,
+   damit die Zeile bei jedem Stationsnamen gleich viel Luft hat. Kopftext:
+   55px fett, ALL-CAPS.
 3. **Nach** dem Stationskopf: 29px (30 % von 96) Abstand von der
-   Kopf-Baseline bis zum **höchsten sichtbaren Element der ersten Zeile**.
-   Das ist bei Standard-Badges (68px hoch) IMMER das Badge, nie der
-   Fahrtrichtung-Text (37px Cap-Höhe) — ein früherer Entwurfsfehler maß
-   diesen Abstand am Text und ließ das Badge kollisionsnah an den
-   Stationsnamen heranrücken.
+   Kopf-Baseline bis zum **höchsten sichtbaren Element der ersten Zeile**
+   — bei Standard-Badges (68px hoch) IMMER das Badge, nie der
+   Fahrtrichtung-Text (37px Cap-Höhe).
 4. **Zeilenraster:** 96px von Badge-Mitte zu Badge-Mitte, solange Zeilen
    derselben Station folgen.
 5. Cursor nach dem letzten Element eines Blocks = Badge-Unterkante der
@@ -401,10 +436,7 @@ hergeleitet (60 %/30 % von 96px Zeilenraster, s. u.):
 **Zeilen-interne Ausrichtung** — alle Elemente einer Zeile werden auf die
 **optische Mitte des Badges** zentriert (Baseline = `R + capHeight/2`,
 gemessene Cap-Höhen pro Schriftgröße: 55px→37, 46px→31,5, 32px→22, 26px→18,
-22px→15). Das ist bewusst **nicht** dieselbe Baseline für alle Elemente —
-unterschiedliche Schriftgrößen haben unterschiedliche Cap-Höhen, eine
-gemeinsame Baseline sieht bei stark unterschiedlichen Größen "hochgezogen"
-statt zentriert aus. Bei R = Badge-Mitte (`translate(54,R)`):
+22px→15). Bei R = Badge-Mitte (`translate(54,R)`):
 
 | Element | x | Baseline-y | Schrift |
 |---|---|---|---|
@@ -425,37 +457,71 @@ Unter jeder Zeile ein 1px-Strich (`x=16` bis `x=1083`) bei `R+48`.
 | `metro` | gefülltes Quadrat 68×68 |
 | `tram` | gefüllter Kreis, r=34 |
 | `bus` | gefülltes Rechteck 68×68, rx=14 |
-| `train` | **ungefülltes** Rechteck 68×68 rx=14, 5px schwarzer Rand (einzige Outline-Form) |
+| `train` (auch Fallback für `other`) | **ungefülltes** Rechteck 68×68 rx=14, 5px schwarzer Rand |
 
 WLB (Wiener Lokalbahnen) normalisiert über `board_type()` auf `tram` →
 Kreis-Badge mit Label „WLB" (24px statt 26px, da 3-stellig).
 
-**Typografie-Sonderfälle** (an einer echten Zeile durchgerendert und
-abgenommen — Formeln beziehen sich auf `R` = Badge-Mitte der jeweiligen
-Zeile, wie oben):
+**Zeilen-Zustände** (an echten Zeilen durchgerendert und abgenommen —
+Formeln beziehen sich auf `R` = Badge-Mitte der jeweiligen Zeile):
 - `"in": 0` ("fährt jetzt") → `✱` an Stelle der Live-Abfahrtszahl, gleiche
-  46px/fett-Formatierung.
-- **Nur Fahrplan** (`realtime === false`, aus v1 übernommen): Live-Abfahrt
-  UND Folgeabfahrt kursiv (`font-style="italic"`) statt fett — nicht beides
-  gleichzeitig. Setzt die `Italic`-Schriftdatei voraus (bereits als Asset
-  vorhanden, s. u.).
+  Formatierung wie die Zahl.
+- **Nur Fahrplan** (`realtime === false`): Live-Abfahrt UND Folgeabfahrt
+  in **mittlerem Grau** (`fill="#808080"`), aufrecht — nicht kursiv. Badge,
+  Steig-Nummer und Fahrtrichtung bleiben schwarz; nur die Zeitangaben und
+  der Trennpunkt werden grau.
 - **Gestörte Abfahrt** (`delayed === true`): weiß auf schwarzem Block,
-  Tie-Break wie v1 — Invertierung schlägt „nur Fahrplan"/kursiv, falls
-  beides zuträfe (eine gestörte Fahrplan-Abfahrt zeigt also fett-weiß auf
-  Schwarz, nicht kursiv-weiß). Rechteck `x=950 y=(R-20) width=60 height=42
-  fill=black`, Live-Abfahrt-Text unverändert an Position `x=1000 y=(R+16)`,
-  nur `fill="white"`. Deckt ausschließlich die Live-Abfahrt ab, nicht den
-  Trennpunkt oder die Folgeabfahrt.
-- Alles einfarbig Schwarz auf Weiß — keine Graustufen, keine Farbe.
+  schlägt „nur Fahrplan"/Grau, falls beides zuträfe (eine gestörte
+  Fahrplan-Abfahrt zeigt also fett-weiß auf Schwarz, nicht grau). Rechteck
+  `x=950 y=(R-20) width=60 height=42 fill=black`, Live-Abfahrt-Text
+  unverändert an Position `x=1000 y=(R+16)`, nur `fill="white"`. Deckt
+  ausschließlich die Live-Abfahrt ab, nicht den Trennpunkt oder die
+  Folgeabfahrt.
+
+### Stand + Pagination (unteres Ende der Abfahrtenspalte)
+
+- „Stand HH:MM" (Zeitpunkt der WL-Datenabfrage) links, `x=16 y=1286`, 24px.
+- **Kanonische Pagination**, nur wenn mehr als eine Seite existiert
+  (Abfahrten-Überlauf und/oder Störungsseite): Pille bei `x=793 y=1256`,
+  `width=290 height=48 rx=24`, weiß mit 2px schwarzem Rand. Darin (alle
+  Elemente vertikal auf die Pillen-Mitte `y=1280` zentriert, Baseline =
+  Mitte + halbe Cap-Höhe): Zurück-Pfeil „←", Seitenzahlen als reiner Text
+  (schwarz, 24-26px), die **aktive Seite als gefüllter schwarzer Kreis**
+  (`r=20`) mit weißer, fetter Zahl darin, Vor-Pfeil „→". Ein Pfeil ohne
+  Ziel (erste bzw. letzte Seite) wird **ausgegraut** (`fill="#b0b0b0"`)
+  statt weggelassen — die Pille behält so auf jeder Seite dieselbe Breite.
+  Bedienbar per Touch **und** über die beiden physischen
+  Seiten-Navigationstasten des Geräts (§3).
+
+### Touch-Leiste (Fußzeile, 1310–1404, 84–94px)
+
+Ersetzt die reine Statuszeile — die Statuswerte sind in die Kopfzeile
+gewandert (s. o.). Bis zu drei Favoriten-Buttons (erste drei Favoriten des
+Geräte-Nutzers nach `sort`), gleich breit über die volle Breite verteilt
+(je `602px`, `16px` Randabstand, `16px` Lücke dazwischen), Höhe `74px`,
+vertikal zentriert in der Fußzeile (`y=1320` bis `y=1394`), `rx=10`.
+
+- **Aktiver Favorit:** Button gefüllt schwarz, Label weiß, fett, 34px,
+  zentriert.
+- **Inaktive Favoriten:** Button weiß mit 3px schwarzem Rand, Label
+  schwarz.
+
+Antippen wechselt sofort den angezeigten Favoriten (setzt die Seite auf 1
+zurück, s. §4).
 
 ### Wetterkarte (rechts, x=1150–1856)
 
-Icon oben, `scale(1.8)`, zentriert um `x=1492`, darunter Temperatur „von–bis"
-zentriert (40px fett). Danach Überschrift „Heute" (30px fett) und
-Fließtext (39px, Zeilenumbruch von Hand an der verfügbaren Spaltenbreite
-ausgerichtet — kein automatischer Textumbruch in SVG).
+Bleibt beim Blättern durch Abfahrten-/Störungsseiten **statisch** — sie
+gehört zum Standort, nicht zum gewählten Favoriten oder zur aktiven Seite.
 
-**Icon-Set** — alle 9 Kategorien aus §8 + Fallback, aus denselben
+Icon oben, `scale(1.8)`, zentriert um `x=1492`, darunter Temperatur
+„von–bis" zentriert (40px fett). Danach Überschrift „Heute" (30px fett)
+und Fließtext (39px, Zeilenumbruch programmatisch berechnet — 37
+Zeichen/Zeile, hergeleitet aus der verfügbaren Spaltenbreite (706px)
+geteilt durch die gemessene mittlere Zeichenbreite bei 39px Atkinson
+Hyperlegible (17,37px/Zeichen) mit 8% Sicherheitsabstand).
+
+**Icon-Set** — alle 9 Kategorien aus §7 + Fallback, aus denselben
 Grundformen (Kreis, Wolken-Outline-Pfad, Linien) gebaut, am gerenderten
 Bild abgenommen. Jedes Icon ist in einem lokalen Koordinatenraum von ca.
 -34..34 zentriert (gleiche Bounding-Box wie die Zeilen-Badges), damit alle
@@ -547,7 +613,7 @@ bei `scale(1.8)` gleich groß wirken. Verbindlicher `<defs>`-Block:
 ```
 
 **Kategorie → Icon-Id** (Eingabe ist `icon_category` aus
-`weather_map_icon_code()`, s. §8):
+`weather_map_icon_code()`, s. §7):
 
 | `icon_category` | Icon-Id |
 |---|---|
@@ -562,90 +628,77 @@ bei `scale(1.8)` gleich groß wirken. Verbindlicher `<defs>`-Block:
 | `nebel` | `icon_nebel` |
 | `unbekannt` (auch: jeder nicht in dieser Tabelle gelistete Wert) | `icon_unbekannt` |
 
-`WEATHER_ICON_CATEGORIES` (§8) kennt heute erst 5 ORF-Codes (die restlichen
-4 Kategorien plus deren Codes wachsen bei Beobachtung, wie in §8
-beschrieben) — die Icon-Zuordnungstabelle hier deckt trotzdem **alle 9**
-bereits ab, damit ein künftig neu beobachteter Code sofort ein passendes
-Icon hat, sobald er in `WEATHER_ICON_CATEGORIES` ergänzt wird.
-
-### Statuszeile (Fußzeile, 1310–1404, 94px)
-
-Trennlinie bei y=1310. Akku-Icon + `%` links, Uhrzeit mittig (Serverzeit
-beim Rendern — bewusst getrennt von „Stand HH:MM" oben, das den Zeitpunkt
-der WL-Datenabfrage markiert), WLAN rechts nur als Balken-Icon (kein dBm-Text).
+`WEATHER_ICON_CATEGORIES` (§7) kennt heute erst 5 ORF-Codes (die
+restlichen 4 Kategorien plus deren Codes wachsen bei Beobachtung) — die
+Icon-Zuordnungstabelle hier deckt trotzdem **alle 9** bereits ab.
 
 ### Referenz-Assets
 
 - `assets/fonts/board/Atkinson-Hyperlegible-{Regular,Bold,Italic,BoldItalic}-102.ttf`
-- `assets/img/wl-logo.svg` (5-Pfad-Original, s. o.)
-
-Beide sind zum Zeitpunkt dieser Spec-Version noch **nicht committed** —
-Task 1 der Implementierungsplan muss sie ins Repo aufnehmen.
+  (committed)
+- `assets/img/wl-logo.svg` (5-Pfad-Original, committed)
 
 ---
 
 ## 10. Firmware
 
-- **Ort/Deploy-Ausschluss:** wie v1 — `firmware/` im wlmonitor-Repo, von
+- **Ort/Deploy-Ausschluss:** `firmware/` im wlmonitor-Repo, von
   `scripts/ssh_deploy.php` ausgeschlossen.
-- **Bibliothek:** Seeed_GFX statt GxEPD2 (§3, §4).
-- **Kein eigenes Layout/Font-Rendering mehr** für den Normalbetrieb — die
-  Firmware schreibt nur noch empfangene Pixel-Rechtecke ins Panel. Ausnahme:
-  ein **minimaler lokaler Text-Fallback** für den Fall, dass der Server gar
-  nicht erreichbar ist (§11) — dafür bleibt eine einzelne kleine Bitmap-Font
+- **Bibliothek:** Seeed_GFX (§3).
+- **Kein eigenes Layout/Font-Rendering** für den Normalbetrieb — die
+  Firmware schreibt nur empfangene Pixel-Rechtecke ins Panel, liest Touch/
+  Tasten aus und meldet sie im nächsten Request (§4). Ausnahme: ein
+  **minimaler lokaler Text-Fallback** für den Fall, dass der Server nicht
+  erreichbar ist (§11) — dafür bleibt eine einzelne kleine Bitmap-Font
   eingebettet, ausschließlich für die Fehlerbanner-Strings.
-- **Battery/RSSI:** `analogReadMilliVolts()` auf GPIO10 (`ADC_BAT`),
-  `WiFi.RSSI()` nach WLAN-Connect — beide als Request-Header mitgeschickt
-  (§6).
-- **Kein NTP.** Wie v1: der „Stand"-Zeitstempel kommt aus `X-Board-Generated`;
-  die Uhrzeit in der Fußzeile rendert der Server, die Firmware muss dafür
+- **Touch/Tasten → Request:** Touch-Koordinaten werden serverseitig NICHT
+  ausgewertet — die Firmware bildet einen Touch-Punkt selbst auf eine der
+  fünf festen Zonen ab (3 Favoriten-Buttons, Pagination-Zurück,
+  Pagination-Vor; exakte Pixel-Rechtecke aus §9) und schickt nur das
+  Ergebnis (`X-Device-Touch`, §5). Die beiden physischen
+  Seiten-Navigationstasten lösen direkt `page_prev`/`page_next` aus, ohne
+  Touch-Koordinaten-Mapping.
+- **Battery/RSSI:** wird als Request-Header mitgeschickt (§5); genaue
+  Auslesemethode (Fuel-Gauge vs. Spannungsteiler) klärt sich bei der
+  Implementierung (§3).
+- **Kein NTP.** Der „Stand"-Zeitstempel kommt aus `X-Board-Generated`; die
+  Uhrzeit in der Kopfzeile rendert der Server, die Firmware muss dafür
   selbst keine Uhr führen.
-- **Verbindung:** LAN-Listener auf akadbrain wie v1
-  (`docs/deploy-board-endpunkt.md`), Klartext-HTTP, feste IP.
-- **Pin-Belegung:** kommt aus der generierten `driver.h` (§4), kein manuelles
-  Übernehmen aus dem Schaltplan nötig.
+- **Verbindung:** LAN-Listener auf akadbrain, Klartext-HTTP, feste IP.
 
-### Provisionierung: WiFiManager statt `config.h`
+### Provisionierung: WiFiManager
 
-**Löst ab:** die bisherige Annahme „WLAN-Zugangsdaten, Token und
-Favoriten-IDs fix in `firmware/include/config.h`, vor jedem Flash von Hand
-eingetragen" (v1 §8). Grund: pro Gerät neu flashen zu müssen, nur um WLAN,
-Token oder Favoriten zu ändern, ist unnötiger Aufwand — und `config.h` mit
-Geheimnissen drin ist schon einmal versehentlich gepusht worden
-(`epaper-monitor/.gitignore`-Kommentar zu `firmware/*.bin`).
+Grund: pro Gerät neu flashen zu müssen, nur um WLAN oder Token zu ändern,
+ist unnötiger Aufwand.
 
 - **Bibliothek:** [WiFiManager](https://github.com/tzapu/WiFiManager)
   (tzapu). Beim allerersten Boot (bzw. wenn keine gespeicherten
   WLAN-Zugangsdaten gefunden werden) spannt das Gerät einen eigenen Access
   Point auf, man verbindet sich damit vom Handy/Laptop, ein Captive Portal
   öffnet automatisch ein Formular.
-- **Erweitert um eigene Formularfelder** (`WiFiManagerParameter`, dafür
-  vorgesehen): zusätzlich zu SSID/Passwort werden **API-Token** und
-  **Favoriten-IDs** (kommagetrennt, wie bisher `BOARD_FAV_IDS`) im selben
-  Formular abgefragt — eine Provisionierung für alles, keine zweite
-  Konfigurationsebene.
+- **Erweitert um eigenes Formularfeld** (`WiFiManagerParameter`):
+  zusätzlich zu SSID/Passwort wird das **API-Token** abgefragt — kein
+  `fav`-Feld mehr nötig, da die Favoriten jetzt serverseitig aus dem Token
+  ermittelt werden (§4).
 - **Persistenz:** WiFiManager speichert WLAN-Zugangsdaten selbst
-  (ESP32-eigener WLAN-Stack, NVS-Flash). Die zusätzlichen Felder (Token,
-  Favoriten-IDs) werden im Save-Callback selbst persistiert — über die
-  ESP32-`Preferences`-Bibliothek (NVS-Namespace), nicht als Datei. Damit
-  überlebt alles denselben Tiefschlaf-/Neustart-Zyklus wie die WLAN-Daten.
-- **Neu-Provisionierung ohne Reflash:** GPIO 32/33 (in v1 „für späteres
-  Nachrüsten" freigehalten, siehe v1 §8) lösen künftig genau das aus — ein
-  langer Tastendruck beim Boot zwingt WiFiManager zurück in den
-  Access-Point-Modus, WLAN **und** Token/Favoriten lassen sich so jederzeit
-  neu eingeben, ohne einen Rechner mit USB-Kabel zu brauchen.
+  (ESP32-eigener WLAN-Stack, NVS-Flash). Das Token wird im Save-Callback
+  über die ESP32-`Preferences`-Bibliothek (NVS-Namespace) persistiert.
+- **Neu-Provisionierung ohne Reflash:** langer Druck auf die grüne
+  Refresh-Taste beim Boot zwingt WiFiManager zurück in den
+  Access-Point-Modus — WLAN **und** Token lassen sich so jederzeit neu
+  eingeben, ohne einen Rechner mit USB-Kabel zu brauchen.
 - **`firmware/include/config.h` bleibt bestehen, aber schrumpft** auf reine
-  Infrastruktur-Konstanten, die für alle Geräte gleich und nicht geheim sind:
-  `BOARD_HOST`, `BOARD_PORT`, `POLL_INTERVAL_SEC`. WLAN, Token und
-  Favoriten-IDs — die tatsächlich pro Gerät unterschiedlichen bzw. geheimen
-  Werte — kommen nicht mehr aus dem Quellcode.
+  Infrastruktur-Konstanten, die für alle Geräte gleich und nicht geheim
+  sind: `BOARD_HOST`, `BOARD_PORT`, `POLL_INTERVAL_SEC`. WLAN und Token —
+  die tatsächlich pro Gerät unterschiedlichen bzw. geheimen Werte — kommen
+  nicht mehr aus dem Quellcode.
 
 ---
 
 ## 11. Fehlerfälle
 
-Wie v1 (§9 dort): bei jedem Fehler bleibt das letzte Bild stehen, das Gerät
-lügt nie über den Zustand der Daten.
+Bei jedem Fehler bleibt das letzte Bild stehen, das Gerät lügt nie über
+den Zustand der Daten.
 
 | Lage | Verhalten |
 |---|---|
@@ -653,41 +706,44 @@ lügt nie über den Zustand der Daten.
 | HTTP 401 | lokaler Banner „⚠ Token ungültig" |
 | HTTP 503 / Zeitüberschreitung | wie WLAN-Ausfall |
 | Antwort unlesbar (Header fehlen, Content-Length passt nicht zum Body) | wie 503, zusätzlich Zähler |
-| `X-Board-Generated` älter als 15 Min | wie v1: Zeitstempel-Darstellung invertiert (jetzt: weiß auf schwarz statt weiß auf rot) |
-| Wetter-Cache > 6 h alt | Fließtext der Wetterkarte durch Fehlermeldung ersetzt (§8) — passiert serverseitig beim Rendern, keine Firmware-Logik nötig |
-| Server erreichbar, aber `If-None-Match` passt nicht zum serverseitigen Zustand | kein Firmware-Fehlerfall — Server erkennt das selbst und schickt automatisch ein Vollbild (§5, §6) |
+| `X-Board-Generated` älter als 15 Min | Zeitstempel-Darstellung invertiert (weiß auf schwarz) |
+| Wetter-Cache > 6 h alt | Fließtext der Wetterkarte durch Fehlermeldung ersetzt (§7) — passiert serverseitig beim Rendern, keine Firmware-Logik nötig |
+| Server erreichbar, aber `If-None-Match` passt nicht zum serverseitigen Zustand | kein Firmware-Fehlerfall — Server erkennt das selbst und schickt automatisch ein Vollbild (§4, §5) |
 
 ---
 
 ## 12. Tests
 
-- `inc/weather.php` — Parser gegen gespeicherte HTML-Fixtures (Beispielseiten
-  von `wetter.orf.at/wien/prognose`): Icon-Code, Temp-Min/Max, Text für
-  heute/morgen korrekt extrahiert; unbekannter Icon-Code fällt auf
-  „unbekannt" zurück und loggt.
+- `inc/weather.php` — Parser gegen gespeicherte HTML-Fixtures: Icon-Code,
+  Temp-Min/Max, Text für heute/morgen korrekt extrahiert; unbekannter
+  Icon-Code fällt auf „unbekannt" zurück und loggt.
 - `inc/weather.php` — Cutover-Logik: vor/nach 19:00 liefert die richtigen
   Werte; Cache-Alter-Schwelle (>6 h → Fehlermeldung statt Text) einzeln
   testbar (reine Funktion, Cache-Inhalt + `now` als Eingabe).
+- `inc/board_template.php` — Layout-/Rendering-Funktionen, siehe
+  Implementierungsplan (`docs/superpowers/plans/2026-08-16-board-svg-template.md`).
 - `inc/board_render.php` — Diff-/Patch-Logik: zwei Frames rein, korrekte
   Bounding-Box raus; ETag-Mismatch löst Vollbild aus; 30-Min-Grenze löst
-  Vollbild aus, auch wenn sich nichts geändert hat.
+  Vollbild aus, auch wenn sich nichts geändert hat; Favoriten-/
+  Seitenwechsel löst Vollbild aus.
 - `web/board.php` — Endpunkttest: Header-Vertrag (`X-Board-*`) bei
-  Vollbild/Patch, `Content-Length` stimmt mit Body überein, 401/503 weiterhin
-  ohne Bildkörper.
+  Vollbild/Patch, `Content-Length` stimmt mit Body überein, 401/503
+  weiterhin ohne Bildkörper, `X-Device-Touch` verschiebt Favorit/Seite
+  korrekt im Geräte-Zustand.
 - Firmware (`pio test -e native`): Fallback-Bannerlogik (WLAN-Fehler, 401,
-  Zeitüberschreitung) — bleibt größtenteils wie v1, da die restliche
-  Board-Logik (`layout.cpp`, `error_state.cpp`) entfällt bzw. stark schrumpft.
+  Zeitüberschreitung), Touch-Zone-zu-Request-Mapping.
 
 ---
 
 ## 13. Nicht Teil dieses Entwurfs
 
 - Akkubetrieb-Feinschliff (Lade-Charakteristik, Spannungs-zu-Prozent-Kurve
-  kalibrieren) — die Statuszeile zeigt einen groben Prozentwert, keine
+  kalibrieren) — die Kopfzeile zeigt einen groben Prozentwert, keine
   präzise Fuel-Gauge-Kalibrierung.
-- Umstellung des Web-UI auf die serverseitige Favoritenfilterung — bereits in
-  v1 §11 zurückgestellt, hier unverändert.
-- Manuelle Auslöser (Taster) — wie v1, weiterhin nicht vorgesehen.
+- Mehrere Geräte pro Token (s. Einschränkung in §4).
+- Mehr als 3 Favoriten gleichzeitig am Gerät wählbar.
 - Eigene Wartung/Erweiterung der ORF-Icon-Code-Tabelle über die drei
-  Startwerte hinaus — wächst anhand geloggter unbekannter Codes, kein
-  vollständiges Reverse-Engineering des ORF-Codesystems im Rahmen dieser Spec.
+  Startwerte hinaus — wächst anhand geloggter unbekannter Codes.
+- Exakte Byte-Packung des 4bpp-Graustufenformats (§6) — wird beim
+  Firmware-/Protokoll-Implementierungsschritt anhand der Seeed_GFX-Quelle
+  geklärt.
