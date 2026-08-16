@@ -34,8 +34,8 @@ const BOARD_ICON_ID_BY_CATEGORY = [
 
 /**
  * Schriftgroesse fuer das Liniennummern-Label im Badge: 26px bei bis zu
- * zwei Zeichen (z.B. "U6", "18"), 24px bei drei Zeichen (z.B. "WLB") --
- * sonst wuerde das Label ueber den 68px-Badge-Rand hinausragen.
+ * zwei Zeichen (z.B. "U6", "18"), 24px bei drei oder mehr Zeichen (z.B.
+ * "WLB") -- sonst wuerde das Label ueber den 68px-Badge-Rand hinausragen.
  */
 function board_badge_label_font_size(string $label): int
 {
@@ -188,11 +188,12 @@ function board_wl_logo_paths(): string
 
 /**
  * Fuellbreite des Akku-Balkens in Pixeln (0-48, proportional zu Prozent).
- * Innenflaeche des Umriss-Rechtecks (x=16 width=56) reicht bis x=68 (4px
- * vor der Polklemme bei x=72); der Fuellbalken beginnt bei x=20, also
- * max. 48px breit. Minimum 2px, damit der Balken bei sehr niedrigem
- * Ladestand nicht komplett verschwindet (0% waere sonst nicht von einem
- * Rendering-Fehler zu unterscheiden).
+ * Das Akku-Icon sitzt im Kopfbereich bei transform="translate(1713,42)":
+ * Umriss-Rechteck lokal x=0 width=56 (absolut x=1713-1769), Polklemme bei
+ * lokal x=56 (absolut x=1769); der Fuellbalken beginnt bei lokal x=4
+ * (absolut x=1717), also max. 48px breit. Minimum 2px, damit der Balken bei
+ * sehr niedrigem Ladestand nicht komplett verschwindet (0% waere sonst nicht
+ * von einem Rendering-Fehler zu unterscheiden).
  */
 function board_battery_fill_width(int $percent): int
 {
@@ -263,6 +264,10 @@ SVG;
  */
 function board_render_touch_bar_svg(array $favoriteTitles, int $activeIndex): string
 {
+    if ($favoriteTitles === []) {
+        return '';
+    }
+
     $count = count($favoriteTitles);
     $margin = 16;
     $gap = 16;
@@ -648,7 +653,6 @@ function board_render_stand_and_pagination_svg(DateTimeImmutable $dataStand, int
 
     $pagesSvg = '';
     $slotWidth = 58;
-    $startX = 793 + intdiv(290 - $totalPages * $slotWidth - 2 * $slotWidth, 2) + $slotWidth;
     // Vereinfachtes, robustes Layout: Pfeile an den Raendern der Pille,
     // Seitenzahlen mittig verteilt.
     $pagesSvg .= sprintf('<text x="822" y="1289" text-anchor="middle" font-size="26" fill="%s">←</text>', $backFill);
@@ -720,6 +724,13 @@ function board_wrap_disruption_text(string $text, int $maxLines): array
  * Beschreibung, 40px nach dem letzten Beschreibungszeile bis zum
  * Trennstrich. $alerts ist bereits auf die Linien des aktiven Favoriten
  * gefiltert (Aufgabe des Aufrufers, s. Interfaces).
+ *
+ * KEIN Ueberlauf-Schutz: anders als board_paginate_departures() bricht diese
+ * Funktion nicht auf eine neue Seite um, wenn der Inhalt zu lang wird --
+ * bewusste Vereinfachung (Task 8: "ob Stoerungen selbst auf mehrere Seiten
+ * muessen, ueberlaesst dieser Task dem Aufrufer... out of scope"). Setzt
+ * voraus, dass die auf einen Favoriten gefilterten Alerts realistisch auf
+ * eine Seite passen.
  *
  * @param list<array{title: string, description: string}> $alerts
  * @return list<array>

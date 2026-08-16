@@ -32,6 +32,21 @@ class BoardTemplateRenderTest extends TestCase
         ]];
     }
 
+    /** Favorit mit genug Zeilen, um BOARD_DEPARTURES_MAX_Y sicher auf 2 Seiten zu ueberschreiten (wie BoardTemplateLayoutTest). */
+    private function multiPageFavoriteFixture(): array
+    {
+        $manyLines = array_map(
+            fn (int $i) => $this->line((string) $i, '1', "Ziel $i", 'bus', true, [['in' => $i], ['in' => $i + 10]]),
+            range(1, 4)
+        );
+
+        return ['id' => 1, 'title' => 'Viele Zeilen', 'stations' => [
+            ['diva' => '1', 'name' => 'Station A', 'lines' => $manyLines],
+            ['diva' => '2', 'name' => 'Station B', 'lines' => $manyLines],
+            ['diva' => '3', 'name' => 'Station C', 'lines' => $manyLines],
+        ]];
+    }
+
     private function weatherFixture(): array
     {
         return [
@@ -50,6 +65,21 @@ class BoardTemplateRenderTest extends TestCase
                 $rgb = imagecolorat($im, $x, $y);
                 $lum = 0.299 * (($rgb >> 16) & 0xFF) + 0.587 * (($rgb >> 8) & 0xFF) + 0.114 * ($rgb & 0xFF);
                 if ($lum < 200) { // < 200 statt < 128: faengt auch das mittlere Grau (#808080) ein
+                    return $y;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Letzte (unterste) schwarze Pixelzeile innerhalb [$x0,$x1) x [$y0,$y1), oder null. */
+    private function lastInkY($im, int $x0, int $x1, int $y0, int $y1): ?int
+    {
+        for ($y = $y1 - 1; $y >= $y0; $y--) {
+            for ($x = $x0; $x < $x1; $x++) {
+                $rgb = imagecolorat($im, $x, $y);
+                $lum = 0.299 * (($rgb >> 16) & 0xFF) + 0.587 * (($rgb >> 8) & 0xFF) + 0.114 * ($rgb & 0xFF);
+                if ($lum < 200) {
                     return $y;
                 }
             }
@@ -126,11 +156,49 @@ class BoardTemplateRenderTest extends TestCase
 
         $im = imagecreatefromstring(svg_to_png($svg));
 
-        $headerBottom = $this->firstInkY($im, 16, 600, 100, 200);
+        // headerBottom = unterste Tinte des Stationskopfs (Baseline-Kante,
+        // keine Unterlaengen bei Grossbuchstaben) -- firstInkY() wuerde hier
+        // die OBERSTE Kante der Versalhoehe liefern, nicht die fuer den
+        // 29px-Abstand relevante Baseline.
+        $headerBottom = $this->lastInkY($im, 16, 600, 100, 200);
         $rowTop = $this->firstInkY($im, 16, 1083, 200, 280);
 
         $this->assertNotNull($headerBottom);
         $this->assertNotNull($rowTop);
+        $this->assertSame(29, $rowTop - $headerBottom, 'Abstand Kopf-Baseline -> hoechstes Element der ersten Zeile muss 29px sein (Spec)');
+    }
+
+    public function test_disruptions_page_and_pagination_pill_render_through_real_pipeline(): void
+    {
+        // Abfahrten spannen 2 Seiten (multiPageFavoriteFixture) + echte
+        // Stoerungsmeldung -> 3 Seiten insgesamt, Stoerungsseite ist die
+        // letzte (Seite 3). Deckt ab, dass Stoerungsseite + Pagination-Pille
+        // auch durch svg_to_png() tatsaechlich sichtbares Pixelmaterial
+        // erzeugen -- bisher pruefte das kein Integrationstest.
+        $alerts = [[
+            'title' => 'U3: Bauarbeiten',
+            'description' => 'Die Linie U3 fährt derzeit nicht zwischen Hütteldorfer Straße und Westbahnhof.',
+            'priority' => '1', 'lines' => ['U3'], 'stops' => [],
+        ]];
+
+        $svg = board_render_svg(
+            ['Viele Zeilen'], 0, $this->multiPageFavoriteFixture(), $alerts, 3,
+            $this->weatherFixture(),
+            new DateTimeImmutable(), new DateTimeImmutable(), 78, 2
+        );
+
+        $im = imagecreatefromstring(svg_to_png($svg));
+
+        // Stoerungstitel "U3: Bauarbeiten" (x=16 y=160, 40px fett) muss Tinte
+        // im erwarteten Bereich hinterlassen.
+        $titleInkY = $this->firstInkY($im, 16, 700, 100, 200);
+        $this->assertNotNull($titleInkY, 'Stoerungstitel muss auf der Stoerungsseite sichtbar sein');
+
+        // Pagination-Pille zeigt Seite 3 als schwarz gefuellten Kreis
+        // (cx=996 cy=1280 r=20). Bereich knapp innerhalb des Kreisradius,
+        // ohne den Pillenrand (y=1256/1304) mit einzuschliessen.
+        $pillInkY = $this->firstInkY($im, 985, 1007, 1265, 1295);
+        $this->assertNotNull($pillInkY, 'aktueller Seiten-Kreis der Pagination-Pille muss sichtbar sein');
     }
 
     public function test_wl_logo_is_monochrome_black_and_white_only(): void

@@ -47,4 +47,9 @@ class BoardTemplateTouchBarTest extends TestCase
         $svg = board_render_touch_bar_svg(['A & B'], 0);
         $this->assertStringContainsString('A &amp; B', $svg);
     }
+
+    public function test_empty_favorites_list_returns_empty_string_not_crash(): void
+    {
+        $this->assertSame('', board_render_touch_bar_svg([], 0));
+    }
 }
