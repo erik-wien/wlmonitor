@@ -148,4 +148,55 @@ class BoardRenderTest extends TestCase
             $this->assertSame("\xFF", $packed[$row * 2 + 1], "Zeile $row, zweites Byte (unbemalt -> muss weiss sein)");
         }
     }
+
+    public function test_fontconfig_path_points_at_board_fonts_dir(): void
+    {
+        $path = board_fontconfig_path();
+
+        $this->assertFileExists($path);
+        $xml = file_get_contents($path);
+        $expectedDir = realpath(__DIR__ . '/../../assets/fonts/board');
+        $this->assertNotFalse($expectedDir, 'assets/fonts/board muss existieren');
+        $this->assertStringContainsString('<dir>' . $expectedDir . '</dir>', $xml);
+    }
+
+    public function test_svg_to_png_renders_atkinson_hyperlegible_not_a_fallback_font(): void
+    {
+        // "iiiiiiiiii" (schmale Buchstaben) vs "mmmmmmmmmm" (breite) bei
+        // gleicher Zeichenzahl: bei jeder realistischen Schriftart liegt die
+        // gerenderte Breite von "i"-Folgen deutlich unter der von "m"-Folgen.
+        // Das ist kein Test auf die exakte Atkinson-Hyperlegible-Metrik,
+        // sondern ein Rauchtest, dass ueberhaupt EINE Schrift mit
+        // Buchstaben-Weitenunterschied geladen wurde (ein fehlendes
+        // FONTCONFIG_FILE wuerde still auf eine Systemschrift zurueckfallen,
+        // aber selbst das haette diesen Unterschied -- der eigentliche Zweck
+        // ist, das Nichtabsturzen mit dem Custom-Font-Pfad zu belegen).
+        $svgFor = fn (string $s) => sprintf(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="60" viewBox="0 0 800 60">'
+            . '<text x="0" y="45" font-family="Atkinson Hyperlegible" font-size="39">%s</text></svg>',
+            $s
+        );
+
+        $narrow = svg_to_png($svgFor('iiiiiiiiii'));
+        $wide = svg_to_png($svgFor('mmmmmmmmmm'));
+
+        $ink = function (string $png): int {
+            $im = imagecreatefromstring($png);
+            $maxX = 0;
+            for ($x = imagesx($im) - 1; $x >= 0; $x--) {
+                for ($y = 0; $y < imagesy($im); $y++) {
+                    $rgb = imagecolorat($im, $x, $y);
+                    $lum = 0.299 * (($rgb >> 16) & 0xFF) + 0.587 * (($rgb >> 8) & 0xFF) + 0.114 * ($rgb & 0xFF);
+                    if ($lum < 128) {
+                        return $x;
+                    }
+                }
+            }
+            return 0;
+        };
+
+        $this->assertGreaterThan($ink($narrow) + 100, $ink($wide),
+            '"mmmmmmmmmm" muss deutlich breiter rendern als "iiiiiiiiii" -- ' .
+            'eine echte Schrift wurde geladen und benutzt (kein leerer/fehlender Font-Fallback)');
+    }
 }

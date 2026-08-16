@@ -8,6 +8,41 @@
 declare(strict_types=1);
 
 /**
+ * Erzeugt (bzw. aktualisiert) eine Fontconfig-XML, die ausschliesslich auf
+ * assets/fonts/board/ zeigt, und gibt ihren Pfad zurueck. rsvg-convert
+ * findet Schriften ueber Fontconfig, nicht ueber @font-face -- ohne dieses
+ * Env-Var faellt "Atkinson Hyperlegible" still auf eine Systemschrift
+ * zurueck (kein Fehler, nur falsche Optik). Pfad relativ zu __DIR__, damit
+ * Dev und Prod ohne Konfigurationsaenderung funktionieren.
+ *
+ * @throws RuntimeException wenn assets/fonts/board fehlt
+ */
+function board_fontconfig_path(): string
+{
+    $fontsDir = realpath(__DIR__ . '/../assets/fonts/board');
+    if ($fontsDir === false) {
+        throw new RuntimeException('assets/fonts/board nicht gefunden');
+    }
+
+    $cacheDir = sys_get_temp_dir() . '/wlmonitor-board-fontcache';
+    if (!is_dir($cacheDir)) {
+        mkdir($cacheDir, 0755, true);
+    }
+
+    $xml = '<?xml version="1.0"?>' . "\n"
+        . '<!DOCTYPE fontconfig SYSTEM "fonts.dtd">' . "\n"
+        . '<fontconfig>' . "\n"
+        . '  <dir>' . $fontsDir . '</dir>' . "\n"
+        . '  <cachedir>' . $cacheDir . '</cachedir>' . "\n"
+        . '</fontconfig>' . "\n";
+
+    $path = sys_get_temp_dir() . '/wlmonitor-board-fontconfig.xml';
+    file_put_contents($path, $xml);
+
+    return $path;
+}
+
+/**
  * Rendert einen SVG-String zu PNG-Bytes via rsvg-convert (Subprozess).
  * Array-Form von proc_open -- kein Shell-String, keine Escaping-Fragen
  * unabhaengig vom SVG-Inhalt.
@@ -22,7 +57,10 @@ function svg_to_png(string $svg): string
         2 => ['pipe', 'w'],
     ];
 
-    $process = proc_open(['rsvg-convert', '-f', 'png', '-b', 'white'], $descriptors, $pipes);
+    $env = getenv();
+    $env['FONTCONFIG_FILE'] = board_fontconfig_path();
+
+    $process = proc_open(['rsvg-convert', '-f', 'png', '-b', 'white'], $descriptors, $pipes, null, $env);
     if (!is_resource($process)) {
         throw new RuntimeException('rsvg-convert konnte nicht gestartet werden');
     }
