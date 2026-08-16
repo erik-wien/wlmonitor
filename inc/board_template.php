@@ -155,6 +155,10 @@ SVG;
  * nur ein schwarzes Rechteck sichtbar (siehe Spec §9, in dieser Session
  * live beobachteter Fehler beim manuellen Kopieren).
  *
+ * Monochrom einbetten statt der echten Markenfarben -- bei 16 Graustufen
+ * wuerden Rot/Dunkelblau sonst zu uneinheitlichen mittleren Grautoenen
+ * quantisiert statt sauber Schwarz zu bleiben (Spec Global Constraints).
+ *
  * @throws RuntimeException wenn die Datei fehlt oder nicht das erwartete
  *         <svg>...</svg>-Format hat
  */
@@ -170,7 +174,16 @@ function board_wl_logo_paths(): string
         throw new RuntimeException('assets/img/wl-logo.svg hat nicht das erwartete <svg>...</svg>-Format');
     }
 
-    return trim($m[1]);
+    // Monochrom einbetten statt der echten Markenfarben -- bei 16 Graustufen
+    // wuerden Rot/Dunkelblau sonst zu uneinheitlichen mittleren Grautoenen
+    // quantisiert statt sauber Schwarz zu bleiben (Spec Global Constraints).
+    $mono = str_replace(
+        ['style="fill:#e3000f"', 'style="fill:#240c4b"', 'style="fill:#fff"'],
+        ['fill="black"', 'fill="black"', 'fill="white"'],
+        trim($m[1])
+    );
+
+    return $mono;
 }
 
 /**
@@ -188,22 +201,14 @@ function board_battery_fill_width(int $percent): int
 }
 
 /**
- * Kopf- und Fusszeile aus Spec §9: Logo, "Stand HH:MM", die vertikale
- * Spaltenlinie Abfahrten|Wetter, die Fusszeilen-Trennlinie und die
- * Statuszeile (Akku/Uhrzeit/WLAN-Balken).
- *
- * $dataStand ist der Zeitpunkt der WL-Datenabfrage ("Stand HH:MM" oben
- * rechts), $renderedAt die Serverzeit beim Rendern (Uhrzeit in der
- * Fusszeile) -- beide bewusst getrennte Werte, s. Spec §9. $wifiBars ist
- * bereits von RSSI in {0,1,2,3} umgerechnet (Aufgabe der aufrufenden
- * Board-Protokoll-Schicht, nicht dieser Funktion).
+ * Kopfzeile aus Spec (Stand 2026-08-16): Logo (schwarz/weiss), zentrierte
+ * Server-Renderzeit, Akku+WLAN in einer Zeile rechtsbuendig auf x=1856,
+ * plus beide Trennlinien (vertikale Spaltenlinie, Fusszeilen-Trennlinie).
+ * "Stand HH:MM" und die Touch-Leiste sind NICHT Teil dieser Funktion
+ * (Task 6b bzw. Task 3b).
  */
-function board_render_chrome_svg(
-    DateTimeImmutable $dataStand,
-    DateTimeImmutable $renderedAt,
-    int $batteryPercent,
-    int $wifiBars
-): string {
+function board_render_chrome_svg(DateTimeImmutable $renderedAt, int $batteryPercent, int $wifiBars): string
+{
     $wifiBars = max(0, min(3, $wifiBars));
     $fillWidth = board_battery_fill_width($batteryPercent);
     $percent = max(0, min(100, $batteryPercent));
@@ -230,18 +235,19 @@ function board_render_chrome_svg(
 <g transform="translate(24,12) scale(0.5025)">
 {$logo}
 </g>
-<text x="1857" y="60" font-family="Atkinson Hyperlegible" font-weight="bold" font-size="39" fill="black" text-anchor="end">Stand {$dataStand->format('H:i')}</text>
+<text x="936" y="55" font-family="Atkinson Hyperlegible" font-weight="bold" font-size="34" fill="black" text-anchor="middle">{$renderedAt->format('H:i')}</text>
+
+<g font-family="Atkinson Hyperlegible" fill="black">
+  <g transform="translate(1665,46)">{$wifiBarsSvg}</g>
+  <g transform="translate(1713,42)">
+    <rect x="0" y="0" width="56" height="26" rx="3" fill="white" stroke="black" stroke-width="3"/>
+    <rect x="56" y="7" width="7" height="12" fill="black"/>
+    <rect x="4" y="4" width="{$fillWidth}" height="18" fill="black"/>
+  </g>
+  <text x="1856" y="63" text-anchor="end" font-weight="bold" font-size="24">{$percent} %</text>
+</g>
 
 <line x1="1113" y1="90" x2="1113" y2="1310" stroke="black" stroke-width="2"/>
 <line x1="0" y1="1310" x2="1872" y2="1310" stroke="black" stroke-width="2"/>
-
-<g font-family="Atkinson Hyperlegible" font-size="28" fill="black">
-  <rect x="16" y="1338" width="56" height="26" rx="3" fill="white" stroke="black" stroke-width="3"/>
-  <rect x="72" y="1345" width="7" height="12" fill="black"/>
-  <rect x="20" y="1342" width="{$fillWidth}" height="18" fill="black"/>
-  <text x="95" y="1360" font-weight="bold">{$percent} %</text>
-  <text x="936" y="1360" text-anchor="middle" font-weight="bold">{$renderedAt->format('H:i')}</text>
-  <g transform="translate(1830,1352)">{$wifiBarsSvg}</g>
-</g>
 SVG;
 }
