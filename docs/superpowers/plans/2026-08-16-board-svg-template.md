@@ -65,7 +65,11 @@ Taskbeschreibung gilt die Spec:
   `x=950 y=(R-20) width=60 height=42 fill=black`, Live-Abfahrt-Text
   `fill="white"`, sonst unverändert. Gestört schlägt „nur Fahrplan" (Tie-Break
   aus Spec: fett-weiß-auf-schwarz, nicht kursiv).
-- `"in": 0` → `✱` statt Zahl, gleiche Formatierung wie die Zahl.
+- `"in": 0` → Jetzt-Symbol `#starNow` (selbst gezeichneter Stern aus 3 dicken
+  Linien, `stroke-width=7`) statt Zahl — **kein Unicode-Zeichen**, sowohl
+  „✱" als auch „✳︎" wurden am gerenderten Bild geprüft und verworfen (zu
+  dünn bzw. gar kein Glyph im Fallback-Font, s. Spec §9). Live-Slot:
+  `translate(985,R)`. Folgeabfahrt-Slot: `translate(1073,R) scale(0.696)`.
 - Wetterkarte: Icon `translate(1492,180) scale(1.8)`. Temperatur
   `x=1492 y=290`, 40px fett, zentriert. „Heute" `x=1150 y=366`, 30px fett.
   Fließtext ab `x=1150 y=422`, 46px Zeilenabstand, 39px Schrift.

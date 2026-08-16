@@ -443,7 +443,7 @@ gemessene Cap-Höhen pro Schriftgröße: 55px→37, 46px→31,5, 32px→22, 26px
 | Badge-Label (Liniennummer, weiß im Badge) | 54 (mittig) | `R+9` | 26px fett |
 | Steig-Nummer | 110 | `R+8` | 22px fett |
 | Fahrtrichtung | 145 | `R+19` | 55px |
-| Live-Abfahrt (Zahl oder `✱`) | 1000 (rechtsbündig) | `R+16` | 46px fett |
+| Live-Abfahrt (Zahl oder Jetzt-Symbol) | 1000 (rechtsbündig) | `R+16` | 46px fett |
 | Trennpunkt „·" | 1015 | `R+7` | 20px |
 | Folgeabfahrt | 1083 (rechtsbündig) | `R+11` | 32px |
 
@@ -464,8 +464,33 @@ Kreis-Badge mit Label „WLB" (24px statt 26px, da 3-stellig).
 
 **Zeilen-Zustände** (an echten Zeilen durchgerendert und abgenommen —
 Formeln beziehen sich auf `R` = Badge-Mitte der jeweiligen Zeile):
-- `"in": 0` ("fährt jetzt") → `✱` an Stelle der Live-Abfahrtszahl, gleiche
-  Formatierung wie die Zahl.
+- `"in": 0` ("fährt jetzt") → Jetzt-Symbol `#starNow` an Stelle der Zahl
+  (Live- **und** Folgeabfahrt können das betreffen). **Kein Unicode-Zeichen**
+  — sowohl „✱" (U+2731) als auch „✳︎" (U+2733) wurden am gerenderten Bild
+  geprüft und verworfen: „✱" fällt im Fallback-Font viel dünner aus als die
+  umgebende Fettschrift (132 vs. 327 Tuschepixel im direkten Vergleich mit
+  einer fetten Ziffer gleicher Größe), „✳︎" hat im verfügbaren Font gar kein
+  Glyph und rendert als ausgefülltes Rechteck. Stattdessen ein selbst
+  gezeichneter Stern aus drei dicken Linien, wie die übrigen Icons dieses
+  Designs (Badges, Wettericons) — kein Font-Fallback-Risiko. Definition
+  (lokaler Koordinatenraum -15..15, passend zur 46px-Zeile):
+
+  ```svg
+  <g id="starNow" stroke="black" stroke-width="7" stroke-linecap="round">
+    <line x1="0" y1="-15" x2="0" y2="15"/>
+    <line x1="-13" y1="-7.5" x2="13" y2="7.5"/>
+    <line x1="-13" y1="7.5" x2="13" y2="-7.5"/>
+  </g>
+  ```
+
+  Einbettung, rechtsbündig auf dieselbe x-Position wie die Zahl, die sie
+  ersetzt, vertikal auf `R` zentriert:
+  - Live-Abfahrt (46px-Slot, `x=1000` rechtsbündig):
+    `<use href="#starNow" transform="translate(985,R)"/>`
+  - Folgeabfahrt (32px-Slot, `x=1083` rechtsbündig):
+    `<use href="#starNow" transform="translate(1073,R) scale(0.696)"/>`
+    (0,696 = 32/46, gleiches Größenverhältnis wie die Schriftgrößen der
+    beiden Slots)
 - **Nur Fahrplan** (`realtime === false`): Live-Abfahrt UND Folgeabfahrt
   in **mittlerem Grau** (`fill="#808080"`), aufrecht — nicht kursiv. Badge,
   Steig-Nummer und Fahrtrichtung bleiben schwarz; nur die Zeitangaben und
