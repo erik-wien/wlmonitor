@@ -74,7 +74,14 @@ Taskbeschreibung gilt die Spec:
 - Font: `Atkinson Hyperlegible` (Familienname, wie in den TTF-Metadaten von
   `assets/fonts/board/*.ttf` hinterlegt). Kein anderer Font-Name im Template.
 - Bit-/Farbkonvention: ausschließlich `fill="black"` / `fill="white"` /
-  `stroke="black"` — keine anderen Farbwerte irgendwo im erzeugten SVG.
+  `stroke="black"` — keine anderen Farbwerte im selbst erzeugten Markup
+  (Badges, Text, Wetter-Icons, Trennlinien, Statuszeile). **Ausnahme:** das
+  eingebettete WL-Logo (`assets/img/wl-logo.svg`, Task 3) führt seine
+  echten Markenfarben unverändert mit — der harte Schwellwert in
+  `png_to_1bpp_packed()` (Spec §7) reduziert jede Farbe anhand ihrer
+  Luminanz auf Schwarz/Weiß, unabhängig davon, ob die Quelle schon
+  monochrom war. Genau so wurde das Logo in jedem Mockup dieser
+  Design-Session gerendert und abgenommen.
 
 ---
 ### Task 1: Font-Einbindung für `rsvg-convert` (`FONTCONFIG_FILE`)
@@ -1727,6 +1734,19 @@ class BoardTemplateRenderTest extends TestCase
         // sind hier explizit ERLAUBT (der harte Schwellwert aus
         // png_to_1bpp_packed() raeumt sie auf) -- dieser Test prueft nur,
         // dass keine ECHTE Farbe (R != G != B) vorkommt.
+        //
+        // Ausnahme: das eingebettete WL-Logo (Task 3) fuehrt seine echten
+        // Markenfarben (#e3000f, #240c4b) unveraendert aus assets/img/wl-logo.svg
+        // mit -- das ist gewollt (das Logo wurde in jedem Mockup dieser Design-
+        // Session genau so, farbig-im-Quell-SVG, gerendert und abgenommen) und
+        // fuer die Displayausgabe folgenlos: der harte Schwellwert in
+        // png_to_1bpp_packed() reduziert jede Farbe anhand ihrer Luminanz auf
+        // Schwarz oder Weiss, ganz gleich ob die Quelle schon monochrom war
+        // oder nicht. Diese Zeile scannt daher bewusst nur den Bereich
+        // AUSSERHALB der Logo-Bounding-Box (x=24..306, y=12..78, aus
+        // translate(24,12) scale(0.5025) auf die 561,3x131,6-Quelle,
+        // grosszuegig gerundet) -- der Rest des Boards (Abfahrten, Wetter,
+        // Statuszeile) muss weiterhin ausschliesslich schwarz/weiss sein.
         $svg = board_render_svg(
             $this->favoriteFixture(), $this->weatherFixture(),
             new DateTimeImmutable(), new DateTimeImmutable(), 78, 2
@@ -1736,6 +1756,9 @@ class BoardTemplateRenderTest extends TestCase
         $colorPixels = 0;
         for ($y = 0; $y < imagesy($im); $y += 7) {
             for ($x = 0; $x < imagesx($im); $x += 7) {
+                if ($x >= 20 && $x <= 310 && $y >= 10 && $y <= 80) {
+                    continue; // Logo-Bounding-Box, s.o.
+                }
                 $rgb = imagecolorat($im, $x, $y);
                 $r = ($rgb >> 16) & 0xFF; $g = ($rgb >> 8) & 0xFF; $b = $rgb & 0xFF;
                 if (max(abs($r - $g), abs($g - $b), abs($r - $b)) > 5) {
@@ -1744,7 +1767,7 @@ class BoardTemplateRenderTest extends TestCase
             }
         }
 
-        $this->assertSame(0, $colorPixels, 'kein einziger gerasterter Pixel darf sichtbar farbig sein');
+        $this->assertSame(0, $colorPixels, 'ausserhalb der Logo-Bounding-Box darf kein Pixel sichtbar farbig sein');
     }
 }
 ```
