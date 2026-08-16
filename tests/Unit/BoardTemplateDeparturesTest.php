@@ -42,7 +42,7 @@ class BoardTemplateDeparturesTest extends TestCase
     {
         $svg = board_render_departures_svg([$this->row(['live_in' => 0])]);
 
-        $this->assertStringContainsString('<use href="#starNow" transform="translate(985,259)"/>', $svg);
+        $this->assertStringContainsString('<use href="#starNow" transform="translate(985,259)" stroke="black"/>', $svg);
         $this->assertStringNotContainsString('✱', $svg);
         $this->assertStringNotContainsString('✳', $svg);
     }
@@ -50,7 +50,21 @@ class BoardTemplateDeparturesTest extends TestCase
     public function test_secondary_zero_renders_scaled_starNow(): void
     {
         $svg = board_render_departures_svg([$this->row(['secondary_in' => 0])]);
-        $this->assertStringContainsString('<use href="#starNow" transform="translate(1073,259) scale(0.696)"/>', $svg);
+        $this->assertStringContainsString('<use href="#starNow" transform="translate(1073,259) scale(0.696)" stroke="black"/>', $svg);
+    }
+
+    public function test_delayed_and_departing_now_renders_white_starNow_not_invisible(): void
+    {
+        // Regressionsschutz: #starNow zeichnet mit einem eigenen stroke, der
+        // vom Aufrufer gesetzt werden muss (die Basisform in board_svg_defs()
+        // hat bewusst KEINE feste Strichfarbe). Ohne die stroke="white"-
+        // Weitergabe hier waere der Stern bei "gestoert UND faehrt gerade
+        // jetzt" unsichtbar: schwarzer Strich auf dem schwarzen
+        // Invertierungsblock der Live-Abfahrt.
+        $svg = board_render_departures_svg([$this->row(['style' => 'delayed', 'live_in' => 0])]);
+
+        $this->assertStringContainsString('<rect x="950" y="239" width="60" height="42" fill="black"/>', $svg);
+        $this->assertStringContainsString('<use href="#starNow" transform="translate(985,259)" stroke="white"/>', $svg);
     }
 
     public function test_missing_departure_renders_dash_and_omits_dot_and_secondary(): void

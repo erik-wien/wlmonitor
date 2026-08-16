@@ -139,7 +139,7 @@ function board_svg_defs(): string
 <g id="badgeBus"><rect x="-34" y="-34" width="68" height="68" rx="14" fill="black"/></g>
 <g id="badgeMetro"><rect x="-34" y="-34" width="68" height="68" fill="black"/></g>
 <g id="badgeTrain"><rect x="-34" y="-34" width="68" height="68" rx="14" fill="white" stroke="black" stroke-width="5"/></g>
-<g id="starNow" stroke="black" stroke-width="7" stroke-linecap="round">
+<g id="starNow" stroke-width="7" stroke-linecap="round">
   <line x1="0" y1="-15" x2="0" y2="15"/>
   <line x1="-13" y1="-7.5" x2="13" y2="7.5"/>
   <line x1="-13" y1="7.5" x2="13" y2="-7.5"/>
@@ -529,11 +529,16 @@ function board_render_departure_row(array $item): string
         $out .= sprintf('<rect x="950" y="%d" width="60" height="42" fill="black"/>', $r - 20);
     }
 
+    // $liveFill gilt fuer die Live-Abfahrt in JEDER Darstellung (Zahl,
+    // Bindestrich, oder starNow) -- ohne das waere starNow bei "gestoert UND
+    // faehrt gerade jetzt" unsichtbar (schwarzer Stern auf dem schwarzen
+    // Invertierungsblock, Review-Befund).
+    $liveFill = $isDelayed ? 'white' : $fill;
+
     if ($item['live_in'] === 0) {
-        $out .= sprintf('<use href="#starNow" transform="translate(985,%d)"/>', $r);
+        $out .= sprintf('<use href="#starNow" transform="translate(985,%d)" stroke="%s"/>', $r, $liveFill);
     } else {
         $liveText = $item['live_in'] === null ? '–' : (string) $item['live_in'];
-        $liveFill = $isDelayed ? 'white' : $fill;
         $out .= sprintf(
             '<text x="1000" y="%d" font-weight="bold" font-size="46" fill="%s" text-anchor="end">%s</text>',
             $r + 16, $liveFill, $liveText
@@ -544,7 +549,7 @@ function board_render_departure_row(array $item): string
         $out .= sprintf('<text x="1015" y="%d" font-size="20" fill="%s">·</text>', $r + 7, $fill);
 
         if ($item['secondary_in'] === 0) {
-            $out .= sprintf('<use href="#starNow" transform="translate(1073,%d) scale(0.696)"/>', $r);
+            $out .= sprintf('<use href="#starNow" transform="translate(1073,%d) scale(0.696)" stroke="%s"/>', $r, $fill);
         } else {
             $out .= sprintf(
                 '<text x="1083" y="%d" font-size="32" fill="%s" text-anchor="end">%s</text>',
