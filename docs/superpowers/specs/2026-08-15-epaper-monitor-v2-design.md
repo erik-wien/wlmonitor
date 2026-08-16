@@ -202,6 +202,17 @@ Neue Datei `inc/board_render.php`:
    Statuszeilen-Werten befüllt.
 2. `rsvg-convert` rendert das SVG zu PNG (1872×1404) — auf dem Zielsystem
    vorhanden (`brew install librsvg`, siehe `epaper-monitor/README.md`).
+   **Font-Einbindung:** `rsvg-convert` nutzt system-installierte Schriften
+   über Fontconfig, nicht `<link>`/`@font-face`. Damit „Atkinson
+   Hyperlegible" ohne System-Installation verfügbar ist, setzt
+   `svg_to_png()` die Umgebungsvariable `FONTCONFIG_FILE` (als expliziter
+   `$env`-Parameter an `proc_open()`, nicht global via `putenv()` — sonst
+   verschmutzt der Wert den Prozess über den Aufruf hinaus) auf eine zur
+   Laufzeit erzeugte Fontconfig-XML, die auf `assets/fonts/board/`
+   verweist (Pfad relativ zu `__DIR__`, funktioniert unverändert in Dev
+   und Prod). Ohne dieses Env-Var fällt `rsvg-convert` still auf eine
+   System-Schrift zurück — sichtbar nur als „falsche Schriftart", nicht als
+   Fehler.
 3. PHP/GD (kein ImageMagick — auf dem Zielsystem nicht installiert, `ext-gd`
    dagegen bereits vorhanden) liest das PNG, wendet einen **harten
    Schwellwert** pro Pixel an (Luminanz < 128 → Schwarz, sonst Weiß) und
@@ -419,11 +430,22 @@ Unter jeder Zeile ein 1px-Strich (`x=16` bis `x=1083`) bei `R+48`.
 WLB (Wiener Lokalbahnen) normalisiert über `board_type()` auf `tram` →
 Kreis-Badge mit Label „WLB" (24px statt 26px, da 3-stellig).
 
-**Typografie-Sonderfälle:**
+**Typografie-Sonderfälle** (an einer echten Zeile durchgerendert und
+abgenommen — Formeln beziehen sich auf `R` = Badge-Mitte der jeweiligen
+Zeile, wie oben):
 - `"in": 0` ("fährt jetzt") → `✱` an Stelle der Live-Abfahrtszahl, gleiche
   46px/fett-Formatierung.
-- Gestörte Abfahrt (`delayed`): weiß auf schwarzem Block (invertiert,
-  Tie-Break wie v1 — Invertierung schlägt Fett, falls beides zuträfe).
+- **Nur Fahrplan** (`realtime === false`, aus v1 übernommen): Live-Abfahrt
+  UND Folgeabfahrt kursiv (`font-style="italic"`) statt fett — nicht beides
+  gleichzeitig. Setzt die `Italic`-Schriftdatei voraus (bereits als Asset
+  vorhanden, s. u.).
+- **Gestörte Abfahrt** (`delayed === true`): weiß auf schwarzem Block,
+  Tie-Break wie v1 — Invertierung schlägt „nur Fahrplan"/kursiv, falls
+  beides zuträfe (eine gestörte Fahrplan-Abfahrt zeigt also fett-weiß auf
+  Schwarz, nicht kursiv-weiß). Rechteck `x=950 y=(R-20) width=60 height=42
+  fill=black`, Live-Abfahrt-Text unverändert an Position `x=1000 y=(R+16)`,
+  nur `fill="white"`. Deckt ausschließlich die Live-Abfahrt ab, nicht den
+  Trennpunkt oder die Folgeabfahrt.
 - Alles einfarbig Schwarz auf Weiß — keine Graustufen, keine Farbe.
 
 ### Wetterkarte (rechts, x=1150–1856)
