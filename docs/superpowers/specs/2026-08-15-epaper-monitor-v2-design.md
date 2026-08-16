@@ -670,7 +670,11 @@ Icon-Zuordnungstabelle hier deckt trotzdem **alle 9** bereits ab.
 ### Referenz-Assets
 
 - `assets/fonts/board/Atkinson-Hyperlegible-{Regular,Bold,Italic,BoldItalic}-102.ttf`
-  (committed)
+  (committed). Das Board-Template selbst nutzt aktuell nur `Regular`/`Bold`
+  — „nur Fahrplan" wird seit dem Touch/Graustufen-Umbau grau statt kursiv
+  dargestellt (s. o.), `Italic`/`BoldItalic` sind ungenutzt, aber als
+  vollständiger Font-Satz bewusst mitcommitted (kein Nachteil, evtl. für
+  künftige Zustände nützlich).
 - `assets/img/wl-logo.svg` (5-Pfad-Original, committed)
 
 ---
