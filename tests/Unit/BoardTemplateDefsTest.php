@@ -1,0 +1,73 @@
+<?php
+// tests/Unit/BoardTemplateDefsTest.php
+//
+// SVG-Grundformen (Badges, Wetter-Icons) aus Spec §9. Reiner String-Vergleich
+// gegen die in der Spec festgeschriebenen IDs -- kein Rendering hier (das
+// prueft Task 7 ueber die echte Pipeline).
+
+namespace WLMonitor\Tests\Unit;
+
+use PHPUnit\Framework\TestCase;
+
+class BoardTemplateDefsTest extends TestCase
+{
+    private const EXPECTED_IDS = [
+        'sun', 'cloudOutline', 'cloudFilled',
+        'icon_klar', 'icon_leicht_bewoelkt', 'icon_bewoelkt', 'icon_bedeckt',
+        'icon_regen_leicht', 'icon_regen_stark', 'icon_schnee', 'icon_gewitter',
+        'icon_nebel', 'icon_unbekannt',
+        'badgeMetro', 'badgeTram', 'badgeBus', 'badgeTrain',
+    ];
+
+    public function test_defs_contain_every_expected_id_exactly_once(): void
+    {
+        $defs = board_svg_defs();
+
+        foreach (self::EXPECTED_IDS as $id) {
+            $count = substr_count($defs, 'id="' . $id . '"');
+            $this->assertSame(1, $count, "id=\"$id\" muss genau einmal vorkommen (gefunden: $count)");
+        }
+    }
+
+    public function test_defs_is_well_formed_xml_fragment(): void
+    {
+        $wrapped = '<svg xmlns="http://www.w3.org/2000/svg"><defs>' . board_svg_defs() . '</defs></svg>';
+        $prev = libxml_use_internal_errors(true);
+        $doc = simplexml_load_string($wrapped);
+        $errors = libxml_get_errors();
+        libxml_use_internal_errors($prev);
+
+        $this->assertNotFalse($doc, 'board_svg_defs() muss valides XML liefern');
+        $this->assertSame([], $errors);
+    }
+
+    public function test_badge_shape_mapping_covers_all_board_types(): void
+    {
+        $this->assertSame('badgeMetro', BOARD_BADGE_SHAPE_BY_TYPE['metro']);
+        $this->assertSame('badgeTram', BOARD_BADGE_SHAPE_BY_TYPE['tram']);
+        $this->assertSame('badgeBus', BOARD_BADGE_SHAPE_BY_TYPE['bus']);
+        $this->assertSame('badgeTrain', BOARD_BADGE_SHAPE_BY_TYPE['train']);
+        $this->assertSame('badgeTrain', BOARD_BADGE_SHAPE_BY_TYPE['other'], 'other faellt auf die train-Form zurueck (Spec Global Constraints)');
+    }
+
+    public function test_icon_id_mapping_covers_all_nine_categories_plus_fallback(): void
+    {
+        $expected = [
+            'klar' => 'icon_klar', 'leicht_bewoelkt' => 'icon_leicht_bewoelkt',
+            'bewoelkt' => 'icon_bewoelkt', 'bedeckt' => 'icon_bedeckt',
+            'regen_leicht' => 'icon_regen_leicht', 'regen_stark' => 'icon_regen_stark',
+            'schnee' => 'icon_schnee', 'gewitter' => 'icon_gewitter',
+            'nebel' => 'icon_nebel', 'unbekannt' => 'icon_unbekannt',
+        ];
+        foreach ($expected as $category => $iconId) {
+            $this->assertSame($iconId, BOARD_ICON_ID_BY_CATEGORY[$category]);
+        }
+    }
+
+    public function test_badge_label_font_size_shrinks_for_three_char_labels(): void
+    {
+        $this->assertSame(26, board_badge_label_font_size('U6'));
+        $this->assertSame(26, board_badge_label_font_size('18'));
+        $this->assertSame(24, board_badge_label_font_size('WLB'));
+    }
+}
