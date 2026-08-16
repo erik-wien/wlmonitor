@@ -139,6 +139,11 @@ function board_svg_defs(): string
 <g id="badgeBus"><rect x="-34" y="-34" width="68" height="68" rx="14" fill="black"/></g>
 <g id="badgeMetro"><rect x="-34" y="-34" width="68" height="68" fill="black"/></g>
 <g id="badgeTrain"><rect x="-34" y="-34" width="68" height="68" rx="14" fill="white" stroke="black" stroke-width="5"/></g>
+<g id="starNow" stroke="black" stroke-width="7" stroke-linecap="round">
+  <line x1="0" y1="-15" x2="0" y2="15"/>
+  <line x1="-13" y1="-7.5" x2="13" y2="7.5"/>
+  <line x1="-13" y1="7.5" x2="13" y2="-7.5"/>
+</g>
 SVG;
 }
 

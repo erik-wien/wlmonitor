@@ -17,6 +17,7 @@ class BoardTemplateDefsTest extends TestCase
         'icon_regen_leicht', 'icon_regen_stark', 'icon_schnee', 'icon_gewitter',
         'icon_nebel', 'icon_unbekannt',
         'badgeMetro', 'badgeTram', 'badgeBus', 'badgeTrain',
+        'starNow',
     ];
 
     public function test_defs_contain_every_expected_id_exactly_once(): void
