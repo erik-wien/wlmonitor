@@ -251,3 +251,39 @@ function board_render_chrome_svg(DateTimeImmutable $renderedAt, int $batteryPerc
 <line x1="0" y1="1310" x2="1872" y2="1310" stroke="black" stroke-width="2"/>
 SVG;
 }
+
+/**
+ * Touch-Leiste aus Spec: bis zu 3 Favoriten-Buttons, gleich breit ueber die
+ * volle Breite verteilt (16px Rand/Luecke), Hoehe 74px, y=1320 bis y=1394,
+ * rx=10. Aktiver Favorit schwarz gefuellt/weisses Label, inaktive weiss mit
+ * 3px schwarzem Rand/schwarzem Label.
+ *
+ * @param list<string> $favoriteTitles 1-3 Titel, bereits fertig ermittelt
+ *        (diese Funktion laedt selbst keine Favoriten).
+ */
+function board_render_touch_bar_svg(array $favoriteTitles, int $activeIndex): string
+{
+    $count = count($favoriteTitles);
+    $margin = 16;
+    $gap = 16;
+    $buttonWidth = intdiv(1872 - 2 * $margin - ($count - 1) * $gap, $count);
+
+    $out = '<g font-family="Atkinson Hyperlegible" font-weight="bold" font-size="34">';
+    foreach ($favoriteTitles as $i => $title) {
+        $x = $margin + $i * ($buttonWidth + $gap);
+        $active = $i === $activeIndex;
+        $out .= sprintf(
+            '<rect x="%d" y="1320" width="%d" height="74" rx="10" %s/>',
+            $x, $buttonWidth,
+            $active ? 'fill="black"' : 'fill="white" stroke="black" stroke-width="3"'
+        );
+        $out .= sprintf(
+            '<text x="%d" y="1367" text-anchor="middle" fill="%s">%s</text>',
+            $x + intdiv($buttonWidth, 2), $active ? 'white' : 'black',
+            htmlspecialchars($title, ENT_XML1)
+        );
+    }
+    $out .= '</g>';
+
+    return $out;
+}
