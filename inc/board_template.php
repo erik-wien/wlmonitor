@@ -380,3 +380,90 @@ function board_render_weather_card(string $iconId, ?int $tempMin, ?int $tempMax,
 {$bodySvg}
 SVG;
 }
+
+/**
+ * Unterste zulaessige Y-Position fuer eine Zeilen-Badge-Unterkante, bevor
+ * auf eine neue Seite umgebrochen wird -- reserviert die letzten 60px der
+ * Abfahrtenspalte (1310-1250) fuer die Stand+Pagination-Leiste (Task 6b).
+ */
+const BOARD_DEPARTURES_MAX_Y = 1250;
+
+/**
+ * Cursor-Layout + Pagination der Abfahrtenliste eines einzelnen Favoriten
+ * (Spec: 58px vor / 29px nach jedem Stationskopf, 96px Zeilenraster,
+ * Cursor nach einem Block = Badge-Unterkante der letzten Zeile). Bricht auf
+ * eine neue Seite um, sobald ein Stationskopf+erste Zeile oder eine
+ * einzelne Zeile BOARD_DEPARTURES_MAX_Y ueberschreiten wuerde; bei einem
+ * Umbruch MITTEN in einer Station wird deren Kopf auf der Folgeseite mit
+ * " (FORTS.)" wiederholt, sonst waere die Zugehoerigkeit auf Seite 2
+ * unklar. $page wird auf [1, totalPages] geklemmt.
+ *
+ * @param array{id: int, title: string, stations: list<array{diva: string, name: string, lines: list<array>}>} $favorite
+ * @return array{items: list<array>, totalPages: int}
+ */
+function board_paginate_departures(array $favorite, int $page): array
+{
+    $pages = [[]];
+    $pageIndex = 0;
+    $cursor = 90;
+
+    foreach ($favorite['stations'] as $station) {
+        if ($station['lines'] === []) {
+            continue;
+        }
+
+        $capTop = $cursor + 58;
+        $headerBaseline = $capTop + 48;
+        $firstR = $headerBaseline + 29 + 34;
+        $stationName = mb_strtoupper($station['name'], 'UTF-8');
+
+        if ($firstR + 34 > BOARD_DEPARTURES_MAX_Y) {
+            $pages[] = [];
+            $pageIndex++;
+            $cursor = 90;
+            $capTop = $cursor + 58;
+            $headerBaseline = $capTop + 48;
+            $firstR = $headerBaseline + 29 + 34;
+        }
+
+        $pages[$pageIndex][] = ['type' => 'header', 'y' => $headerBaseline, 'text' => $stationName];
+
+        $r = $firstR;
+        foreach ($station['lines'] as $line) {
+            if ($r + 34 > BOARD_DEPARTURES_MAX_Y) {
+                $pages[] = [];
+                $pageIndex++;
+                $cursor = 90;
+                $capTop = $cursor + 58;
+                $headerBaseline = $capTop + 48;
+                $r = $headerBaseline + 29 + 34;
+                $pages[$pageIndex][] = ['type' => 'header', 'y' => $headerBaseline, 'text' => $stationName . ' (FORTS.)'];
+            }
+
+            $departures = $line['departures'];
+            $delayed = ($departures[0]['delayed'] ?? false) === true;
+
+            $pages[$pageIndex][] = [
+                'type' => 'row',
+                'r' => $r,
+                'badge_type' => $line['type'],
+                'label' => $line['line'],
+                'platform' => $line['platform'],
+                'destination' => $line['towards'],
+                'live_in' => $departures[0]['in'] ?? null,
+                'secondary_in' => $departures[1]['in'] ?? null,
+                'style' => $delayed ? 'delayed' : ($line['realtime'] ? 'normal' : 'gray'),
+                'divider_y' => $r + 48,
+            ];
+
+            $r += 96;
+        }
+
+        $cursor = ($r - 96) + 34;
+    }
+
+    $totalPages = count($pages);
+    $page = max(1, min($totalPages, $page));
+
+    return ['items' => $pages[$page - 1], 'totalPages' => $totalPages];
+}
