@@ -615,7 +615,11 @@ function board_render_stand_and_pagination_svg(DateTimeImmutable $dataStand, int
  * Verfuegbare Spaltenbreite der Abfahrten-/Stoerungsspalte (1067px, x=16
  * bis x=1083) geteilt durch die bei 39px gemessene mittlere Zeichenbreite
  * (17,37px/Zeichen, s. Task 4), linear auf 32px skaliert, 8% Sicherheits-
- * abstand: floor(1067 / (17.37 * 32/39) * 0.92).
+ * abstand: floor(1067 / (17.37 * 32/39) * 0.92) = 68, hier auf 67 abgerundet
+ * (Review-Befund: die urspruengliche Formel im Plan ergab bereits 68, nicht
+ * 67 -- 67 ist die konservativere, schmalere Wahl und kann daher nie zum
+ * Ueberlauf ueber x=1083 fuehren, nutzt die verfuegbare Breite nur minimal
+ * weniger aus).
  */
 const BOARD_DISRUPTIONS_MAX_CHARS_PER_LINE = 67;
 
