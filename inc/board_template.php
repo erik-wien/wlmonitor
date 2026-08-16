@@ -289,6 +289,69 @@ function board_render_touch_bar_svg(array $favoriteTitles, int $activeIndex): st
 }
 
 /**
+ * Setzt das komplette Board-SVG zusammen: Grundformen, Kopfzeile,
+ * Abfahrten- ODER Stoerungsseite (je nach $requestedPage), Stand+
+ * Pagination, Wetterkarte, Touch-Leiste.
+ *
+ * Seitenzaehlung: board_paginate_departures() liefert totalPages fuer die
+ * Abfahrten allein. Gibt es $filteredAlerts, kommt genau eine weitere
+ * Seite dazu (die Stoerungsseite -- board_layout_disruptions() paginiert
+ * selbst nicht, s. Task 8). $requestedPage bis totalDeparturePages zeigt
+ * Abfahrten, totalDeparturePages+1 (falls vorhanden) zeigt Stoerungen.
+ *
+ * @param list<string> $touchBarFavoriteTitles 1-3 Titel
+ * @param array $activeFavorite board_favorite()-Ergebnis
+ * @param list<array> $filteredAlerts bereits auf $activeFavorite gefiltert
+ */
+function board_render_svg(
+    array $touchBarFavoriteTitles,
+    int $activeFavoriteIndex,
+    array $activeFavorite,
+    array $filteredAlerts,
+    int $requestedPage,
+    array $weather,
+    DateTimeImmutable $dataStand,
+    DateTimeImmutable $renderedAt,
+    int $batteryPercent,
+    int $wifiBars
+): string {
+    $defs = board_svg_defs();
+    $chrome = board_render_chrome_svg($renderedAt, $batteryPercent, $wifiBars);
+    $touchBar = board_render_touch_bar_svg($touchBarFavoriteTitles, $activeFavoriteIndex);
+    $weatherSvg = board_render_weather_svg($weather);
+
+    $departurePages = board_paginate_departures($activeFavorite, 1);
+    $totalDeparturePages = $departurePages['totalPages'];
+    $hasDisruptions = $filteredAlerts !== [];
+    $totalPages = $totalDeparturePages + ($hasDisruptions ? 1 : 0);
+
+    $requestedPage = max(1, min($totalPages, $requestedPage));
+
+    if ($requestedPage <= $totalDeparturePages) {
+        $items = board_paginate_departures($activeFavorite, $requestedPage)['items'];
+        $mainSvg = board_render_departures_svg($items);
+    } else {
+        $mainSvg = board_render_disruptions_svg(board_layout_disruptions($filteredAlerts));
+    }
+
+    $standAndPagination = board_render_stand_and_pagination_svg($dataStand, $requestedPage, $totalPages);
+
+    return <<<SVG
+<svg xmlns="http://www.w3.org/2000/svg" width="1872" height="1404" viewBox="0 0 1872 1404">
+<defs>
+{$defs}
+</defs>
+<rect width="1872" height="1404" fill="white"/>
+{$chrome}
+{$mainSvg}
+{$standAndPagination}
+{$weatherSvg}
+{$touchBar}
+</svg>
+SVG;
+}
+
+/**
  * Verfuegbare Spaltenbreite der Wetterkarte (706px, x=1150 bis x=1856)
  * geteilt durch die gemessene mittlere Zeichenbreite bei 39px Atkinson
  * Hyperlegible (17,37px/Zeichen, s. Task 4 Step 3), 8% Sicherheitsabstand
