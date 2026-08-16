@@ -562,3 +562,51 @@ function board_render_departure_row(array $item): string
 
     return $out;
 }
+
+/**
+ * "Stand HH:MM" (Zeitpunkt der WL-Datenabfrage) + kanonische Pagination am
+ * unteren Ende der Abfahrtenspalte. Die Pille erscheint nur, wenn es mehr
+ * als eine Seite gibt. Ein Pfeil ohne Ziel (erste/letzte Seite) wird
+ * ausgegraut statt weggelassen, damit die Pille immer gleich breit bleibt.
+ */
+function board_render_stand_and_pagination_svg(DateTimeImmutable $dataStand, int $currentPage, int $totalPages): string
+{
+    $standSvg = sprintf(
+        '<text x="16" y="1286" font-family="Atkinson Hyperlegible" font-size="24" fill="black">Stand %s</text>',
+        $dataStand->format('H:i')
+    );
+
+    if ($totalPages <= 1) {
+        return $standSvg;
+    }
+
+    $backFill = $currentPage > 1 ? 'black' : '#b0b0b0';
+    $forwardFill = $currentPage < $totalPages ? 'black' : '#b0b0b0';
+
+    $pagesSvg = '';
+    $slotWidth = 58;
+    $startX = 793 + intdiv(290 - $totalPages * $slotWidth - 2 * $slotWidth, 2) + $slotWidth;
+    // Vereinfachtes, robustes Layout: Pfeile an den Raendern der Pille,
+    // Seitenzahlen mittig verteilt.
+    $pagesSvg .= sprintf('<text x="822" y="1289" text-anchor="middle" font-size="26" fill="%s">←</text>', $backFill);
+
+    $numberStartX = 880;
+    for ($p = 1; $p <= $totalPages; $p++) {
+        $x = $numberStartX + ($p - 1) * 58;
+        if ($p === $currentPage) {
+            $pagesSvg .= sprintf('<circle cx="%d" cy="1280" r="20" fill="black"/>', $x);
+            $pagesSvg .= sprintf('<text x="%d" y="1289" text-anchor="middle" font-weight="bold" font-size="24" fill="white">%d</text>', $x, $p);
+        } else {
+            $pagesSvg .= sprintf('<text x="%d" y="1289" text-anchor="middle" font-size="24" fill="black">%d</text>', $x, $p);
+        }
+    }
+    $arrowX = $numberStartX + $totalPages * 58;
+    $pagesSvg .= sprintf('<text x="%d" y="1289" text-anchor="middle" font-size="26" fill="%s">→</text>', $arrowX, $forwardFill);
+
+    $pillWidth = max(290, $arrowX - 822 + 58);
+
+    return $standSvg . sprintf(
+        '<g font-family="Atkinson Hyperlegible"><rect x="793" y="1256" width="%d" height="48" rx="24" fill="white" stroke="black" stroke-width="2"/>%s</g>',
+        $pillWidth, $pagesSvg
+    );
+}
