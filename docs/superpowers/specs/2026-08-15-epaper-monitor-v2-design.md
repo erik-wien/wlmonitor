@@ -491,10 +491,13 @@ Formeln beziehen sich auf `R` = Badge-Mitte der jeweiligen Zeile):
     `<use href="#starNow" transform="translate(1073,R) scale(0.696)"/>`
     (0,696 = 32/46, gleiches Größenverhältnis wie die Schriftgrößen der
     beiden Slots)
-- **Nur Fahrplan** (`realtime === false`): Live-Abfahrt UND Folgeabfahrt
-  in **mittlerem Grau** (`fill="#808080"`), aufrecht — nicht kursiv. Badge,
-  Steig-Nummer und Fahrtrichtung bleiben schwarz; nur die Zeitangaben und
-  der Trennpunkt werden grau.
+- **Nur Fahrplan** (`realtime === false`): die ganze Zeile bis auf das Badge
+  selbst in **mittlerem Grau** (`fill="#808080"`) — Steig-Nummer,
+  Fahrtrichtung, Live-Abfahrt, Trennpunkt, Folgeabfahrt, aufrecht (nicht
+  kursiv, keine andere Formatierung als sonst). Nur Badge-Form und
+  Badge-Label (weiß im Badge) bleiben unverändert — sie zeigen die Linie,
+  nicht den Echtzeit-Status, und sollen deshalb nicht mitgrauen. Am
+  gerenderten Bild abgenommen (Zeile „Gersthof S").
 - **Gestörte Abfahrt** (`delayed === true`): weiß auf schwarzem Block,
   schlägt „nur Fahrplan"/Grau, falls beides zuträfe (eine gestörte
   Fahrplan-Abfahrt zeigt also fett-weiß auf Schwarz, nicht grau). Rechteck
