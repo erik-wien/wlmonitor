@@ -473,3 +473,87 @@ function board_paginate_departures(array $favorite, int $page): array
 
     return ['items' => $pages[$page - 1], 'totalPages' => $totalPages];
 }
+
+/**
+ * SVG-Rendering der Abfahrtenliste aus den Layout-Items von
+ * board_paginate_departures() (Task 5).
+ *
+ * @param list<array> $layoutItems
+ */
+function board_render_departures_svg(array $layoutItems): string
+{
+    $out = '<g font-family="Atkinson Hyperlegible">';
+
+    foreach ($layoutItems as $item) {
+        $out .= $item['type'] === 'header'
+            ? board_render_departure_header($item)
+            : board_render_departure_row($item);
+    }
+
+    $out .= '</g>';
+    return $out;
+}
+
+function board_render_departure_header(array $item): string
+{
+    return sprintf(
+        '<text x="16" y="%d" font-weight="bold" font-size="55" fill="black">%s</text>',
+        $item['y'], htmlspecialchars($item['text'], ENT_XML1)
+    );
+}
+
+function board_render_departure_row(array $item): string
+{
+    $r = $item['r'];
+    $badgeShape = BOARD_BADGE_SHAPE_BY_TYPE[$item['badge_type']] ?? BOARD_BADGE_SHAPE_BY_TYPE['other'];
+    $labelSize = board_badge_label_font_size($item['label']);
+    $isGray = $item['style'] === 'gray';
+    $isDelayed = $item['style'] === 'delayed';
+    $fill = $isGray ? '#808080' : 'black';
+
+    $out = sprintf('<use href="#%s" transform="translate(54,%d)"/>', $badgeShape, $r);
+    $out .= sprintf(
+        '<text x="54" y="%d" font-weight="bold" font-size="%d" fill="white" text-anchor="middle">%s</text>',
+        $r + 9, $labelSize, htmlspecialchars($item['label'], ENT_XML1)
+    );
+    $out .= sprintf(
+        '<text x="110" y="%d" font-weight="bold" font-size="22" fill="%s">%s</text>',
+        $r + 8, $fill, htmlspecialchars($item['platform'], ENT_XML1)
+    );
+    $out .= sprintf(
+        '<text x="145" y="%d" font-size="55" fill="%s">%s</text>',
+        $r + 19, $fill, htmlspecialchars($item['destination'], ENT_XML1)
+    );
+
+    if ($isDelayed) {
+        $out .= sprintf('<rect x="950" y="%d" width="60" height="42" fill="black"/>', $r - 20);
+    }
+
+    if ($item['live_in'] === 0) {
+        $out .= sprintf('<use href="#starNow" transform="translate(985,%d)"/>', $r);
+    } else {
+        $liveText = $item['live_in'] === null ? '–' : (string) $item['live_in'];
+        $liveFill = $isDelayed ? 'white' : $fill;
+        $out .= sprintf(
+            '<text x="1000" y="%d" font-weight="bold" font-size="46" fill="%s" text-anchor="end">%s</text>',
+            $r + 16, $liveFill, $liveText
+        );
+    }
+
+    if ($item['secondary_in'] !== null) {
+        $out .= sprintf('<text x="1015" y="%d" font-size="20" fill="%s">·</text>', $r + 7, $fill);
+
+        if ($item['secondary_in'] === 0) {
+            $out .= sprintf('<use href="#starNow" transform="translate(1073,%d) scale(0.696)"/>', $r);
+        } else {
+            $out .= sprintf(
+                '<text x="1083" y="%d" font-size="32" fill="%s" text-anchor="end">%s</text>',
+                $r + 11, $fill, (string) $item['secondary_in']
+            );
+        }
+    }
+
+    $out .= sprintf('<line x1="16" y1="%d" x2="1083" y2="%d" stroke="black" stroke-width="1"/>', $item['divider_y'], $item['divider_y']);
+
+    return $out;
+}
