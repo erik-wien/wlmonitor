@@ -610,3 +610,102 @@ function board_render_stand_and_pagination_svg(DateTimeImmutable $dataStand, int
         $pillWidth, $pagesSvg
     );
 }
+
+/**
+ * Verfuegbare Spaltenbreite der Abfahrten-/Stoerungsspalte (1067px, x=16
+ * bis x=1083) geteilt durch die bei 39px gemessene mittlere Zeichenbreite
+ * (17,37px/Zeichen, s. Task 4), linear auf 32px skaliert, 8% Sicherheits-
+ * abstand: floor(1067 / (17.37 * 32/39) * 0.92).
+ */
+const BOARD_DISRUPTIONS_MAX_CHARS_PER_LINE = 67;
+
+/**
+ * Wie board_wrap_text() (Task 4), aber mit hartem Zeilenlimit: ORF-
+ * Stoerungstexte koennen mehrere hundert Zeichen lang sein (Spec §8) -- bei
+ * mehr als $maxLines Zeilen wird die letzte Zeile so weit gekuerzt, dass
+ * " …" noch dazupasst.
+ *
+ * @return list<string>
+ */
+function board_wrap_disruption_text(string $text, int $maxLines): array
+{
+    $lines = board_wrap_text($text, BOARD_DISRUPTIONS_MAX_CHARS_PER_LINE);
+
+    if (count($lines) <= $maxLines) {
+        return $lines;
+    }
+
+    $truncated = array_slice($lines, 0, $maxLines);
+    $last = $truncated[$maxLines - 1];
+    $budget = BOARD_DISRUPTIONS_MAX_CHARS_PER_LINE - 2; // Platz fuer " …"
+    if (mb_strlen($last, 'UTF-8') > $budget) {
+        $last = mb_substr($last, 0, $budget, 'UTF-8');
+    }
+    $truncated[$maxLines - 1] = rtrim($last) . ' …';
+
+    return $truncated;
+}
+
+/**
+ * Cursor-Layout der Stoerungsseite: Titel fett (40px) + gekuerzte
+ * Beschreibung (32px, max. 3 Zeilen), 50px Abstand vor jedem Titel, 16px
+ * zwischen Titel und Beschreibung, 42px Zeilenabstand innerhalb der
+ * Beschreibung, 40px nach dem letzten Beschreibungszeile bis zum
+ * Trennstrich. $alerts ist bereits auf die Linien des aktiven Favoriten
+ * gefiltert (Aufgabe des Aufrufers, s. Interfaces).
+ *
+ * @param list<array{title: string, description: string}> $alerts
+ * @return list<array>
+ */
+function board_layout_disruptions(array $alerts): array
+{
+    $items = [];
+    $cursor = 90;
+
+    foreach ($alerts as $alert) {
+        $titleTop = $cursor + 50;
+        $titleBaseline = $titleTop + 20;
+        $items[] = ['type' => 'disruption_title', 'y' => $titleBaseline, 'text' => $alert['title']];
+
+        $descLines = board_wrap_disruption_text($alert['description'], 3);
+        $y = $titleBaseline + 16 + 16;
+        foreach ($descLines as $line) {
+            $items[] = ['type' => 'disruption_line', 'y' => $y, 'text' => $line];
+            $y += 42;
+        }
+
+        $dividerY = $y - 42 + 40;
+        $items[] = ['type' => 'disruption_divider', 'y' => $dividerY];
+        $cursor = $dividerY;
+    }
+
+    return $items;
+}
+
+function board_render_disruptions_svg(array $items): string
+{
+    if ($items === []) {
+        return '';
+    }
+
+    $out = '<g font-family="Atkinson Hyperlegible">';
+    foreach ($items as $item) {
+        $out .= match ($item['type']) {
+            'disruption_title' => sprintf(
+                '<text x="16" y="%d" font-weight="bold" font-size="40" fill="black">%s</text>',
+                $item['y'], htmlspecialchars($item['text'], ENT_XML1)
+            ),
+            'disruption_line' => sprintf(
+                '<text x="16" y="%d" font-size="32" fill="black">%s</text>',
+                $item['y'], htmlspecialchars($item['text'], ENT_XML1)
+            ),
+            'disruption_divider' => sprintf(
+                '<line x1="16" y1="%d" x2="1083" y2="%d" stroke="black" stroke-width="1"/>',
+                $item['y'], $item['y']
+            ),
+        };
+    }
+    $out .= '</g>';
+
+    return $out;
+}
