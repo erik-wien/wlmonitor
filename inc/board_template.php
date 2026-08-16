@@ -398,6 +398,12 @@ const BOARD_DEPARTURES_MAX_Y = 1250;
  * " (FORTS.)" wiederholt, sonst waere die Zugehoerigkeit auf Seite 2
  * unklar. $page wird auf [1, totalPages] geklemmt.
  *
+ * Die Umbruchpruefung nutzt "+48" (Zeilentrenner-Position, R+48), nicht nur
+ * "+34" (Badge-Unterkante) -- sonst koennte der 1px-Trennstrich der letzten
+ * Zeile einer Seite bis zu 14px in den fuer Stand+Pagination reservierten
+ * Bereich (1250-1310) hineinragen (am 2026-08-16 im Review von Task 5
+ * gefunden, hier korrigiert).
+ *
  * @param array{id: int, title: string, stations: list<array{diva: string, name: string, lines: list<array>}>} $favorite
  * @return array{items: list<array>, totalPages: int}
  */
@@ -417,7 +423,7 @@ function board_paginate_departures(array $favorite, int $page): array
         $firstR = $headerBaseline + 29 + 34;
         $stationName = mb_strtoupper($station['name'], 'UTF-8');
 
-        if ($firstR + 34 > BOARD_DEPARTURES_MAX_Y) {
+        if ($firstR + 48 > BOARD_DEPARTURES_MAX_Y) {
             $pages[] = [];
             $pageIndex++;
             $cursor = 90;
@@ -430,7 +436,7 @@ function board_paginate_departures(array $favorite, int $page): array
 
         $r = $firstR;
         foreach ($station['lines'] as $line) {
-            if ($r + 34 > BOARD_DEPARTURES_MAX_Y) {
+            if ($r + 48 > BOARD_DEPARTURES_MAX_Y) {
                 $pages[] = [];
                 $pageIndex++;
                 $cursor = 90;
