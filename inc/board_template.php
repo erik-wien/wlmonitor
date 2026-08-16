@@ -141,3 +141,102 @@ function board_svg_defs(): string
 <g id="badgeTrain"><rect x="-34" y="-34" width="68" height="68" rx="14" fill="white" stroke="black" stroke-width="5"/></g>
 SVG;
 }
+
+/**
+ * Liest assets/img/wl-logo.svg und liefert nur die inneren Elemente
+ * (<title> + 5 <path>), ohne die aeusseren <svg>-Tags -- zur Einbettung in
+ * eine eigene <g transform="..."> im Board-Template. Alle 5 Pfade sind
+ * Pflicht: fehlt die Wortmarke (letzter Pfad, style="fill:#fff"), bleibt
+ * nur ein schwarzes Rechteck sichtbar (siehe Spec §9, in dieser Session
+ * live beobachteter Fehler beim manuellen Kopieren).
+ *
+ * @throws RuntimeException wenn die Datei fehlt oder nicht das erwartete
+ *         <svg>...</svg>-Format hat
+ */
+function board_wl_logo_paths(): string
+{
+    $file = realpath(__DIR__ . '/../assets/img/wl-logo.svg');
+    if ($file === false) {
+        throw new RuntimeException('assets/img/wl-logo.svg nicht gefunden');
+    }
+
+    $raw = file_get_contents($file);
+    if (!preg_match('/<svg[^>]*>(.*)<\/svg>/s', $raw, $m)) {
+        throw new RuntimeException('assets/img/wl-logo.svg hat nicht das erwartete <svg>...</svg>-Format');
+    }
+
+    return trim($m[1]);
+}
+
+/**
+ * Fuellbreite des Akku-Balkens in Pixeln (0-48, proportional zu Prozent).
+ * Innenflaeche des Umriss-Rechtecks (x=16 width=56) reicht bis x=68 (4px
+ * vor der Polklemme bei x=72); der Fuellbalken beginnt bei x=20, also
+ * max. 48px breit. Minimum 2px, damit der Balken bei sehr niedrigem
+ * Ladestand nicht komplett verschwindet (0% waere sonst nicht von einem
+ * Rendering-Fehler zu unterscheiden).
+ */
+function board_battery_fill_width(int $percent): int
+{
+    $percent = max(0, min(100, $percent));
+    return max(2, (int) round(48 * $percent / 100));
+}
+
+/**
+ * Kopf- und Fusszeile aus Spec §9: Logo, "Stand HH:MM", die vertikale
+ * Spaltenlinie Abfahrten|Wetter, die Fusszeilen-Trennlinie und die
+ * Statuszeile (Akku/Uhrzeit/WLAN-Balken).
+ *
+ * $dataStand ist der Zeitpunkt der WL-Datenabfrage ("Stand HH:MM" oben
+ * rechts), $renderedAt die Serverzeit beim Rendern (Uhrzeit in der
+ * Fusszeile) -- beide bewusst getrennte Werte, s. Spec §9. $wifiBars ist
+ * bereits von RSSI in {0,1,2,3} umgerechnet (Aufgabe der aufrufenden
+ * Board-Protokoll-Schicht, nicht dieser Funktion).
+ */
+function board_render_chrome_svg(
+    DateTimeImmutable $dataStand,
+    DateTimeImmutable $renderedAt,
+    int $batteryPercent,
+    int $wifiBars
+): string {
+    $wifiBars = max(0, min(3, $wifiBars));
+    $fillWidth = board_battery_fill_width($batteryPercent);
+    $percent = max(0, min(100, $batteryPercent));
+
+    $wifiBarSpecs = [
+        ['x' => 0,  'y' => 10, 'h' => 8],
+        ['x' => 12, 'y' => 4,  'h' => 14],
+        ['x' => 24, 'y' => -4, 'h' => 22],
+    ];
+    $wifiBarsSvg = '';
+    foreach ($wifiBarSpecs as $i => $bar) {
+        $filled = $i < $wifiBars;
+        $wifiBarsSvg .= sprintf(
+            '<rect x="%d" y="%d" width="8" height="%d" %s/>',
+            $bar['x'], $bar['y'], $bar['h'],
+            $filled ? 'fill="black"' : 'fill="white" stroke="black" stroke-width="2"'
+        );
+    }
+
+    $logo = board_wl_logo_paths();
+
+    return <<<SVG
+<line x1="0" y1="90" x2="1872" y2="90" stroke="black" stroke-width="2"/>
+<g transform="translate(24,12) scale(0.5025)">
+{$logo}
+</g>
+<text x="1857" y="60" font-family="Atkinson Hyperlegible" font-weight="bold" font-size="39" fill="black" text-anchor="end">Stand {$dataStand->format('H:i')}</text>
+
+<line x1="1113" y1="90" x2="1113" y2="1310" stroke="black" stroke-width="2"/>
+<line x1="0" y1="1310" x2="1872" y2="1310" stroke="black" stroke-width="2"/>
+
+<g font-family="Atkinson Hyperlegible" font-size="28" fill="black">
+  <rect x="16" y="1338" width="56" height="26" rx="3" fill="white" stroke="black" stroke-width="3"/>
+  <rect x="72" y="1345" width="7" height="12" fill="black"/>
+  <rect x="20" y="1342" width="{$fillWidth}" height="18" fill="black"/>
+  <text x="95" y="1360" font-weight="bold">{$percent} %</text>
+  <text x="936" y="1360" text-anchor="middle" font-weight="bold">{$renderedAt->format('H:i')}</text>
+  <g transform="translate(1830,1352)">{$wifiBarsSvg}</g>
+</g>
+SVG;
+}
