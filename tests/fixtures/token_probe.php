@@ -16,18 +16,60 @@ declare(strict_types=1);
  *   authorization    ?string  Value for the Authorization header (e.g. "Bearer xyz").
  *                              Omitted/null → no Authorization header at all.
  *   get              ?array   Merged into $_GET (e.g. ['fav' => '3']).
+ *   headers          ?array   Extra request headers, name => value (e.g.
+ *                              ['X-Device-Touch' => 'fav1', 'If-None-Match' => '"abc"']).
+ *                              Merged into $_SERVER as HTTP_<NAME> the same way
+ *                              a real web server populates header superglobals.
  *   mock_wl_response ?string  Raw JSON body to serve for any https:// fetch —
  *                              lets the probe exercise monitor_get() without a
  *                              real network call, matching
  *                              tests/Unit/MonitorParserTest.php's MockHttpWrapper.
  *
- * STDOUT carries whatever the page echoes (the JSON body). The HTTP status
- * code is reported on STDERR as "STATUS:<code>\n" via a shutdown function.
+ * STDOUT carries whatever the page echoes (the response body — binary for
+ * board.php since the Board-Protokoll rewrite). The HTTP status code is
+ * reported on STDERR as "STATUS:<code>\n", and the full response header list
+ * (headers_list()) as "HEADERS:<json array>\n", both via a shutdown function
+ * -- STDOUT alone can no longer carry response metadata once it's opaque
+ * binary.
  */
 
 $page         = $argv[1] ?? '';
 $scenarioFile = $argv[2] ?? '';
 $scenario     = json_decode((string) file_get_contents($scenarioFile), true) ?? [];
+
+// ── CLI SAPI workaround: headers_list() doesn't work in CLI SAPI ────────────
+// If running in CLI, re-execute via php-cgi (which supports headers_list()).
+if (php_sapi_name() === 'cli') {
+    $phpCgiBinary = trim((string) shell_exec('which php-cgi 2>/dev/null'));
+    if ($phpCgiBinary && file_exists($phpCgiBinary)) {
+        // Re-execute this script via php-cgi, which properly supports headers_list().
+        $cmd = escapeshellarg($phpCgiBinary) . ' ' . escapeshellarg(__FILE__)
+             . ' ' . escapeshellarg($page) . ' ' . escapeshellarg($scenarioFile);
+        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $proc = proc_open($cmd, $descriptors, $pipes);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($proc);
+
+        // php-cgi outputs HTTP headers (CRLF-terminated), blank line (CRLF), then body.
+        // Extract body and forward both body and STDERR output.
+        // Handle both CRLF and LF line endings.
+        if (preg_match("/\r?\n\r?\n/", $stdout, $matches)) {
+            $separator = $matches[0];
+            [$httpHeaders, $body] = explode($separator, $stdout, 2);
+            echo $body;
+        } else {
+            echo $stdout;
+        }
+        // Forward STDERR from the cgi subprocess (contains STATUS: and HEADERS:).
+        if ($stderr) {
+            fwrite(STDERR, $stderr);
+        }
+        exit;
+    }
+}
 
 if (!empty($scenario['authorization'])) {
     $_SERVER['HTTP_AUTHORIZATION'] = $scenario['authorization'];
@@ -39,6 +81,10 @@ $_SERVER['PHP_SELF']       = '/' . $page;
 // Deliberately NOT *.eriks.cloud / *.jardyx.com / *.test — see page_probe.php.
 $_SERVER['HTTP_HOST']      = 'wlmonitor.test.invalid';
 $_SERVER['REMOTE_ADDR']    = '127.0.0.1';
+
+foreach ($scenario['headers'] ?? [] as $name => $value) {
+    $_SERVER['HTTP_' . strtoupper(str_replace('-', '_', $name))] = (string) $value;
+}
 
 class TokenProbeHttpMock
 {
@@ -86,7 +132,14 @@ if (array_key_exists('mock_wl_response', $scenario) && $scenario['mock_wl_respon
 http_response_code(200);
 
 register_shutdown_function(static function (): void {
-    fwrite(STDERR, 'STATUS:' . http_response_code() . "\n");
+    // Use php://stderr for compatibility with both CLI and CGI SAPI.
+    // (STDERR constant is not defined in CGI SAPI)
+    $stderr = fopen('php://stderr', 'w');
+    if ($stderr) {
+        fwrite($stderr, 'STATUS:' . http_response_code() . "\n");
+        fwrite($stderr, 'HEADERS:' . json_encode(headers_list(), JSON_UNESCAPED_SLASHES) . "\n");
+        fclose($stderr);
+    }
 });
 
 require __DIR__ . '/../../web/' . $page;
