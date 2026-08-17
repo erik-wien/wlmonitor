@@ -398,6 +398,10 @@ unten sind verbindlich, nicht Richtwerte.
   (`translate(1713,42)`, Umriss + Füllbalken proportional zum Ladestand,
   Füllbreite `max(2, round(48 · Prozent/100))`), dann „Prozent %"-Text
   rechtsbündig bei `x=1856 y=63`, 24px fett.
+  **Das WLAN-Balken-Rechteck (`translate(1665,46)`) wird von der Firmware
+  selbst überschrieben**, sobald sie unmittelbar vor dem Tiefschlaf geht
+  (s. §10) — der Server rendert dort normal die WLAN-Balken, sie sind nur
+  im Moment direkt nach einem erfolgreichen Poll tatsächlich sichtbar.
 
 ### Trennlinie Abfahrten|Wetter
 
@@ -681,29 +685,51 @@ Icon-Zuordnungstabelle hier deckt trotzdem **alle 9** bereits ab.
 
 ## 10. Firmware
 
-- **Ort/Deploy-Ausschluss:** `firmware/` im wlmonitor-Repo, von
-  `scripts/ssh_deploy.php` ausgeschlossen.
-- **Bibliothek:** Seeed_GFX (§3).
+- **Ort/Deploy-Ausschluss:** `epaper-monitor/` im wlmonitor-Repo, von
+  `mcp/deploy.py` ausgeschlossen (kein PHP, wird nicht auf einen Webserver
+  deployt — separat via PlatformIO auf das Gerät geflasht).
+- **Bibliothek:** Seeed_GxEPD2 (Adafruit-GFX-basiert, §3) für Panel-Ansteuerung.
 - **Kein eigenes Layout/Font-Rendering** für den Normalbetrieb — die
   Firmware schreibt nur empfangene Pixel-Rechtecke ins Panel, liest Touch/
   Tasten aus und meldet sie im nächsten Request (§4). Ausnahme: ein
   **minimaler lokaler Text-Fallback** für den Fall, dass der Server nicht
-  erreichbar ist (§11) — dafür bleibt eine einzelne kleine Bitmap-Font
-  eingebettet, ausschließlich für die Fehlerbanner-Strings.
+  erreichbar ist (§11) — dafür genügt GxEPD2s eingebaute Standardschrift
+  (Adafruit-GFX-Default-Font), kein eigenes Bitmap-Font-Asset nötig.
 - **Touch/Tasten → Request:** Touch-Koordinaten werden serverseitig NICHT
   ausgewertet — die Firmware bildet einen Touch-Punkt selbst auf eine der
   fünf festen Zonen ab (3 Favoriten-Buttons, Pagination-Zurück,
   Pagination-Vor; exakte Pixel-Rechtecke aus §9) und schickt nur das
   Ergebnis (`X-Device-Touch`, §5). Die beiden physischen
   Seiten-Navigationstasten lösen direkt `page_prev`/`page_next` aus, ohne
-  Touch-Koordinaten-Mapping.
+  Touch-Koordinaten-Mapping. Die grüne Refresh-/Wake-Taste (GPIO3/KEY0)
+  weckt aus dem Tiefschlaf, löst aber keinen `X-Device-Touch`-Wert aus.
 - **Battery/RSSI:** wird als Request-Header mitgeschickt (§5); genaue
-  Auslesemethode (Fuel-Gauge vs. Spannungsteiler) klärt sich bei der
-  Implementierung (§3).
-- **Kein NTP.** Der „Stand"-Zeitstempel kommt aus `X-Board-Generated`; die
-  Uhrzeit in der Kopfzeile rendert der Server, die Firmware muss dafür
-  selbst keine Uhr führen.
-- **Verbindung:** LAN-Listener auf akadbrain, Klartext-HTTP, feste IP.
+  Auslesemethode (Spannungsteiler über den ADC, GPIO1, Enable-Pin GPIO40)
+  klärt sich final bei der Implementierung anhand echter Hardware (§3).
+- **Kein NTP, keine externe RTC.** Der „Stand"-Zeitstempel kommt aus
+  `X-Board-Generated`; die Uhrzeit in der Kopfzeile rendert der Server, die
+  Firmware muss dafür selbst keine Uhr führen. Zur Zeitschätzung zwischen
+  zwei Polls genügt ein im ESP32-eigenen RTC-Speicher verankerter
+  Uptime-Offset (übersteht Tiefschlaf) — die auf dem Panel zusätzlich
+  vorhandene externe RTC (PCF8563, batteriegepuffert) wird dafür nicht
+  gebraucht und bleibt ungenutzt.
+- **Verbindung:** normale HTTPS-Anfrage gegen die öffentliche wlmonitor-
+  Instanz (`https://wlmonitor.eriks.cloud/board.php`, wie jeder andere
+  Token-Client — Home Assistant nutzt denselben Mechanismus, s.
+  `docs/deploy-board-endpunkt.md`), `WiFiClientSecure` mit
+  `esp_crt_bundle_attach()` (ESP32-eigenes Root-CA-Bundle statt
+  Zertifikats-Pinning — rotiert automatisch mit, keine Wartung nötig). Kein
+  separater LAN-Listener, kein Klartext-HTTP, keine feste IP.
+- **Schlaf-/Veraltet-Markierung:** unmittelbar vor `esp_deep_sleep_start()`
+  überschreibt die Firmware das WLAN-Balken-Rechteck der Kopfzeile
+  (`translate(1665,46)`, §9) lokal mit einem einfachen „zzz"-Symbol (per
+  GxEPD2-Bordmitteln gezeichnet, kein Asset nötig). Bleibt so auf dem
+  stromlosen Panel stehen, bis der nächste erfolgreiche Poll die echten
+  WLAN-Balken zurückschreibt. Ersetzt eine separate
+  Zeitstempel-Invertierung: einfacher (kein Wissen über
+  Stand-Text-Koordinaten nötig) und ehrlicher (zeigt *immer* an, wenn das
+  Bild ein eingefrorener Snapshot ist, nicht erst nach einer festen
+  Zeitschwelle).
 
 ### Provisionierung: WiFiManager
 
@@ -726,7 +752,7 @@ ist unnötiger Aufwand.
   Refresh-Taste beim Boot zwingt WiFiManager zurück in den
   Access-Point-Modus — WLAN **und** Token lassen sich so jederzeit neu
   eingeben, ohne einen Rechner mit USB-Kabel zu brauchen.
-- **`firmware/include/config.h` bleibt bestehen, aber schrumpft** auf reine
+- **`epaper-monitor/include/config.h` bleibt bestehen, aber schrumpft** auf reine
   Infrastruktur-Konstanten, die für alle Geräte gleich und nicht geheim
   sind: `BOARD_HOST`, `BOARD_PORT`, `POLL_INTERVAL_SEC`. WLAN und Token —
   die tatsächlich pro Gerät unterschiedlichen bzw. geheimen Werte — kommen
@@ -745,7 +771,7 @@ den Zustand der Daten.
 | HTTP 401 | lokaler Banner „⚠ Token ungültig" |
 | HTTP 503 / Zeitüberschreitung | wie WLAN-Ausfall |
 | Antwort unlesbar (Header fehlen, Content-Length passt nicht zum Body) | wie 503, zusätzlich Zähler |
-| `X-Board-Generated` älter als 15 Min | Zeitstempel-Darstellung invertiert (weiß auf schwarz) |
+| Gerät ist im Tiefschlaf (jederzeit zwischen zwei Polls — der Normalzustand) | WLAN-Balken-Bereich zeigt „zzz" statt Balken (§10) — kein separater 15-Minuten-Schwellwert nötig |
 | Wetter-Cache > 6 h alt | Fließtext der Wetterkarte durch Fehlermeldung ersetzt (§7) — passiert serverseitig beim Rendern, keine Firmware-Logik nötig |
 | Server erreichbar, aber `If-None-Match` passt nicht zum serverseitigen Zustand | kein Firmware-Fehlerfall — Server erkennt das selbst und schickt automatisch ein Vollbild (§4, §5) |
 
