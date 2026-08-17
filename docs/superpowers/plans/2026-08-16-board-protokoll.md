@@ -2,6 +2,28 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Status (2026-08-17): Erledigt und auf `main` gemergt.** Alle 5 Tasks via
+> SDD implementiert, task-review-approved, whole-branch-review-approved
+> (`Ready to merge: Yes with minor follow-ups`, keine Critical/Important
+> Findings). Vier kleine Whole-Branch-Nachbesserungen direkt umgesetzt:
+> Zustands-Speicherfehler melden jetzt 500 statt fälschlich 503;
+> Regressionstests für ETag-Mismatch und den Übergang
+> "keine Favoriten → erster Favorit" ergänzt; Integrationstests räumen ihre
+> `data/board_state/`-Dateien jetzt in `tearDown()` auf. Merge-Commit:
+> `cafdbdc` (fast-forward, 8 Feature-Commits `21a15ac..9675ab9` + 1
+> Nachbesserungs-Commit). Suite bei Merge: 287/287 grün.
+>
+> **Offener Punkt für die nächste Phase (ESP32-Firmware/reTerminal E1003):**
+> `epaper-monitor/` enthält bereits eine vollständige, committete Firmware
+> (Commits bis `8ab1ad5`) — aber für die ALTE Hardware (Waveshare 7.5″
+> e-Paper HAT (B), 800×480, GxEPD2) gegen den ALTEN v1-JSON-Endpunkt und die
+> ALTE Spec `2026-08-01-epaper-abfahrtsmonitor-design.md`. Diese Firmware ist
+> mit dem neuen binären Board-Protokoll (dieser Plan) und dem
+> reTerminal-E1003-Pivot (`2026-08-15-epaper-monitor-v2-design.md`)
+> **inkompatibel** — weder Hardware noch Protokoll passen mehr. Bewusst nicht
+> in dieser Aufräum-Session angefasst; Entscheidung (archivieren/ersetzen)
+> steht noch aus und sollte vor Beginn der Firmware-Phase getroffen werden.
+
 **Goal:** Rewrite `web/board.php` from its current v1 JSON contract into the binary
 image-protocol endpoint from spec §5 — device-state persistence, touch-driven
 favorite/page resolution, full/patch frame diffing, and disruption-page
@@ -143,7 +165,7 @@ Copied verbatim from `docs/superpowers/specs/2026-08-15-epaper-monitor-v2-design
   - `board_state_save_frame(string $path, string $packed): void`
   - `board_resolve_touch(array $meta, ?string $touch, int $favoriteCount): array{activeFavoriteIndex:int, activePage:int}`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/Unit/BoardStateTest.php`:
 
@@ -292,12 +314,12 @@ class BoardStateTest extends TestCase
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `vendor/bin/phpunit tests/Unit/BoardStateTest.php`
 Expected: FAIL — `board_state_hash()` (and everything else) undefined.
 
-- [ ] **Step 3: Implement `inc/board_state.php`**
+- [x] **Step 3: Implement `inc/board_state.php`**
 
 ```php
 <?php
@@ -447,7 +469,7 @@ function board_resolve_touch(array $meta, ?string $touch, int $favoriteCount): a
 }
 ```
 
-- [ ] **Step 4: Wire the new file into the test bootstrap**
+- [x] **Step 4: Wire the new file into the test bootstrap**
 
 In `tests/bootstrap.php`, after the existing line
 `require_once __DIR__ . '/../inc/board_template.php';` add:
@@ -456,16 +478,16 @@ In `tests/bootstrap.php`, after the existing line
 require_once __DIR__ . '/../inc/board_state.php';
 ```
 
-- [ ] **Step 5: Add the state directory to .gitignore**
+- [x] **Step 5: Add the state directory to .gitignore**
 
 In `data/.gitignore`, add a new line: `board_state/`
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `vendor/bin/phpunit tests/Unit/BoardStateTest.php`
 Expected: PASS, all tests green.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add inc/board_state.php tests/Unit/BoardStateTest.php tests/bootstrap.php data/.gitignore
@@ -487,7 +509,7 @@ git commit -m "feat(board): add per-device state persistence + touch resolution"
   - `board_frame_diff(string $oldPacked, string $newPacked, int $width, int $height): ?array{x:int,y:int,w:int,h:int}`
   - `board_crop_and_pack(string $pngBinary, int $x, int $y, int $w, int $h): string`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/Unit/BoardRenderTest.php`, inside the `BoardRenderTest` class,
 right before the final closing `}`:
@@ -564,12 +586,12 @@ right before the final closing `}`:
     }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `vendor/bin/phpunit tests/Unit/BoardRenderTest.php`
 Expected: FAIL — `board_frame_diff()`/`board_crop_and_pack()` undefined.
 
-- [ ] **Step 3: Implement in `inc/board_render.php`**
+- [x] **Step 3: Implement in `inc/board_render.php`**
 
 Append at the end of `inc/board_render.php`:
 
@@ -651,12 +673,12 @@ function board_crop_and_pack(string $pngBinary, int $x, int $y, int $w, int $h):
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `vendor/bin/phpunit tests/Unit/BoardRenderTest.php`
 Expected: PASS, all tests green (including the pre-existing ones in this file).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add inc/board_render.php tests/Unit/BoardRenderTest.php
@@ -679,7 +701,7 @@ git commit -m "feat(board): add frame-diff bounding box + crop-and-pack for patc
   - `board_battery_percent_from_mv(int $mv): int` — 0-100.
   - `board_wifi_bars_from_rssi(int $rssi): int` — 0-3.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/Unit/BoardFilterTest.php`, inside the `BoardFilterTest` class,
 right before the final closing `}`:
@@ -760,12 +782,12 @@ class, right before the final closing `}`:
     }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `vendor/bin/phpunit tests/Unit/BoardFilterTest.php tests/Unit/BoardEndpointTest.php`
 Expected: FAIL — the three new functions are undefined.
 
-- [ ] **Step 3: Implement in `inc/board.php`**
+- [x] **Step 3: Implement in `inc/board.php`**
 
 Append at the end of `inc/board.php`:
 
@@ -827,12 +849,12 @@ function board_wifi_bars_from_rssi(int $rssi): int
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `vendor/bin/phpunit tests/Unit/BoardFilterTest.php tests/Unit/BoardEndpointTest.php`
 Expected: PASS, all tests green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add inc/board.php tests/Unit/BoardFilterTest.php tests/Unit/BoardEndpointTest.php
@@ -857,7 +879,7 @@ git commit -m "feat(board): add disruptions filter + battery/RSSI normalizers"
   populate `HTTP_*` — this is what lets integration tests set
   `X-Device-Touch`, `X-Device-Battery-mV`, `X-Device-RSSI`, `If-None-Match`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/Integration/TokenProbeHeaderCaptureTest.php`:
 
@@ -928,12 +950,12 @@ final class TokenProbeHeaderCaptureTest extends TestCase
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `vendor/bin/phpunit tests/Integration/TokenProbeHeaderCaptureTest.php`
 Expected: FAIL — no `HEADERS:` line on STDERR yet.
 
-- [ ] **Step 3: Implement in `tests/fixtures/token_probe.php`**
+- [x] **Step 3: Implement in `tests/fixtures/token_probe.php`**
 
 Change the scenario-key doc comment block (lines 15-22) to document the new
 `headers` key — replace:
@@ -1004,19 +1026,19 @@ register_shutdown_function(static function (): void {
 });
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `vendor/bin/phpunit tests/Integration/TokenProbeHeaderCaptureTest.php`
 Expected: PASS.
 
-- [ ] **Step 5: Run the full existing suite to confirm nothing else broke**
+- [x] **Step 5: Run the full existing suite to confirm nothing else broke**
 
 Run: `vendor/bin/phpunit`
 Expected: PASS (the `headers` key defaults to `[]` via `?? []`, so every
 existing scenario JSON without it is unaffected; the extra `HEADERS:` STDERR
 line is additive and no existing test parses STDERR by exact line count).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tests/fixtures/token_probe.php tests/Integration/TokenProbeHeaderCaptureTest.php
@@ -1052,7 +1074,7 @@ git commit -m "test(board): capture response headers in token_probe.php for bina
   Nothing downstream in this codebase consumes it in-process (it's an
   external device endpoint) — this is the final task.
 
-- [ ] **Step 1: Update `runProbe()` in `tests/Integration/BoardTokenEndpointTest.php`**
+- [x] **Step 1: Update `runProbe()` in `tests/Integration/BoardTokenEndpointTest.php`**
 
 Replace the existing `runProbe()` method:
 
@@ -1138,7 +1160,7 @@ with:
     }
 ```
 
-- [ ] **Step 2: Write the failing tests for the binary protocol**
+- [x] **Step 2: Write the failing tests for the binary protocol**
 
 The two existing board.php tests that assert on a JSON body no longer match
 the rewritten contract. Replace `test_board_shows_placeholder_for_diva_the_wl_api_omitted`
@@ -1334,13 +1356,13 @@ and `test_board_returns_200_not_503_when_wl_api_has_nothing_for_any_requested_di
     }
 ```
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
 
 Run: `vendor/bin/phpunit tests/Integration/BoardTokenEndpointTest.php`
 Expected: FAIL — `web/board.php` still returns JSON, none of the
 `X-Board-*` headers exist yet, `debug` is unhandled.
 
-- [ ] **Step 4: Rewrite `web/board.php`**
+- [x] **Step 4: Rewrite `web/board.php`**
 
 Replace the entire file content with:
 
@@ -1554,20 +1576,20 @@ try {
 }
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `vendor/bin/phpunit tests/Integration/BoardTokenEndpointTest.php`
 Expected: PASS, all tests green — including the 4 pre-existing
 `monitor_json.php`/401-path tests, which this rewrite does not touch.
 
-- [ ] **Step 6: Run the full suite**
+- [x] **Step 6: Run the full suite**
 
 Run: `vendor/bin/phpunit`
 Expected: PASS. This is the integration point for every task in this plan
 plus the whole prior Board-SVG-Template feature — a regression anywhere in
 that chain shows up here.
 
-- [ ] **Step 7: Manual smoke test against the real pipeline**
+- [x] **Step 7: Manual smoke test against the real pipeline**
 
 Not part of the automated suite (needs a real DB user + token + favorite),
 but before committing, sanity-check by hand once against the dev environment:
@@ -1579,7 +1601,7 @@ curl -s -D- -o /tmp/board_frame.bin \
 ls -la /tmp/board_frame.bin   # sollte 1872*1404/8 = 328536 Byte sein bei Vollbild
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add web/board.php tests/Integration/BoardTokenEndpointTest.php
