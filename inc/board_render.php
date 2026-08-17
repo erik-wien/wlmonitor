@@ -148,8 +148,15 @@ const BOARD_HEIGHT = 1404;
  * bitgenaues Cropping waere fuer den Firmware-Schreibvorgang unnoetig
  * kompliziert; y/h sind pixelgenau, da jede Zeile eigene Bytes hat.
  *
+ * Setzt voraus, dass $width ein Vielfaches von 8 ist (bei BOARD_WIDTH=1872
+ * immer der Fall) -- sonst kann der letzte, nur teilweise gefuellte Byte
+ * eine nicht-byte-ausgerichtete $w liefern. Die Byte-Vergleichsschleife
+ * selbst ist formatunabhaengig, aber die "8 Pixel pro Byte"-Umrechnung
+ * (Zeilen unten) ist 1bpp-spezifisch -- ein kuenftiger 4bpp-Packer (2px/Byte,
+ * Spec §6, aktuell nicht Teil dieser Spec) muesste diese Funktion mitaendern,
+ * nicht nur ihre Aufrufer.
+ *
  * @return array{x:int,y:int,w:int,h:int}|null null = Frames identisch (kein Patch noetig)
- * @throws never -- bei Laengenmismatch wird bewusst der volle Bereich zurueckgegeben statt eines Fehlers, s. Global Constraints
  */
 function board_frame_diff(string $oldPacked, string $newPacked, int $width, int $height): ?array
 {
