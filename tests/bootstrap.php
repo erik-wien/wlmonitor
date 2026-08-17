@@ -27,6 +27,7 @@ require_once __DIR__ . '/../inc/board.php';
 require_once __DIR__ . '/../inc/weather.php';
 require_once __DIR__ . '/../inc/board_render.php';
 require_once __DIR__ . '/../inc/board_template.php';
+require_once __DIR__ . '/../inc/board_state.php';
 
 if (!file_exists(__DIR__ . '/../data')) {
     mkdir(__DIR__ . '/../data', 0755, true);
