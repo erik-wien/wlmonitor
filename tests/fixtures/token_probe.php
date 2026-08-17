@@ -31,6 +31,13 @@ declare(strict_types=1);
  * (headers_list()) as "HEADERS:<json array>\n", both via a shutdown function
  * -- STDOUT alone can no longer carry response metadata once it's opaque
  * binary.
+ *
+ * Prerequisite: the `php-cgi` binary must be on PATH (Homebrew's php formula
+ * installs it alongside `php`). headers_list() returns an empty array under
+ * PHP's CLI SAPI, so this script re-executes itself via php-cgi to capture
+ * real headers; if php-cgi is missing, every probe invocation -- not just
+ * header-capture-specific tests -- fails fast with a clear error rather than
+ * silently degrading to empty headers.
  */
 
 $page         = $argv[1] ?? '';
