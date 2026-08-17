@@ -1,141 +1,103 @@
 #include "display.h"
-#include "layout.h"
-#include "logo.h"
-#include "panel_select.h"
-#include <GxEPD2_3C.h>
-#include <Fonts/FreeSans9pt7b.h>
+#include <GxEPD2_BW.h>
 #include <Fonts/FreeSansBold9pt7b.h>
-#include <Fonts/FreeSansBold24pt7b.h>
-#include <Fonts/FreeSansBoldOblique24pt7b.h>
 
-static GxEPD2_3C<PANEL_DRIVER, PANEL_DRIVER::HEIGHT / 2> epd(PANEL_DRIVER(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
+// Setup522_Seeed_reTerminal_E1003 (ED103TC2, 1872x1404) -- Panel-/SPI-Pins
+// aus den Global Constraints. Die exakte GxEPD2-Panelklasse
+// (GxEPD2_ED103TC2_1872x1404) kommt aus der Seeed_GxEPD2-Bibliothek
+// (lib_deps in platformio.ini, Task 8) -- unverifiziert ohne Hardware, ob
+// der Klassenname exakt so lautet; falls nicht, gegen die tatsaechlich
+// installierte Bibliotheksversion korrigieren.
+#define EPD_SCK_PIN     7
+#define EPD_MISO_PIN    8
+#define EPD_MOSI_PIN    9
+#define EPD_CS_PIN      10
+#define EPD_RES_PIN     12
+#define EPD_BUSY_PIN    13
+#define EPD_TFT_ENABLE  11
+#define EPD_ITE_ENABLE  21
 
-static const int16_t SCREEN_W = 800;
-static const int16_t SCREEN_H = 480;
-static const int16_t HEADER_H = 44;
-static const int16_t COLUMN_PAD = 12;
-static const int16_t AVG_CHAR_WIDTH_PX = 11;   // grobe Naeherung, siehe layout.h::truncateToWidth
+static const int PANEL_W = 1872;
+static const int PANEL_H = 1404;
+
+// WLAN-Balken-Rechteck der Kopfzeile (Spec §9: translate(1665,46), 3 Balken).
+static const int WIFI_ICON_X = 1665;
+static const int WIFI_ICON_Y = 46;
+static const int WIFI_ICON_W = 54;
+static const int WIFI_ICON_H = 28;
+
+static SPIClass hspi(HSPI);
+static GxEPD2_BW<GxEPD2_ED103TC2_1872x1404, GxEPD2_ED103TC2_1872x1404::HEIGHT> epd(
+    GxEPD2_ED103TC2_1872x1404(EPD_CS_PIN, EPD_RES_PIN, EPD_BUSY_PIN));
 
 void initDisplay() {
-    epd.init(115200);
-    epd.setRotation(0);
+    pinMode(EPD_TFT_ENABLE, OUTPUT);
+    digitalWrite(EPD_TFT_ENABLE, HIGH);
+    pinMode(EPD_ITE_ENABLE, OUTPUT);
+    digitalWrite(EPD_ITE_ENABLE, HIGH);
+
+    hspi.begin(EPD_SCK_PIN, EPD_MISO_PIN, EPD_MOSI_PIN, -1);
+    epd.epd2.selectSPI(hspi, SPISettings(10000000, MSBFIRST, SPI_MODE0));
+    epd.init(0, true, 10, false);
+    epd.setRotation(1); // Querformat: 1872x1404 statt nativ 1404x1872 (Spec §3)
 }
 
-static void drawHeader(time_t generatedEpoch, time_t estimatedNow, ErrorBanner banner) {
-    epd.drawBitmap(16, (HEADER_H - LOGO_HEIGHT) / 2, LOGO_BLACK, LOGO_WIDTH, LOGO_HEIGHT, GxEPD_BLACK);
-    epd.drawBitmap(16, (HEADER_H - LOGO_HEIGHT) / 2, LOGO_RED, LOGO_WIDTH, LOGO_HEIGHT, GxEPD_RED);
-
-    struct tm t;
-    localtime_r(&generatedEpoch, &t);
-    char stamp[16];
-    snprintf(stamp, sizeof(stamp), "Stand %02d:%02d", t.tm_hour, t.tm_min);
-
-    bool stale = isStale(estimatedNow, generatedEpoch, 15);
-    epd.setFont(&FreeSansBold9pt7b);
-    int16_t bx, by;
-    uint16_t bw, bh;
-    epd.getTextBounds(stamp, 0, 0, &bx, &by, &bw, &bh);
-    int16_t sx = SCREEN_W - bw - 16;
-    int16_t sy = HEADER_H / 2 + bh / 2;
-
-    if (stale) {
-        epd.fillRect(sx - 6, sy - bh - 4, bw + 12, bh + 10, GxEPD_RED);
-        epd.setTextColor(GxEPD_WHITE);
-    } else {
-        epd.setTextColor(GxEPD_BLACK);
-    }
-    epd.setCursor(sx, sy);
-    epd.print(stamp);
-
-    if (banner == ErrorBanner::Offline || banner == ErrorBanner::TokenInvalid) {
-        const char* msg = (banner == ErrorBanner::Offline) ? "offline" : "Token ungueltig";
-        epd.setFont(&FreeSans9pt7b);
-        epd.setTextColor(GxEPD_RED);
-        epd.setCursor(SCREEN_W / 2 - 40, HEADER_H - 6);
-        epd.print(msg);
-    }
-}
-
-static void drawDeparture(int16_t x, int16_t y, const Departure& dep, DepartureStyle style) {
-    bool big = (style == DepartureStyle::RedLive || style == DepartureStyle::BlackItalic);
-    epd.setFont(big
-        ? (style == DepartureStyle::BlackItalic
-            ? (const GFXfont*) &FreeSansBoldOblique24pt7b
-            : (const GFXfont*) &FreeSansBold24pt7b)
-        : (const GFXfont*) &FreeSans9pt7b);
-
-    uint16_t color = (style == DepartureStyle::RedLive) ? GxEPD_RED : GxEPD_BLACK;
-
-    if (style == DepartureStyle::Inverted) {
-        char probe[8];
-        snprintf(probe, sizeof(probe), "%d", dep.inMinutes);
-        int16_t bx, by;
-        uint16_t bw, bh;
-        epd.getTextBounds(probe, x, y, &bx, &by, &bw, &bh);
-        epd.fillRect(bx - 3, by - 3, bw + 6, bh + 6, GxEPD_RED);
-        color = GxEPD_WHITE;
-    }
-
-    epd.setTextColor(color);
-    epd.setCursor(x, y);
-    if (isDepartingNow(dep.inMinutes)) {
-        epd.print("*");
-    } else {
-        epd.print(dep.inMinutes);
-    }
-}
-
-static void drawColumn(int16_t colX, const Favorite& fav) {
-    int16_t y = HEADER_H + 24;
-    const int16_t colWidth = SCREEN_W / 2 - 16 - COLUMN_PAD;
-
-    epd.setFont(&FreeSansBold9pt7b);
-    epd.setTextColor(GxEPD_BLACK);
-    epd.setCursor(colX, y);
-    String title = fav.title.c_str();
-    title.toUpperCase();
-    epd.print(title);
-    y += 26;
-
-    for (const Station& st : fav.stations) {
-        epd.setFont(&FreeSans9pt7b);
-        epd.setTextColor(GxEPD_BLACK);
-        epd.setCursor(colX, y);
-        epd.print(truncateToWidth(st.name, colWidth, AVG_CHAR_WIDTH_PX).c_str());
-        y += 22;
-
-        for (const Line& ln : st.lines) {
-            epd.setFont(&FreeSansBold9pt7b);
-            epd.setTextColor(GxEPD_BLACK);
-            epd.setCursor(colX, y);
-            char prefix[24];
-            snprintf(prefix, sizeof(prefix), "%s %s ", ln.name.c_str(), ln.platform.c_str());
-            epd.print(prefix);
-            epd.print(truncateToWidth(ln.towards, colWidth - 90, AVG_CHAR_WIDTH_PX).c_str());
-            y += 20;
-
-            int16_t depX = colX;
-            for (size_t i = 0; i < ln.departures.size(); i++) {
-                const Departure& dep = ln.departures[i];
-                DepartureStyle style = departureStyle(i == 0, ln.realtime, dep.delayed);
-                drawDeparture(depX, y, dep, style);
-                bool big = (style == DepartureStyle::RedLive || style == DepartureStyle::BlackItalic);
-                depX += big ? 60 : 36;
-            }
-            if (!ln.departures.empty()) y += 30;
-        }
-    }
-}
-
-void renderBoard(const BoardResponse& board, time_t generatedEpoch, time_t estimatedNow, ErrorBanner banner) {
+void applyFullFrame(const uint8_t* packed, int w, int h) {
+    // drawBitmap() erwartet 1bpp MSB-first mit GxEPD_BLACK als "gesetztes
+    // Bit"-Farbe -- die Bit-Konvention des Protokolls ist umgekehrt
+    // (1=weiss), daher invert=true.
     epd.setFullWindow();
     epd.firstPage();
     do {
         epd.fillScreen(GxEPD_WHITE);
-        drawHeader(generatedEpoch, estimatedNow, banner);
-        epd.drawFastVLine(SCREEN_W / 2, HEADER_H, SCREEN_H - HEADER_H, GxEPD_BLACK);
-
-        if (board.favorites.size() > 0) drawColumn(16, board.favorites[0]);
-        if (board.favorites.size() > 1) drawColumn(SCREEN_W / 2 + 16, board.favorites[1]);
+        epd.drawInvertedBitmap(0, 0, packed, w, h, GxEPD_BLACK);
     } while (epd.nextPage());
+}
+
+void applyPatch(const uint8_t* packed, int x, int y, int w, int h) {
+    epd.setPartialWindow(x, y, w, h);
+    epd.firstPage();
+    do {
+        epd.drawInvertedBitmap(x, y, packed, w, h, GxEPD_BLACK);
+    } while (epd.nextPage());
+}
+
+void showErrorBanner(ErrorBanner banner, const char* sinceTime) {
+    if (banner == ErrorBanner::None) return;
+
+    char text[64];
+    if (banner == ErrorBanner::Offline) {
+        snprintf(text, sizeof(text), "offline seit %s", sinceTime);
+    } else {
+        snprintf(text, sizeof(text), "Token ungueltig");
+    }
+
+    // Kleines Banner-Rechteck oben links in der Kopfzeile, ueberlagert den
+    // Server-Renderzeit-Text nicht (der sitzt zentriert bei x=936).
+    const int bannerX = 16, bannerY = 10, bannerW = 700, bannerH = 70;
+    epd.setPartialWindow(bannerX, bannerY, bannerW, bannerH);
+    epd.firstPage();
+    do {
+        epd.fillRect(bannerX, bannerY, bannerW, bannerH, GxEPD_WHITE);
+        epd.setFont(&FreeSansBold9pt7b);
+        epd.setTextColor(GxEPD_BLACK);
+        epd.setCursor(bannerX + 8, bannerY + bannerH - 20);
+        epd.print(text);
+    } while (epd.nextPage());
+}
+
+void markSleepIcon() {
+    epd.setPartialWindow(WIFI_ICON_X, WIFI_ICON_Y, WIFI_ICON_W, WIFI_ICON_H);
+    epd.firstPage();
+    do {
+        epd.fillRect(WIFI_ICON_X, WIFI_ICON_Y, WIFI_ICON_W, WIFI_ICON_H, GxEPD_WHITE);
+        epd.setFont(&FreeSansBold9pt7b);
+        epd.setTextColor(GxEPD_BLACK);
+        epd.setCursor(WIFI_ICON_X, WIFI_ICON_Y + WIFI_ICON_H - 6);
+        epd.print("zzz");
+    } while (epd.nextPage());
+}
+
+void sleepPanel() {
+    epd.hibernate();
 }
