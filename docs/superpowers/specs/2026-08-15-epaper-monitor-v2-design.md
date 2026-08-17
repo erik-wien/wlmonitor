@@ -685,8 +685,9 @@ Icon-Zuordnungstabelle hier deckt trotzdem **alle 9** bereits ab.
 
 ## 10. Firmware
 
-- **Ort/Deploy-Ausschluss:** `epaper-monitor/` im wlmonitor-Repo, von
-  `mcp/deploy.py` ausgeschlossen (kein PHP, wird nicht auf einen Webserver
+- **Ort/Deploy-Ausschluss:** `epaper-monitor/` im wlmonitor-Repo, explizit
+  in `scripts/ssh_deploy.php` gelistet (`'epaper-monitor/'`) und damit vom
+  rsync-Deploy ausgeschlossen (kein PHP, wird nicht auf einen Webserver
   deployt — separat via PlatformIO auf das Gerät geflasht).
 - **Bibliothek:** Seeed_GxEPD2 (Adafruit-GFX-basiert, §3) für Panel-Ansteuerung.
 - **Kein eigenes Layout/Font-Rendering** für den Normalbetrieb — die
