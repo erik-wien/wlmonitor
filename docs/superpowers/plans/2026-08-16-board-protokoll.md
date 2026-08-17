@@ -13,16 +13,20 @@
 > `cafdbdc` (fast-forward, 8 Feature-Commits `21a15ac..9675ab9` + 1
 > Nachbesserungs-Commit). Suite bei Merge: 287/287 grün.
 >
-> **Offener Punkt für die nächste Phase (ESP32-Firmware/reTerminal E1003):**
-> `epaper-monitor/` enthält bereits eine vollständige, committete Firmware
-> (Commits bis `8ab1ad5`) — aber für die ALTE Hardware (Waveshare 7.5″
-> e-Paper HAT (B), 800×480, GxEPD2) gegen den ALTEN v1-JSON-Endpunkt und die
-> ALTE Spec `2026-08-01-epaper-abfahrtsmonitor-design.md`. Diese Firmware ist
-> mit dem neuen binären Board-Protokoll (dieser Plan) und dem
-> reTerminal-E1003-Pivot (`2026-08-15-epaper-monitor-v2-design.md`)
-> **inkompatibel** — weder Hardware noch Protokoll passen mehr. Bewusst nicht
-> in dieser Aufräum-Session angefasst; Entscheidung (archivieren/ersetzen)
-> steht noch aus und sollte vor Beginn der Firmware-Phase getroffen werden.
+> **Nächste Phase (ESP32-Firmware/reTerminal E1003) — Entscheidung 2026-08-17: ERSETZEN.**
+> `epaper-monitor/` enthält eine vollständige, committete Firmware (Commits
+> bis `8ab1ad5`) für die ALTE Hardware (Waveshare 7.5″ e-Paper HAT (B),
+> 800×480, GxEPD2) gegen den ALTEN v1-JSON-Endpunkt und die ALTE Spec
+> `2026-08-01-epaper-abfahrtsmonitor-design.md`. Mit dem neuen binären
+> Board-Protokoll (dieser Plan) und dem reTerminal-E1003-Pivot
+> (`2026-08-15-epaper-monitor-v2-design.md`) inkompatibel — weder Hardware
+> noch Protokoll passen mehr. Erik hat entschieden: ersetzen, nicht
+> archivieren. Referenzmaterial für die neue Firmware (Pins, Seeed_GFX-API,
+> Touch/RTC/Deep-Sleep) liegt im Claude-Memory-System unter
+> `reference_reterminal_e1003_arduino` (aus dem Seeed-Wiki exzerpiert,
+> zwei unverifizierte Diskrepanzen markiert — vor Nutzung gegenprüfen).
+> Der eigentliche Austausch (Löschen der alten Firmware + neuer Spec/Plan-
+> Zyklus für die neue) ist noch NICHT begonnen — nächster Schritt.
 
 **Goal:** Rewrite `web/board.php` from its current v1 JSON contract into the binary
 image-protocol endpoint from spec §5 — device-state persistence, touch-driven
