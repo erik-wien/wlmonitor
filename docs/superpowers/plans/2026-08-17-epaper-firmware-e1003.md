@@ -998,17 +998,47 @@ void sleepPanel();
 
 - [ ] **Step 2: Write `display.cpp`**
 
+> **Update 2026-08-17 (post-execution correction):** the class name and API
+> shape below were originally guessed from a Seeed wiki example
+> (`GxEPD2_ED103TC2_1872x1404`, wrapped via `GxEPD2_BW<Panel, Panel::HEIGHT>`
+> + `selectSPI()` + `setRotation(1)`) and turned out to be **wrong** — that
+> class does not exist in the actual `zinggjm/GxEPD2@^1.5.3` library already
+> in `lib_deps`. This was caught during real execution by reading the
+> installed library source directly
+> (`.pio/libdeps/esp32dev/GxEPD2/src/it8951/GxEPD2_it103_1872x1404.h/.cpp`,
+> `GxEPD2_EPD.h`, `GxEPD2_GFX.h`) rather than guessing further. The block
+> below is the corrected, verified-against-real-source version — task
+> briefs extracted from this plan for Task 6 onward should use this code,
+> not the original guess. Key corrections, each independently re-verified
+> by the task reviewer (opus) via its own read of the same library source:
+> the real class is `GxEPD2_it103_1872x1404` (IT8951, natively 1872×1404 —
+> no rotation needed); `GxEPD2_GFX` is pure-abstract in this library
+> version, so `GxEPD2_BW<GxEPD2_it103_1872x1404, 128>` is the real
+> text-drawing vehicle; the raw pixel blit bypasses GFX entirely via
+> `epd.epd2.drawImage()`; `invert=false` was derived algebraically from
+> `_send8pixel()`/`writeImage()`, not guessed, and is provably correct for
+> the 1=white/0=black protocol convention; this driver hardcodes the global
+> `SPI` object and ignores `selectSPI()` entirely, so the original
+> `hspi(HSPI)` pattern would have been silently ineffective; the DC pin is
+> genuinely absent from the project's own pin reference and is set to `-1`
+> (GxEPD2's "not wired" convention) with source-level evidence (`_dc` is
+> never referenced by this driver — the IT8951 protocol multiplexes
+> command/data over SPI preamble words) but this specific claim is **still
+> not 100% hardware-confirmable** without a real device or schematic.
+
 ```cpp
 #include "display.h"
+#include <it8951/GxEPD2_it103_1872x1404.h>
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeSansBold9pt7b.h>
 
-// Setup522_Seeed_reTerminal_E1003 (ED103TC2, 1872x1404) -- Panel-/SPI-Pins
-// aus den Global Constraints. Die exakte GxEPD2-Panelklasse
-// (GxEPD2_ED103TC2_1872x1404) kommt aus der Seeed_GxEPD2-Bibliothek
-// (lib_deps in platformio.ini, Task 8) -- unverifiziert ohne Hardware, ob
-// der Klassenname exakt so lautet; falls nicht, gegen die tatsaechlich
-// installierte Bibliotheksversion korrigieren.
+// Panel-/SPI-Pins aus den Global Constraints (Seeed-Wiki, unverifiziert
+// ohne Hardware). GxEPD2_it103_1872x1404 (IT8951-Controller, 1872x1404) ist
+// die reale, in der installierten GxEPD2@1.5.3 vorhandene Klasse -- ihr
+// Header-Kommentar nennt sie fuer "ES103TC1 10.3\" e-paper panel"; der
+// Panelname weicht von der Spec ("ED103TC2") geringfuegig ab, aber
+// Controller (IT8951) + Aufloesung (1872x1404) + Groesse (10.3") passen;
+// naeher kommt man ohne Hardware nicht heran.
 #define EPD_SCK_PIN     7
 #define EPD_MISO_PIN    8
 #define EPD_MOSI_PIN    9
@@ -1018,8 +1048,22 @@ void sleepPanel();
 #define EPD_TFT_ENABLE  11
 #define EPD_ITE_ENABLE  21
 
-static const int PANEL_W = 1872;
-static const int PANEL_H = 1404;
+// *** UNGEKLAERTE LUECKE: DC-Pin -- vor dem ersten Flash pruefen! ***
+// GxEPD2_EPD::GxEPD2_EPD(cs, dc, rst, busy, ...) verlangt einen DC-Pin als
+// 2. Konstruktorargument. Die Seeed-Wiki-Pinliste (Quelle der Konstanten
+// oben) fuehrt aber KEINEN DC-Pin fuer die E1003-ePaper-Schnittstelle auf.
+//
+// -1 ist GxEPD2s eigene, in der Bibliothek durchgaengig verwendete
+// Konvention fuer "Pin nicht vorhanden/nicht verdrahtet" (GxEPD2_EPD.cpp
+// fasst cs/dc/rst/busy jeweils nur mit "if (_pin >= 0) {...}" an -- bei -1
+// passiert schlicht nichts). Stuetzender Befund aus GxEPD2_it103_1872x1404.cpp:
+// die Membervariable _dc wird dort in KEINER einzigen Methode referenziert
+// -- das IT8951-Protokoll unterscheidet Kommando/Daten ueber 16-Bit-
+// Praeambel-Worte im SPI-Datenstrom selbst, nicht ueber eine eigene
+// DC-Leitung. Starkes Indiz, dass -1 der tatsaechlich korrekte Wert ist --
+// aber TROTZDEM vor dem ersten Flash gegen ein echtes E1003-Schaltplan
+// oder Seeeds eigene Beispiel-Firmware gegenchecken.
+#define EPD_DC_PIN      -1  // UNBEKANNT/UNBESTAETIGT -- s. Kommentar oben
 
 // WLAN-Balken-Rechteck der Kopfzeile (Spec §9: translate(1665,46), 3 Balken).
 static const int WIFI_ICON_X = 1665;
@@ -1027,9 +1071,29 @@ static const int WIFI_ICON_Y = 46;
 static const int WIFI_ICON_W = 54;
 static const int WIFI_ICON_H = 28;
 
-static SPIClass hspi(HSPI);
-static GxEPD2_BW<GxEPD2_ED103TC2_1872x1404, GxEPD2_ED103TC2_1872x1404::HEIGHT> epd(
-    GxEPD2_ED103TC2_1872x1404(EPD_CS_PIN, EPD_RES_PIN, EPD_BUSY_PIN));
+// Seitenhoehe fuer den GxEPD2_BW-Pufferpfad unten (nur fuer Text). 128
+// Zeilen reichen locker fuer beide Rechtecke (Banner 70px, Sleep-Icon 28px
+// hoch) und halten den RAM-Puffer klein: (1872/8)*128 Byte = 29952 Byte
+// statt >300 KB bei voller Panelhoehe.
+static const uint16_t TEXT_PAGE_HEIGHT = 128;
+
+// GxEPD2_GFX ist in der installierten GxEPD2@1.5.3 eine rein abstrakte
+// Schnittstelle (nur "= 0"-virtuelle Methoden) -- nicht instanziierbar, und
+// es gibt in dieser Version keine konkrete GxEPD2_GFX-Unterklasse fuer
+// IT8951-Panels (GxEPD2_BW/_3C/_4C/_7C binden per __has_include nur
+// Klassen aus epd/ und gdey/ ein, nicht it8951/). Der reale, kompilierbare
+// Ersatz mit identischer Text-API (fillScreen/setFont/setCursor/print/
+// setPartialWindow/firstPage/nextPage) ist das GxEPD2_BW<...>-Template
+// selbst -- bindet rein strukturell, kein Bezug zur epd/-Vorauswahl.
+//
+// Es existiert genau EIN Panel-Objekt (epd.epd2) -- fuer den reinen
+// Pixel-Blit (applyFullFrame/applyPatch) wird direkt darauf zugegriffen,
+// ganz ohne die GFX-Zwischenschicht. Fuer die zwei Text-Funktionen wird
+// die GFX-Huelle (epd selbst) verwendet. Ein zweites, eigenstaendiges
+// Panel-Objekt zu erzeugen waere falsch, weil dann zwei getrennte
+// GxEPD2_EPD-Instanzen um dieselbe Hardware konkurrieren wuerden.
+static GxEPD2_BW<GxEPD2_it103_1872x1404, TEXT_PAGE_HEIGHT> epd(
+    GxEPD2_it103_1872x1404(EPD_CS_PIN, EPD_DC_PIN, EPD_RES_PIN, EPD_BUSY_PIN));
 
 void initDisplay() {
     pinMode(EPD_TFT_ENABLE, OUTPUT);
@@ -1037,30 +1101,43 @@ void initDisplay() {
     pinMode(EPD_ITE_ENABLE, OUTPUT);
     digitalWrite(EPD_ITE_ENABLE, HIGH);
 
-    hspi.begin(EPD_SCK_PIN, EPD_MISO_PIN, EPD_MOSI_PIN, -1);
-    epd.epd2.selectSPI(hspi, SPISettings(10000000, MSBFIRST, SPI_MODE0));
-    epd.init(0, true, 10, false);
-    epd.setRotation(1); // Querformat: 1872x1404 statt nativ 1404x1872 (Spec §3)
+    // GxEPD2_it103_1872x1404 spricht das SPI-Peripheriegeraet ausschliesslich
+    // ueber das globale `SPI`-Objekt an -- GxEPD2_EPD::selectSPI()/_pSPIx
+    // wird von dieser Treiberklasse NIE gelesen (anders als bei den meisten
+    // anderen GxEPD2-Panelklassen). Die E1003-eigenen SPI-Pins muessen
+    // deshalb direkt auf dem globalen SPI-Objekt gebunden werden, bevor
+    // epd.init() laeuft (das ruft intern nur noch SPI.begin() ohne
+    // Parameter -- auf dem ESP32 ein No-Op, wenn der Bus schon mit
+    // expliziten Pins gestartet wurde). ss=-1, weil GxEPD2 den CS-Pin
+    // selbst per digitalWrite() manuell steuert.
+    SPI.begin(EPD_SCK_PIN, EPD_MISO_PIN, EPD_MOSI_PIN, -1);
+
+    epd.init(0, true, 20, false);
+    // Kein setRotation() noetig: GxEPD2_it103_1872x1404 ist bereits nativ
+    // WIDTH=1872 x HEIGHT=1404.
 }
 
 void applyFullFrame(const uint8_t* packed, int w, int h) {
-    // drawBitmap() erwartet 1bpp MSB-first mit GxEPD_BLACK als "gesetztes
-    // Bit"-Farbe -- die Bit-Konvention des Protokolls ist umgekehrt
-    // (1=weiss), daher invert=true.
-    epd.setFullWindow();
-    epd.firstPage();
-    do {
-        epd.fillScreen(GxEPD_WHITE);
-        epd.drawInvertedBitmap(0, 0, packed, w, h, GxEPD_BLACK);
-    } while (epd.nextPage());
+    // Direkter Pass-Through ueber das rohe Panel-Objekt (epd.epd2), keine
+    // GFX-Zwischenschicht -- writeImage()/drawImage() erwarten exakt das
+    // Protokollformat (1bpp MSB-first, Zeilenbreite auf 8 aufgerundet).
+    //
+    // invert-Wert per Quellcode-Analyse hergeleitet (nicht geraten): in
+    // GxEPD2_it103_1872x1404::writeImage() gilt
+    //   data = bitmap_byte; if (invert) data = ~data; _send8pixel(~data);
+    // und in _send8pixel() wird pro gesetztem Bit (bit==1) ein 0x00-Byte
+    // (schwarz) ans Panel gesendet, pro geloeschtem Bit (bit==0) ein
+    // 0xFF-Byte (weiss). Bei invert=false ist das an _send8pixel
+    // uebergebene Byte ~bitmap_byte, d.h. bitmap_byte-Bit 0 -> gesendet 1 ->
+    // schwarz, bitmap_byte-Bit 1 -> gesendet 0 -> weiss. Das entspricht
+    // exakt der Protokoll-Konvention (Spec §6): 1=weiss, 0=schwarz.
+    // invert=false ist also nachweislich richtig, kein Ratewert.
+    epd.epd2.drawImage(packed, 0, 0, w, h, /*invert=*/false);
 }
 
 void applyPatch(const uint8_t* packed, int x, int y, int w, int h) {
-    epd.setPartialWindow(x, y, w, h);
-    epd.firstPage();
-    do {
-        epd.drawInvertedBitmap(x, y, packed, w, h, GxEPD_BLACK);
-    } while (epd.nextPage());
+    // Gleiche Bit-Konvention/Herleitung wie applyFullFrame.
+    epd.epd2.drawImage(packed, x, y, w, h, /*invert=*/false);
 }
 
 void showErrorBanner(ErrorBanner banner, const char* sinceTime) {
@@ -1100,31 +1177,39 @@ void markSleepIcon() {
 }
 
 void sleepPanel() {
-    epd.hibernate();
+    // Standby, nicht echtes Deep-Sleep: GxEPD2_it103_1872x1404::hibernate()
+    // ruft nur _PowerOff() -- der IT8951-eigene Tiefschlaf ist in der
+    // Bibliothek bewusst deaktiviert (Bibliothekskommentar: senkt den
+    // Verbrauch nicht, braucht sogar mehr Strom als Standby).
+    epd.epd2.hibernate();
 }
 ```
 
 - [ ] **Step 2: Confirm it compiles**
 
-Run: `pio run -e esp32dev` (may need Task 8's `platformio.ini` lib_deps
-first — if so, defer this check to Task 8, same as Task 4).
+Run: `pio run -e esp32dev` (from `epaper-monitor/`). `display.cpp.o` should
+compile cleanly against the already-installed `zinggjm/GxEPD2@1.5.3` (it's
+already in `lib_deps` from before this plan started, no Task 8 dependency
+needed for this specific file) — confirmed working during real execution.
+The overall build will still fail on unrelated missing headers
+(`board_model.h` from `main.cpp`/`display.h`'s old callers) until Tasks 8/9
+run; that failure is expected and not this task's concern.
 
 - [ ] **Step 3: Self-review**
 
-Note explicitly: `GxEPD2_ED103TC2_1872x1404` is the class name expected per
-the memory reference's GxEPD2-alternative-init example, but this has not
-been confirmed against the actual installed Seeed_GxEPD2 library headers
-(no hardware/library install to check against yet). `drawInvertedBitmap()`
-is a real GxEPD2/Adafruit-GFX API but its exact bit-inversion semantics
-relative to this protocol's 1=white convention need a real render+read-back
-test once hardware exists — flag this, don't claim it's verified correct.
+Confirm: the class name, API shape, `invert` value, and SPI-wiring pattern
+above were all independently verified against the real installed library
+source during this plan's actual execution (not re-derive them from
+scratch) — if implementing this plan fresh in a different environment where
+the installed GxEPD2 version differs, re-verify against that environment's
+actual headers rather than assuming this exact code is still correct.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 cd epaper-monitor
 git add src/display.h src/display.cpp
-git commit -m "feat(firmware): rewrite display driver for GxEPD2/E1003 + sleep icon (unverified, no hardware yet)"
+git commit -m "feat(firmware): rewrite display driver for GxEPD2/E1003 + sleep icon (verified against installed library source)"
 ```
 
 ---
@@ -1447,6 +1532,16 @@ wrong end-to-end behavior once hardware exists.
 
 - [ ] **Step 1: Update `platformio.ini`**
 
+> **Update 2026-08-17:** originally this step pointed `lib_deps` at
+> `https://github.com/Seeed-Projects/Seeed_GxEPD2.git` (an untested fork
+> URL). Task 5's real execution discovered that the mainline, registry-
+> published `zinggjm/GxEPD2@^1.5.3` — already what this project's OLD
+> firmware used, already proven to install cleanly — has a real, verified
+> `GxEPD2_it103_1872x1404` class matching the E1003's IT8951/1872×1404
+> panel exactly (see Task 5). No fork needed; the config below now keeps
+> the already-working `lib_deps` entry unchanged rather than swapping to
+> an unverified alternative.
+
 Replace the entire file content:
 
 ```ini
@@ -1464,7 +1559,7 @@ build_flags =
     -DCORE_DEBUG_LEVEL=0
     -DBOARD_HAS_PSRAM
 lib_deps =
-    https://github.com/Seeed-Projects/Seeed_GxEPD2.git
+    zinggjm/GxEPD2@^1.5.3
     adafruit/Adafruit GFX Library@^1.11.9
     tzapu/WiFiManager@^2.0.17
 
@@ -1485,7 +1580,7 @@ build_src_filter =
     -<*>
     +<hw_bringup.cpp>
 lib_deps =
-    https://github.com/Seeed-Projects/Seeed_GxEPD2.git
+    zinggjm/GxEPD2@^1.5.3
     adafruit/Adafruit GFX Library@^1.11.9
 
 ; Host-Umgebung fuer die reine Logik in lib/boardlogic/: kein ESP32-Toolchain
@@ -1704,6 +1799,11 @@ from every other subsystem.
 
 - [ ] **Step 1: Write `hw_bringup.cpp`**
 
+> **Update 2026-08-17:** uses the class/API corrected during Task 5's real
+> execution (`GxEPD2_it103_1872x1404`, not the originally-guessed
+> `GxEPD2_ED103TC2_1872x1404` — see Task 5's own update note for the full
+> reasoning). Same `EPD_DC_PIN=-1` open question applies here too.
+
 ```cpp
 // Isolierter Hardware-Bring-up-Test fuer das reTerminal E1003 (ersetzt das
 // alte bw_test.cpp, das gegen den frueheren Waveshare-7,5"-Panel gebaut
@@ -1713,6 +1813,7 @@ from every other subsystem.
 // kompiliert (siehe platformio.ini), main.cpp ist dort ausgeschlossen
 // (sonst zwei setup()/loop()-Definitionen).
 #include <Arduino.h>
+#include <it8951/GxEPD2_it103_1872x1404.h>
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeSansBold24pt7b.h>
 
@@ -1724,10 +1825,12 @@ from every other subsystem.
 #define EPD_SCK_PIN     7
 #define EPD_MISO_PIN    8
 #define EPD_MOSI_PIN    9
+// UNGEKLAERT (s. Task 5): kein DC-Pin in der Seeed-Wiki-Pinliste, -1 =
+// GxEPD2s "nicht verdrahtet"-Konvention -- vor dem ersten Flash pruefen.
+#define EPD_DC_PIN      -1
 
-static SPIClass hspi(HSPI);
-static GxEPD2_BW<GxEPD2_ED103TC2_1872x1404, GxEPD2_ED103TC2_1872x1404::HEIGHT> epd(
-    GxEPD2_ED103TC2_1872x1404(EPD_CS_PIN, EPD_RES_PIN, EPD_BUSY_PIN));
+static GxEPD2_BW<GxEPD2_it103_1872x1404, 128> epd(
+    GxEPD2_it103_1872x1404(EPD_CS_PIN, EPD_DC_PIN, EPD_RES_PIN, EPD_BUSY_PIN));
 
 void setup() {
     Serial.begin(115200);
@@ -1739,10 +1842,11 @@ void setup() {
     pinMode(EPD_ITE_ENABLE, OUTPUT);
     digitalWrite(EPD_ITE_ENABLE, HIGH);
 
-    hspi.begin(EPD_SCK_PIN, EPD_MISO_PIN, EPD_MOSI_PIN, -1);
-    epd.epd2.selectSPI(hspi, SPISettings(10000000, MSBFIRST, SPI_MODE0));
-    epd.init(115200, true, 10, false);
-    epd.setRotation(1);
+    // GxEPD2_it103_1872x1404 ignoriert selectSPI() (s. Task 5) -- Pins
+    // direkt auf dem globalen SPI-Objekt binden, vor epd.init().
+    SPI.begin(EPD_SCK_PIN, EPD_MISO_PIN, EPD_MOSI_PIN, -1);
+    epd.init(115200, true, 20, false);
+    // Kein setRotation() noetig: die Klasse ist bereits nativ 1872x1404.
 
     Serial.println("[bringup] init() done, drawing");
 
@@ -1837,8 +1941,17 @@ Diese Firmware wurde ohne physisches reTerminal E1003 geschrieben (Plan:
 Annahmen sind **unverifiziert** und müssen beim ersten echten Hardwaretest
 geprüft werden:
 
-- Display-Controller-Chip (Spec: IT8951; kein Wiki-Beleg für E1003 — nur
-  `Setup522`/`ED103TC2` sind bestätigt).
+- Display-Panel-Name (Spec: „ED103TC2"; die reale, installierte GxEPD2-Klasse
+  `GxEPD2_it103_1872x1404` nennt ihr Panel „ES103TC1" — Controller (IT8951)
+  + Auflösung (1872×1404) + Größe (10,3″) passen exakt, der Namensunterschied
+  ist wahrscheinlich eine Waveshare-/Good-Display-Namensvariante derselben
+  Panel-Familie, aber ohne Hardware nicht zu 100% auszuschließen).
+- **DC-Pin für das ePaper-SPI-Interface** (`src/display.cpp`/`hw_bringup.cpp`,
+  `EPD_DC_PIN=-1`) — die Seeed-Wiki-Pinliste kennt keinen DC-Pin für die
+  E1003-ePaper-Schnittstelle; Quellcode-Analyse der echten Bibliothek zeigt,
+  dass der Treiber `_dc` nirgends referenziert (IT8951 nutzt SPI-Präambel-
+  Worte statt einer DC-Leitung) — starkes Indiz für „-1 ist richtig", aber
+  vor dem ersten Flash gegen Schaltplan/Seeeds eigene Firmware gegenchecken.
 - GT911-Touch-Registerprotokoll (`src/touch.cpp`) — aus Wiki-Beispielcode
   transkribiert, nicht aus verifizierter Bibliotheks-API.
 - Touch-Rotation (`rawX`/`rawY` → Panel-Koordinaten in `src/touch.cpp`) —
@@ -1846,8 +1959,12 @@ geprüft werden:
 - KEY1/KEY2-Tastenrollen (`src/buttons.cpp`) — nur KEY0 (Wake) ist bestätigt.
 - Batterie-mV-Skalierungsfaktor (`src/battery.cpp`) — `*2`-Divisor-Frage
   ungeklärt, siehe Kommentar dort.
-- `GxEPD2_ED103TC2_1872x1404`-Klassenname — aus Wiki-Beispiel übernommen,
-  nicht gegen installierte Bibliothek geprüft.
+
+**Bereits gegen echten Bibliotheks-Quellcode verifiziert** (nicht mehr auf
+der obigen Liste, s. Task 5): `GxEPD2_it103_1872x1404`-Klassenname und
+-API-Form, die `invert=false`-Bit-Konvention für den Pixel-Blit, und dass
+`selectSPI()` von diesem Treiber ignoriert wird (SPI-Pins müssen direkt auf
+das globale `SPI`-Objekt gebunden werden).
 ```
 
 - [ ] **Step 4: Commit**
