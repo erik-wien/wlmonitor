@@ -299,6 +299,7 @@ final class BoardTokenEndpointTest extends TestCase
         $this->assertSame((string) strlen($r['out']), $this->headerValue($r['headers'], 'Content-Length'));
         $this->assertNotNull($this->headerValue($r['headers'], 'X-Board-ETag'));
         $this->assertSame('1', $this->headerValue($r['headers'], 'X-Board-Favorite-Count'));
+        $this->assertSame('1', $this->headerValue($r['headers'], 'X-Board-Total-Pages'));
     }
 
     public function test_favorite_count_header_reflects_two_configured_favorites(): void
@@ -319,6 +320,42 @@ final class BoardTokenEndpointTest extends TestCase
 
         $this->assertSame(200, $r['status']);
         $this->assertSame('2', $this->headerValue($r['headers'], 'X-Board-Favorite-Count'));
+    }
+
+    public function test_total_pages_header_reflects_pagination_overflow(): void
+    {
+        // Analog zu X-Board-Favorite-Count: die Pagination-Pille
+        // (board_render_stand_and_pagination_svg()) ist nur sichtbar und
+        // ihre Breite nur bekannt, wenn die Firmware totalPages kennt.
+        // 15 Linien an einer Haltestelle erzwingen zuverlaessig einen
+        // Seitenumbruch (gleiche Fixture-Groesse wie
+        // BoardTemplateLayoutTest, dort verifiziert dass 10 Linien NICHT,
+        // aber 15 Linien SEHR WOHL ueberlaufen).
+        $token = $this->createTokenUser();
+        $this->createFavorite('Viele Linien', '90111111', null);
+
+        $lines = [];
+        foreach (range(1, 15) as $i) {
+            $lines[] = [
+                'name' => 'L' . $i, 'towards' => 'Z', 'type' => 'ptTram', 'platform' => (string) $i,
+                'departures' => ['departure' => [['departureTime' => ['countdown' => 4]]]],
+            ];
+        }
+        $mock = json_encode([
+            'message' => ['serverTime' => '2026-08-17T19:00:00+02:00'],
+            'data' => ['monitors' => [[
+                'locationStop' => ['properties' => [
+                    'title' => 'Halt', 'name' => 'STK90111111', 'diva' => ['statId' => '90111111'],
+                ]],
+                'lines' => $lines,
+            ]]],
+        ]);
+
+        $r = $this->runProbe('board.php', ['authorization' => 'Bearer ' . $token, 'mock_wl_response' => $mock]);
+
+        $this->assertSame(200, $r['status']);
+        $totalPages = (int) $this->headerValue($r['headers'], 'X-Board-Total-Pages');
+        $this->assertGreaterThan(1, $totalPages, 'X-Board-Total-Pages muss den echten Seitenumbruch widerspiegeln: ' . json_encode($r['headers']));
     }
 
     public function test_second_poll_with_matching_etag_and_unchanged_favorite_returns_patch_mode(): void

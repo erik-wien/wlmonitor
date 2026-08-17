@@ -182,6 +182,10 @@ X-Board-Favorite-Count: 0-3 (tatsächliche Anzahl der Touch-Leisten-Buttons —
                              Zahl, s. §9; ohne diesen Header könnte die
                              Firmware bei < 3 Favoriten falsche Touch-Zonen
                              berechnen)
+X-Board-Total-Pages: 1-n (Gesamtseitenzahl inkl. einer eventuellen
+                          Störungsseite — bestimmt, ob und wie breit die
+                          Pagination-Pille aus §9 gerendert wurde, analog
+                          zu X-Board-Favorite-Count)
 Content-Type: application/octet-stream
 Content-Length: <n>
 ```

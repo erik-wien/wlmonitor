@@ -206,6 +206,11 @@ try {
     // Favoritenzahl (board_render_touch_bar_svg(), 1-3 Buttons) -- ohne
     // diesen Header muesste die Firmware raten, wie breit jede Zone ist.
     header('X-Board-Favorite-Count: ' . count($touchBarFavorites));
+    // Analog: die Pagination-Pille (board_render_stand_and_pagination_svg())
+    // ist nur sichtbar, wenn totalPages > 1, und ihre Breite haengt von
+    // totalPages ab -- die Firmware braucht das, um die Touch-Zonen fuer
+    // die Pfeile korrekt nachzurechnen.
+    header('X-Board-Total-Pages: ' . $totalPages);
     header('Content-Type: application/octet-stream');
     header('Content-Length: ' . strlen($body));
     echo $body;
