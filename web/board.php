@@ -1,91 +1,207 @@
 <?php
 /**
- * web/board.php — JSON-Abfahrtstafel für Geräte (E-Paper-Display, Home
- * Assistant), token-authentifiziert.
+ * web/board.php — Bild-Protokoll für Geräte (E-Paper-Display), token-
+ * authentifiziert. Liefert rohe 1bpp-Pixeldaten statt JSON (Spec §5).
  *
- * GET /board.php?fav=<id>[,<id>…]
+ * GET /board.php
  * Authorization: Bearer <token>      (X-Auth-Token als Ausweichheader)
+ * X-Device-Battery-mV: <n>           (optional)
+ * X-Device-RSSI: <n>                 (optional)
+ * X-Device-Touch: fav0|fav1|fav2|page_prev|page_next   (optional)
+ * If-None-Match: "<letzter ETag>"    (optional)
  *
- * Bewusst KEINE Sitzung: nichts wird aus $_SESSION gelesen oder dorthin
- * geschrieben. Alles, was die Antwort bestimmt, hängt am Token-Benutzer.
- * Der Vorgänger monitor_json.php tat das Gegenteil und legte bei jedem
- * anonymen Aufruf eine Session an (4 Tage Lebensdauer).
+ * Bewusst KEINE Sitzung -- wie im Vorgänger, alles haengt am Token-Nutzer.
+ * Pro-Geraet-Zustand (aktiver Favorit/Seite/letzter Frame) liegt in
+ * data/board_state/<sha256(token)>.{json,frame} (inc/board_state.php),
+ * kein $_SESSION.
  *
  * Fehler nennen nach aussen nur eine Kennung; die Ursache geht ins auth_log
- * (Fehler-Regeln §21).
+ * (Fehler-Regeln §21). 401/503/500 haben KEINEN Bildkoerper (Spec §5).
  *
- * Spec: docs/superpowers/specs/2026-08-01-epaper-abfahrtsmonitor-design.md
+ * ?debug=svg / ?debug=png liefern Zwischenstufen der Rendering-Pipeline
+ * (gleiche Auth, aber OHNE Diff-/Patch-/State-Logik, Spec §6).
+ *
+ * Spec: docs/superpowers/specs/2026-08-15-epaper-monitor-v2-design.md
  */
 declare(strict_types=1);
 
-require_once __DIR__ . '/../inc/initialize.php';   // ruft auth_bootstrap(), löst das Token auf
+require_once __DIR__ . '/../inc/initialize.php';
 require_once __DIR__ . '/../inc/favorites.php';
 require_once __DIR__ . '/../inc/monitor.php';
 require_once __DIR__ . '/../inc/board.php';
+require_once __DIR__ . '/../inc/weather.php';
+require_once __DIR__ . '/../inc/board_render.php';
+require_once __DIR__ . '/../inc/board_template.php';
+require_once __DIR__ . '/../inc/board_state.php';
 
-header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-/** Antwort senden und beenden. */
-function board_out(array $payload, int $status = 200): never
+/** Fehlerantwort senden und beenden -- einziger JSON-Zweig dieses Endpunkts. */
+function board_error_out(array $payload, int $status): never
 {
     http_response_code($status);
+    header('Content-Type: application/json; charset=utf-8');
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     exit;
 }
 
 $userId = auth_api_request_user();
 if ($userId === null) {
-    // Nur ein VORGELEGTES, aber ungueltiges Token ist die berichtenswerte
-    // Anomalie. Fehlt der Header ganz, ist das ein alter Client waehrend der
-    // Umstellung auf Token-Pflicht — jeder seiner Polls sonst eine
-    // auth_log-Zeile in einer Tabelle, die sich sieben Apps teilen.
     if (auth_api_token_presented()) {
         appendLog($con, 'board', 'Zugriff ohne gueltiges Token (Token vorgelegt, aber ungueltig)');
     }
-    board_out(['error' => 'unauthorized'], 401);
+    board_error_out(['error' => 'unauthorized'], 401);
 }
 
 try {
-    $favs = board_selected_favorites(favorites_get($con, $userId), (string) ($_GET['fav'] ?? ''));
-    if ($favs === []) {
-        board_out(['generated' => date('c'), 'favorites' => []]);
-    }
+    $token = auth_api_token_from_request();
+    $hash = board_state_hash($token);
+    $metaPath = board_state_meta_path($hash);
+    $framePath = board_state_frame_path($hash);
+    $oldMeta = board_state_load_meta($metaPath);
 
-    $divas = board_all_divas($favs);
+    $touchBarFavorites = array_slice(favorites_get($con, $userId), 0, 3);
+    $touchBarTitles = array_map(static fn (array $f): string => (string) $f['title'], $touchBarFavorites);
 
-    // Zwei Abfahrten je Zeile — genau das, was das Layout zeigt. Mehr waere
-    // unbenutzte Nutzlast auf einem Geraet mit wenig Heap.
-    try {
-        $monitor = monitor_get($con, $divas, 2);
-    } catch (RuntimeException $e) {
-        // "Keine Abfahrten fuer keine der angefragten DIVAs" ist kein
-        // Upstream-Ausfall, sondern ein gueltiger Zustand (WL-API laesst
-        // Haltestellen ohne bevorstehende Abfahrten stillschweigend weg) —
-        // nur DIESE eine RuntimeException wird so behandelt, alle anderen
-        // (API nicht erreichbar, kaputtes JSON) bleiben ein 503 (s.u.).
-        if (!str_contains($e->getMessage(), 'No monitors found')) {
-            throw $e;
+    $touchHeader = $_SERVER['HTTP_X_DEVICE_TOUCH'] ?? null;
+    $resolved = board_resolve_touch($oldMeta, is_string($touchHeader) ? $touchHeader : null, count($touchBarFavorites));
+
+    if ($touchBarFavorites === []) {
+        // Frisch provisioniertes Geraet ohne Favoriten -- kein monitor_get()-
+        // Aufruf (kein Netz noetig), leeres aber gueltiges Board.
+        $activeFavorite = ['id' => 0, 'title' => '', 'stations' => []];
+        $filteredAlerts = [];
+    } else {
+        $activeFavoriteRaw = $touchBarFavorites[$resolved['activeFavoriteIndex']];
+        $divas = board_all_divas([$activeFavoriteRaw]);
+
+        try {
+            $monitor = monitor_get($con, $divas, 2);
+        } catch (RuntimeException $e) {
+            // "Keine Abfahrten fuer keine der angefragten DIVAs" ist kein
+            // Upstream-Ausfall, sondern ein gueltiger Zustand -- nur DIESE
+            // eine RuntimeException wird so behandelt.
+            if (!str_contains($e->getMessage(), 'No monitors found')) {
+                throw $e;
+            }
+            $monitor = [];
         }
-        $monitor = [];
+        $monitor = monitor_inject_missing_stations($con, $monitor, $divas);
+
+        $activeFavorite = board_favorite($activeFavoriteRaw, $monitor);
+        $filteredAlerts = board_filter_alerts_for_favorite($monitor['alerts'] ?? [], $activeFavorite);
     }
 
-    // Die WL-API laesst Haltestellen ohne bevorstehende Abfahrten
-    // stillschweigend weg. Ohne Platzhalter wuerde die Karte einer
-    // gefilterten Haltestelle verschwinden — nicht von "alles normal" zu
-    // unterscheiden.
-    $monitor = monitor_inject_missing_stations($con, $monitor, $divas);
+    $totalDeparturePages = board_paginate_departures($activeFavorite, 1)['totalPages'];
+    $totalPages = $totalDeparturePages + ($filteredAlerts !== [] ? 1 : 0);
+    $requestedPage = max(1, min($totalPages, $resolved['activePage']));
 
-    $out = ['generated' => date('c'), 'favorites' => []];
-    foreach ($favs as $fav) {
-        $out['favorites'][] = board_favorite($fav, $monitor);
+    $weatherCachePath = __DIR__ . '/../data/weather_cache.json';
+    $weatherCache = file_exists($weatherCachePath)
+        ? json_decode((string) file_get_contents($weatherCachePath), true)
+        : null;
+
+    $renderedAt = new DateTimeImmutable();
+    $dataStand = $renderedAt; // s. Global Constraints: bewusst kein Reparse von monitor_get()['update_at']
+    $weather = weather_select_display(is_array($weatherCache) ? $weatherCache : null, $renderedAt);
+
+    $batteryMv = $_SERVER['HTTP_X_DEVICE_BATTERY_MV'] ?? null;
+    $batteryPercent = is_numeric($batteryMv) ? board_battery_percent_from_mv((int) $batteryMv) : 0;
+    $rssi = $_SERVER['HTTP_X_DEVICE_RSSI'] ?? null;
+    $wifiBars = is_numeric($rssi) ? board_wifi_bars_from_rssi((int) $rssi) : 0;
+
+    $svg = board_render_svg(
+        $touchBarTitles,
+        $resolved['activeFavoriteIndex'],
+        $activeFavorite,
+        $filteredAlerts,
+        $requestedPage,
+        $weather,
+        $dataStand,
+        $renderedAt,
+        $batteryPercent,
+        $wifiBars
+    );
+
+    $debug = (string) ($_GET['debug'] ?? '');
+    if ($debug === 'svg') {
+        header('Content-Type: image/svg+xml; charset=utf-8');
+        echo $svg;
+        exit;
     }
-    board_out($out);
+
+    $png = svg_to_png($svg);
+
+    if ($debug === 'png') {
+        header('Content-Type: image/png');
+        echo $png;
+        exit;
+    }
+
+    $newPacked = png_to_1bpp_packed($png, BOARD_WIDTH, BOARD_HEIGHT);
+    $newEtag = '"' . hash('sha256', $newPacked) . '"';
+
+    $oldFrame = board_state_load_frame($framePath);
+    $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+    $stateChanged = $resolved['activeFavoriteIndex'] !== (int) ($oldMeta['activeFavoriteIndex'] ?? -1)
+        || $requestedPage !== (int) ($oldMeta['activePage'] ?? -1);
+    $fullRefreshAt = $oldMeta['fullRefreshAt'] ?? null;
+    $recentFullRefresh = $fullRefreshAt !== null && (time() - (int) $fullRefreshAt) < 1800;
+
+    $canPatch = $oldFrame !== null
+        && $ifNoneMatch !== ''
+        && $ifNoneMatch === ($oldMeta['etag'] ?? null)
+        && $recentFullRefresh
+        && !$stateChanged;
+
+    $diff = $canPatch ? board_frame_diff($oldFrame, $newPacked, BOARD_WIDTH, BOARD_HEIGHT) : null;
+
+    if ($diff !== null) {
+        $mode = 'patch';
+        $body = board_crop_and_pack($png, $diff['x'], $diff['y'], $diff['w'], $diff['h']);
+        $x = $diff['x'];
+        $y = $diff['y'];
+        $w = $diff['w'];
+        $h = $diff['h'];
+    } else {
+        // Voll-Frame: entweder kann nicht gepatcht werden (ETag-Mismatch,
+        // 30-Min-Grenze, Favoriten-/Seitenwechsel, erster Poll ueberhaupt),
+        // oder der neue Frame ist byte-identisch zum alten (board_frame_diff()
+        // liefert dann null) -- in beiden Faellen ist ein Vollbild die
+        // korrekte, immer gueltige Antwort.
+        $mode = 'full';
+        $body = $newPacked;
+        $x = 0;
+        $y = 0;
+        $w = BOARD_WIDTH;
+        $h = BOARD_HEIGHT;
+        $fullRefreshAt = time();
+    }
+
+    board_state_save_meta($metaPath, [
+        'activeFavoriteIndex' => $resolved['activeFavoriteIndex'],
+        'activePage' => $requestedPage,
+        'etag' => $newEtag,
+        'fullRefreshAt' => $fullRefreshAt,
+    ]);
+    board_state_save_frame($framePath, $newPacked);
+
+    header('X-Board-Mode: ' . $mode);
+    header('X-Board-ETag: ' . $newEtag);
+    header('X-Board-Generated: ' . $renderedAt->format(DATE_ATOM));
+    header('X-Board-X: ' . $x);
+    header('X-Board-Y: ' . $y);
+    header('X-Board-W: ' . $w);
+    header('X-Board-H: ' . $h);
+    header('Content-Type: application/octet-stream');
+    header('Content-Length: ' . strlen($body));
+    echo $body;
+    exit;
 } catch (RuntimeException | InvalidArgumentException $e) {
     appendLog($con, 'board', 'Upstream-Fehler: ' . $e->getMessage());
-    board_out(['error' => 'upstream_unavailable'], 503);
+    board_error_out(['error' => 'upstream_unavailable'], 503);
 } catch (Throwable $e) {
     appendLog($con, 'board', 'Fehler: ' . get_class($e) . ': ' . $e->getMessage());
-    board_out(['error' => 'server_error'], 500);
+    board_error_out(['error' => 'server_error'], 500);
 }

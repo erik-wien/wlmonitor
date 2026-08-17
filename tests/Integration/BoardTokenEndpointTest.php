@@ -56,7 +56,7 @@ final class BoardTokenEndpointTest extends TestCase
         $this->con->close();
     }
 
-    /** @return array{status: ?int, out: string} */
+    /** @return array{status: ?int, out: string, headers: list<string>} */
     private function runProbe(string $page, array $scenario): array
     {
         $scenarioFile = tempnam(sys_get_temp_dir(), 'wlm_tok_');
@@ -76,7 +76,37 @@ final class BoardTokenEndpointTest extends TestCase
         if (preg_match('/STATUS:(\d+)/', $stderr, $m)) {
             $status = (int) $m[1];
         }
-        return ['status' => $status, 'out' => $stdout];
+        $headers = [];
+        if (preg_match('/HEADERS:(.+)/', $stderr, $m)) {
+            $headers = json_decode($m[1], true) ?? [];
+        }
+        return ['status' => $status, 'out' => $stdout, 'headers' => $headers];
+    }
+
+    private function headerValue(array $headers, string $name): ?string
+    {
+        foreach ($headers as $h) {
+            if (str_starts_with($h, $name . ':')) {
+                return trim(substr($h, strlen($name) + 1));
+            }
+        }
+        return null;
+    }
+
+    private function mockMonitorResponse(string $diva, int $countdown): string
+    {
+        return json_encode([
+            'message' => ['serverTime' => '2026-08-16T19:00:00+02:00'],
+            'data' => ['monitors' => [[
+                'locationStop' => ['properties' => [
+                    'title' => 'Halt', 'name' => 'STK' . $diva, 'diva' => ['statId' => $diva],
+                ]],
+                'lines' => [[
+                    'name' => 'L1', 'towards' => 'Z', 'type' => 'ptTram', 'platform' => '1',
+                    'departures' => ['departure' => [['departureTime' => ['countdown' => $countdown]]]],
+                ]],
+            ]]],
+        ]);
     }
 
     private function authLogCount(string $context, int $sinceId): int
@@ -187,16 +217,20 @@ final class BoardTokenEndpointTest extends TestCase
 
     public function test_board_shows_placeholder_for_diva_the_wl_api_omitted(): void
     {
+        // Die eigentliche Platzhalter-Logik (eine gefilterte, von der WL-API
+        // stillschweigend weggelassene Station bleibt als leere Karte
+        // bestehen statt zu verschwinden) ist auf inc/board.php- und
+        // inc/monitor.php-Ebene unit-getestet (board_favorite(),
+        // monitor_inject_missing_stations()). Hier, end-to-end durch den
+        // binaeren Endpunkt, ist nur noch pruefbar, dass die Pipeline dabei
+        // NICHT fehlschlaegt -- der Koerper selbst ist opakes 1bpp.
         $token = $this->createTokenUser();
         $this->createFavorite('Test', '90111111,90222222', [
             '90222222' => [['line' => '63', 'platform' => '1']],
         ]);
 
-        // The WL API returns a monitor for 90111111 only — 90222222 (the
-        // filtered station) is silently omitted, as real stops with no
-        // upcoming departures are.
         $mock = json_encode([
-            'message' => ['serverTime' => '2026-08-02T10:00:00+02:00'],
+            'message' => ['serverTime' => '2026-08-16T10:00:00+02:00'],
             'data'    => ['monitors' => [[
                 'locationStop' => ['properties' => [
                     'title' => 'Halt 1', 'name' => 'STK90111111', 'diva' => ['statId' => '90111111'],
@@ -214,14 +248,8 @@ final class BoardTokenEndpointTest extends TestCase
         ]);
 
         $this->assertSame(200, $r['status']);
-        $body = json_decode($r['out'], true);
-        $this->assertNotNull($body, 'response must be valid JSON: ' . $r['out']);
-        $divas = array_column($body['favorites'][0]['stations'], 'diva');
-        $this->assertContains(
-            '90222222',
-            $divas,
-            'the filtered station the WL API omitted must still appear as a card'
-        );
+        $this->assertSame('full', $this->headerValue($r['headers'], 'X-Board-Mode'));
+        $this->assertGreaterThan(0, strlen($r['out']), 'Body darf nicht leer sein');
     }
 
     public function test_board_returns_200_not_503_when_wl_api_has_nothing_for_any_requested_diva(): void
@@ -232,7 +260,7 @@ final class BoardTokenEndpointTest extends TestCase
         // WL API returns an empty monitors array — monitor_get() throws
         // RuntimeException('No monitors found…') for this.
         $mock = json_encode([
-            'message' => ['serverTime' => '2026-08-02T10:00:00+02:00'],
+            'message' => ['serverTime' => '2026-08-16T10:00:00+02:00'],
             'data'    => ['monitors' => []],
         ]);
 
@@ -241,9 +269,137 @@ final class BoardTokenEndpointTest extends TestCase
             'mock_wl_response' => $mock,
         ]);
 
-        $this->assertSame(200, $r['status'], 'no departures anywhere is not an outage: ' . $r['out']);
-        $body = json_decode($r['out'], true);
-        $this->assertNotNull($body, 'response must be valid JSON: ' . $r['out']);
-        $this->assertCount(1, $body['favorites']);
+        $this->assertSame(200, $r['status'], 'no departures anywhere is not an outage');
+        $this->assertSame('full', $this->headerValue($r['headers'], 'X-Board-Mode'));
+    }
+
+    // --- Board-Protokoll: Vollbild/Patch/Touch/Debug (Spec §4, §5, §6) -------
+
+    public function test_first_poll_for_a_device_is_always_full_mode(): void
+    {
+        $token = $this->createTokenUser();
+        $this->createFavorite('Test', '90111111', null);
+        $mock = $this->mockMonitorResponse('90111111', 4);
+
+        $r = $this->runProbe('board.php', ['authorization' => 'Bearer ' . $token, 'mock_wl_response' => $mock]);
+
+        $this->assertSame(200, $r['status']);
+        $this->assertSame('full', $this->headerValue($r['headers'], 'X-Board-Mode'));
+        $this->assertSame('1872', $this->headerValue($r['headers'], 'X-Board-W'));
+        $this->assertSame('1404', $this->headerValue($r['headers'], 'X-Board-H'));
+        $this->assertSame((string) strlen($r['out']), $this->headerValue($r['headers'], 'Content-Length'));
+        $this->assertNotNull($this->headerValue($r['headers'], 'X-Board-ETag'));
+    }
+
+    public function test_second_poll_with_matching_etag_and_unchanged_favorite_returns_patch_mode(): void
+    {
+        $token = $this->createTokenUser();
+        $this->createFavorite('Test', '90111111', null);
+
+        $r1 = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $this->mockMonitorResponse('90111111', 4),
+        ]);
+        $etag = $this->headerValue($r1['headers'], 'X-Board-ETag');
+        $this->assertNotNull($etag);
+
+        // Andere Abfahrtszeit -> garantiert sichtbar anderer Frame, unabhaengig
+        // von der Uhrzeit, zu der der Test laeuft.
+        $r2 = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $this->mockMonitorResponse('90111111', 9),
+            'headers' => ['If-None-Match' => $etag],
+        ]);
+
+        $this->assertSame(200, $r2['status']);
+        $this->assertSame('patch', $this->headerValue($r2['headers'], 'X-Board-Mode'));
+        $this->assertGreaterThan(0, strlen($r2['out']));
+        $w = (int) $this->headerValue($r2['headers'], 'X-Board-W');
+        $h = (int) $this->headerValue($r2['headers'], 'X-Board-H');
+        $this->assertLessThan(1872 * 1404, $w * $h, 'ein Patch darf nicht die volle Flaeche sein');
+    }
+
+    public function test_favorite_switch_touch_forces_full_mode_even_with_matching_etag(): void
+    {
+        $token = $this->createTokenUser();
+        $this->createFavorite('A', '90111111', null);
+        $this->createFavorite('B', '90222222', null);
+
+        $r1 = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $this->mockMonitorResponse('90111111', 4),
+        ]);
+        $etag = $this->headerValue($r1['headers'], 'X-Board-ETag');
+
+        $r2 = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $this->mockMonitorResponse('90222222', 4),
+            'headers' => ['If-None-Match' => $etag, 'X-Device-Touch' => 'fav1'],
+        ]);
+
+        $this->assertSame(200, $r2['status']);
+        $this->assertSame('full', $this->headerValue($r2['headers'], 'X-Board-Mode'));
+    }
+
+    public function test_malformed_upstream_response_returns_503_json_error(): void
+    {
+        $token = $this->createTokenUser();
+        $this->createFavorite('Test', '90111111', null);
+
+        $r = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => 'not valid json',
+        ]);
+
+        $this->assertSame(503, $r['status']);
+        $this->assertSame('application/json; charset=utf-8', $this->headerValue($r['headers'], 'Content-Type'));
+        $this->assertSame(['error' => 'upstream_unavailable'], json_decode($r['out'], true));
+    }
+
+    public function test_debug_svg_returns_raw_svg_and_bypasses_state_logic(): void
+    {
+        $token = $this->createTokenUser();
+        $this->createFavorite('Test', '90111111', null);
+
+        $r = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $this->mockMonitorResponse('90111111', 4),
+            'get' => ['debug' => 'svg'],
+        ]);
+
+        $this->assertSame(200, $r['status']);
+        $this->assertSame('image/svg+xml; charset=utf-8', $this->headerValue($r['headers'], 'Content-Type'));
+        $this->assertStringStartsWith('<svg', $r['out']);
+        $this->assertNull($this->headerValue($r['headers'], 'X-Board-Mode'), 'Debug-Zweig darf keine Diff-/State-Header setzen');
+    }
+
+    public function test_debug_png_returns_raw_png(): void
+    {
+        $token = $this->createTokenUser();
+        $this->createFavorite('Test', '90111111', null);
+
+        $r = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $this->mockMonitorResponse('90111111', 4),
+            'get' => ['debug' => 'png'],
+        ]);
+
+        $this->assertSame(200, $r['status']);
+        $this->assertSame('image/png', $this->headerValue($r['headers'], 'Content-Type'));
+        $this->assertStringStartsWith("\x89PNG\r\n\x1a\n", $r['out']);
+    }
+
+    public function test_user_with_no_favorites_still_gets_a_valid_full_frame(): void
+    {
+        // Kein mock_wl_response -- board.php darf monitor_get() bei null
+        // Favoriten gar nicht erst aufrufen, sonst wuerde dieser Test an
+        // einem echten (fehlenden) Netzwerkzugriff haengen bleiben.
+        $token = $this->createTokenUser();
+
+        $r = $this->runProbe('board.php', ['authorization' => 'Bearer ' . $token]);
+
+        $this->assertSame(200, $r['status']);
+        $this->assertSame('full', $this->headerValue($r['headers'], 'X-Board-Mode'));
+        $this->assertGreaterThan(0, strlen($r['out']));
     }
 }
