@@ -60,5 +60,6 @@ final class TokenProbeHeaderCaptureTest extends TestCase
         $r = $this->runProbe('board.php', ['headers' => ['If-None-Match' => '"abc"']]);
 
         $this->assertSame(401, $r['status'], 'unveraendertes Verhalten: fehlender Authorization-Header bleibt 401');
+        $this->assertNotEmpty($r['headers'], 'HEADERS: line muss tatsaechlich Header-Daten enthalten (beweist, dass der CGI-Mechanismus lief)');
     }
 }

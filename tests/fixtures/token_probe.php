@@ -41,34 +41,38 @@ $scenario     = json_decode((string) file_get_contents($scenarioFile), true) ?? 
 // If running in CLI, re-execute via php-cgi (which supports headers_list()).
 if (php_sapi_name() === 'cli') {
     $phpCgiBinary = trim((string) shell_exec('which php-cgi 2>/dev/null'));
-    if ($phpCgiBinary && file_exists($phpCgiBinary)) {
-        // Re-execute this script via php-cgi, which properly supports headers_list().
-        $cmd = escapeshellarg($phpCgiBinary) . ' ' . escapeshellarg(__FILE__)
-             . ' ' . escapeshellarg($page) . ' ' . escapeshellarg($scenarioFile);
-        $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
-        $proc = proc_open($cmd, $descriptors, $pipes);
-        $stdout = stream_get_contents($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        proc_close($proc);
-
-        // php-cgi outputs HTTP headers (CRLF-terminated), blank line (CRLF), then body.
-        // Extract body and forward both body and STDERR output.
-        // Handle both CRLF and LF line endings.
-        if (preg_match("/\r?\n\r?\n/", $stdout, $matches)) {
-            $separator = $matches[0];
-            [$httpHeaders, $body] = explode($separator, $stdout, 2);
-            echo $body;
-        } else {
-            echo $stdout;
-        }
-        // Forward STDERR from the cgi subprocess (contains STATUS: and HEADERS:).
-        if ($stderr) {
-            fwrite(STDERR, $stderr);
-        }
-        exit;
+    if (!$phpCgiBinary || !file_exists($phpCgiBinary)) {
+        fwrite(STDERR, "ERROR: php-cgi not found on PATH -- required for tests/fixtures/token_probe.php's header-capture mechanism (see file docblock)\n");
+        exit(1);
     }
+
+    // Re-execute this script via php-cgi, which properly supports headers_list().
+    $cmd = escapeshellarg($phpCgiBinary) . ' ' . escapeshellarg(__FILE__)
+         . ' ' . escapeshellarg($page) . ' ' . escapeshellarg($scenarioFile);
+    $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+    $proc = proc_open($cmd, $descriptors, $pipes);
+    $stdout = stream_get_contents($pipes[1]);
+    $stderr = stream_get_contents($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    proc_close($proc);
+
+    // php-cgi outputs HTTP headers (CRLF-terminated), blank line (CRLF), then body.
+    // Extract body and forward both body and STDERR output.
+    // Handle both CRLF and LF line endings.
+    if (preg_match("/\r?\n\r?\n/", $stdout, $matches)) {
+        $separator = $matches[0];
+        [, $body] = explode($separator, $stdout, 2);
+        echo $body;
+    } else {
+        fwrite(STDERR, "ERROR: php-cgi subprocess output had no header/body separator -- cannot safely split response. php-cgi STDERR follows:\n" . $stderr . "\n");
+        exit(1);
+    }
+    // Forward STDERR from the cgi subprocess (contains STATUS: and HEADERS:).
+    if ($stderr) {
+        fwrite(STDERR, $stderr);
+    }
+    exit;
 }
 
 if (!empty($scenario['authorization'])) {
