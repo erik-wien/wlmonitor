@@ -1,16 +1,25 @@
 #pragma once
-#include <string>
 #include <cstdint>
+#include <vector>
+#include "board_response.h"
 
-enum class BoardFetchResult {
-    Ok,                 // HTTP 200, Koerper in outBody
-    Unauthorized,       // HTTP 401
-    Unavailable,        // HTTP 503, Verbindungsfehler oder Zeitueberschreitung
-    ServerError,        // HTTP 500 oder sonstiger unerwarteter Status
+enum class BoardFetchOutcome {
+    Success,
+    NetworkUnavailable,  // TLS/connect failure, timeout, or HTTP 503
+    Unauthorized,        // HTTP 401
+    UnreadableResponse,  // headers missing/malformed or Content-Length mismatch
 };
 
-// Fuehrt GET http://host:port/board.php?fav=favIds aus, mit
-// "Authorization: Bearer <token>". timeoutMs begrenzt Verbindungsaufbau UND
-// Antwortwartezeit.
-BoardFetchResult fetchBoard(const char* host, uint16_t port, const char* favIds,
-                             const char* token, uint32_t timeoutMs, std::string& outBody);
+struct BoardFetchResult {
+    BoardFetchOutcome outcome = BoardFetchOutcome::NetworkUnavailable;
+    ParsedBoardResponse parsed;   // only meaningful when outcome == Success
+    std::vector<uint8_t> body;    // raw packed pixel bytes, only when outcome == Success
+};
+
+// Fuehrt GET https://BOARD_HOST:BOARD_PORT/board.php aus (board_config.h),
+// mit Authorization: Bearer <token>, X-Device-Battery-mV, X-Device-RSSI,
+// optional X-Device-Touch (touchValue == nullptr -> Header weggelassen)
+// und optional If-None-Match (lastEtag == nullptr oder leer -> weggelassen,
+// Spec §5). timeoutMs begrenzt Verbindungsaufbau UND Antwortwartezeit.
+void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
+                 int batteryMv, int rssi, uint32_t timeoutMs, BoardFetchResult& out);
