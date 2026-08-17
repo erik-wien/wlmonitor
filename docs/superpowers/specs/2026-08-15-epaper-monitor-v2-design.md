@@ -177,6 +177,11 @@ X-Board-X: 0            (nur bei patch relevant)
 X-Board-Y: 0
 X-Board-W: 1872
 X-Board-H: 1404
+X-Board-Favorite-Count: 0-3 (tatsächliche Anzahl der Touch-Leisten-Buttons —
+                             die Leiste teilt sich dynamisch durch diese
+                             Zahl, s. §9; ohne diesen Header könnte die
+                             Firmware bei < 3 Favoriten falsche Touch-Zonen
+                             berechnen)
 Content-Type: application/octet-stream
 Content-Length: <n>
 ```

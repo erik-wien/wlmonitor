@@ -202,6 +202,10 @@ try {
     header('X-Board-Y: ' . $y);
     header('X-Board-W: ' . $w);
     header('X-Board-H: ' . $h);
+    // Die Touch-Leiste teilt sich dynamisch durch die tatsaechliche
+    // Favoritenzahl (board_render_touch_bar_svg(), 1-3 Buttons) -- ohne
+    // diesen Header muesste die Firmware raten, wie breit jede Zone ist.
+    header('X-Board-Favorite-Count: ' . count($touchBarFavorites));
     header('Content-Type: application/octet-stream');
     header('Content-Length: ' . strlen($body));
     echo $body;

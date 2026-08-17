@@ -298,6 +298,27 @@ final class BoardTokenEndpointTest extends TestCase
         $this->assertSame('1404', $this->headerValue($r['headers'], 'X-Board-H'));
         $this->assertSame((string) strlen($r['out']), $this->headerValue($r['headers'], 'Content-Length'));
         $this->assertNotNull($this->headerValue($r['headers'], 'X-Board-ETag'));
+        $this->assertSame('1', $this->headerValue($r['headers'], 'X-Board-Favorite-Count'));
+    }
+
+    public function test_favorite_count_header_reflects_two_configured_favorites(): void
+    {
+        // Die Touch-Leiste teilt sich dynamisch durch die tatsaechliche
+        // Favoritenzahl (board_render_touch_bar_svg(), 1-3 Buttons) -- ohne
+        // diesen Header muesste die Firmware raten, wie breit jede
+        // Touch-Zone ist. Zwei statt drei Favoriten beweist, dass der
+        // Header die ECHTE Zahl traegt, nicht nur einen festen Wert.
+        $token = $this->createTokenUser();
+        $this->createFavorite('A', '90111111', null);
+        $this->createFavorite('B', '90222222', null);
+
+        $r = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $this->mockMonitorResponse('90111111', 4),
+        ]);
+
+        $this->assertSame(200, $r['status']);
+        $this->assertSame('2', $this->headerValue($r['headers'], 'X-Board-Favorite-Count'));
     }
 
     public function test_second_poll_with_matching_etag_and_unchanged_favorite_returns_patch_mode(): void
@@ -434,6 +455,7 @@ final class BoardTokenEndpointTest extends TestCase
         $this->assertSame(200, $r['status']);
         $this->assertSame('full', $this->headerValue($r['headers'], 'X-Board-Mode'));
         $this->assertGreaterThan(0, strlen($r['out']));
+        $this->assertSame('0', $this->headerValue($r['headers'], 'X-Board-Favorite-Count'));
     }
 
     public function test_device_transitioning_from_no_favorites_to_a_favorite_between_polls(): void
