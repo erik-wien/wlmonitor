@@ -1,7 +1,6 @@
 #include "board_client.h"
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
-#include <esp_crt_bundle.h>
 #include "board_config.h"
 
 namespace {
@@ -88,8 +87,20 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
     int contentLength = http.getSize(); // -1, falls unbekannt -- validateBoardResponse() prueft ohnehin gegen den echten gelesenen Byte-Count
     out.body.reserve(contentLength > 0 ? (size_t) contentLength : 4096);
 
+    // Eigene millis()-Deadline statt sich allein auf http.setTimeout() zu
+    // verlassen: ob der Kern-Timeout wirklich diese Lese-Schleife abbricht
+    // (statt nur einen einzelnen blockierenden read()-Aufruf) ist
+    // core-versionsabhaengig und ohne Hardware nicht verifizierbar (Review-
+    // Befund Task 4). Ohne diese Deadline koennte ein Peer, der die
+    // Verbindung offen haelt aber nichts mehr sendet (v.a. bei fehlendem
+    // Content-Length, contentLength == -1), die Schleife auf einem
+    // batteriebetriebenen Geraet unbegrenzt blockieren.
     uint8_t buf[512];
+    uint32_t readStart = millis();
     while (http.connected() && (contentLength > 0 || contentLength == -1)) {
+        if (millis() - readStart > timeoutMs) {
+            break; // unvollstaendiger Body -> validateBoardResponse() erkennt die falsche Laenge
+        }
         size_t avail = stream->available();
         if (avail == 0) {
             if (!stream->connected()) break;
