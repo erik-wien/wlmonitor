@@ -179,13 +179,21 @@ try {
         $fullRefreshAt = time();
     }
 
-    board_state_save_meta($metaPath, [
-        'activeFavoriteIndex' => $resolved['activeFavoriteIndex'],
-        'activePage' => $requestedPage,
-        'etag' => $newEtag,
-        'fullRefreshAt' => $fullRefreshAt,
-    ]);
-    board_state_save_frame($framePath, $newPacked);
+    try {
+        board_state_save_meta($metaPath, [
+            'activeFavoriteIndex' => $resolved['activeFavoriteIndex'],
+            'activePage' => $requestedPage,
+            'etag' => $newEtag,
+            'fullRefreshAt' => $fullRefreshAt,
+        ]);
+        board_state_save_frame($framePath, $newPacked);
+    } catch (RuntimeException $e) {
+        // Lokales Platten-/Berechtigungsproblem, kein Upstream-Ausfall --
+        // eigener Fehlerpfad, damit das Geraet nicht faelschlich 503
+        // (upstream_unavailable) statt 500 (server_error) sieht.
+        appendLog($con, 'board', 'Zustand konnte nicht gespeichert werden: ' . $e->getMessage());
+        board_error_out(['error' => 'server_error'], 500);
+    }
 
     header('X-Board-Mode: ' . $mode);
     header('X-Board-ETag: ' . $newEtag);

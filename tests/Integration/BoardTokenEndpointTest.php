@@ -27,6 +27,8 @@ final class BoardTokenEndpointTest extends TestCase
     private ?int $testUserId = null;
     /** @var list<int> */
     private array $testFavoriteIds = [];
+    /** @var list<string> */
+    private array $createdTokens = [];
 
     protected function setUp(): void
     {
@@ -52,6 +54,11 @@ final class BoardTokenEndpointTest extends TestCase
             $root = new \mysqli(DATABASE_HOST, 'root', '', DATABASE_NAME);
             $root->query('DELETE FROM ' . AUTH_DB_PREFIX . 'auth_accounts WHERE id = ' . $this->testUserId);
             $root->close();
+        }
+        foreach ($this->createdTokens as $token) {
+            $hash = board_state_hash($token);
+            @unlink(board_state_meta_path($hash));
+            @unlink(board_state_frame_path($hash));
         }
         $this->con->close();
     }
@@ -153,7 +160,9 @@ final class BoardTokenEndpointTest extends TestCase
         $stmt->close();
         $this->testUserId = $userId;
 
-        return auth_api_token_issue($this->con, $userId, 'probe', 'web', null);
+        $token = auth_api_token_issue($this->con, $userId, 'probe', 'web', null);
+        $this->createdTokens[] = $token;
+        return $token;
     }
 
     private function createFavorite(string $title, string $diva, ?array $filter): int
@@ -319,6 +328,30 @@ final class BoardTokenEndpointTest extends TestCase
         $this->assertLessThan(1872 * 1404, $w * $h, 'ein Patch darf nicht die volle Flaeche sein');
     }
 
+    public function test_second_poll_with_mismatching_etag_returns_full_mode(): void
+    {
+        $token = $this->createTokenUser();
+        $this->createFavorite('Test', '90111111', null);
+
+        $r1 = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $this->mockMonitorResponse('90111111', 4),
+        ]);
+        $this->assertSame('full', $this->headerValue($r1['headers'], 'X-Board-Mode'));
+
+        // Gleicher Favorit, gleiche Seite -- aber ein absichtlich falscher
+        // If-None-Match-Wert. Das muss den ETag-Mismatch-Zweig treffen, nicht
+        // den Favoriten-/Seitenwechsel-Zweig.
+        $r2 = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $this->mockMonitorResponse('90111111', 9),
+            'headers' => ['If-None-Match' => '"not-the-real-etag"'],
+        ]);
+
+        $this->assertSame(200, $r2['status']);
+        $this->assertSame('full', $this->headerValue($r2['headers'], 'X-Board-Mode'));
+    }
+
     public function test_favorite_switch_touch_forces_full_mode_even_with_matching_etag(): void
     {
         $token = $this->createTokenUser();
@@ -401,5 +434,30 @@ final class BoardTokenEndpointTest extends TestCase
         $this->assertSame(200, $r['status']);
         $this->assertSame('full', $this->headerValue($r['headers'], 'X-Board-Mode'));
         $this->assertGreaterThan(0, strlen($r['out']));
+    }
+
+    public function test_device_transitioning_from_no_favorites_to_a_favorite_between_polls(): void
+    {
+        // Kein mock_wl_response beim ersten Poll -- analog zu
+        // test_user_with_no_favorites_still_gets_a_valid_full_frame(), keine
+        // Favoriten heisst kein monitor_get()-Aufruf.
+        $token = $this->createTokenUser();
+
+        $r1 = $this->runProbe('board.php', ['authorization' => 'Bearer ' . $token]);
+        $this->assertSame(200, $r1['status']);
+        $this->assertSame('full', $this->headerValue($r1['headers'], 'X-Board-Mode'));
+        $this->assertGreaterThan(0, strlen($r1['out']));
+
+        // Geraet bekommt zwischen den Polls einen Favoriten -- der zweite
+        // Poll braucht jetzt echt einen mock_wl_response, weil es etwas zum
+        // Abfragen gibt.
+        $this->createFavorite('Test', '90111111', null);
+
+        $r2 = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $this->mockMonitorResponse('90111111', 4),
+        ]);
+        $this->assertSame(200, $r2['status']);
+        $this->assertNotNull($this->headerValue($r2['headers'], 'X-Board-Mode'));
     }
 }
