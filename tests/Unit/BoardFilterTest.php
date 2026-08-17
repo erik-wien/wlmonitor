@@ -165,4 +165,46 @@ class BoardFilterTest extends TestCase
 
         $this->assertCount(1, $out[0]['departures'], 'the same minute is not listed twice');
     }
+
+    // --- board_filter_alerts_for_favorite() (Spec §8) -------------------------
+
+    public function test_alerts_filter_keeps_only_alerts_matching_a_favorite_line(): void
+    {
+        $favorite = ['stations' => [['lines' => [['line' => 'U6'], ['line' => '13A']]]]];
+        $alerts = [
+            ['title' => 'Stoerung U6', 'description' => '...', 'lines' => ['U6'], 'stops' => []],
+            ['title' => 'Stoerung U3', 'description' => '...', 'lines' => ['U3'], 'stops' => []],
+        ];
+
+        $result = board_filter_alerts_for_favorite($alerts, $favorite);
+
+        $this->assertCount(1, $result);
+        $this->assertSame('Stoerung U6', $result[0]['title']);
+    }
+
+    public function test_alerts_filter_keeps_alert_matching_any_of_multiple_lines(): void
+    {
+        $favorite = ['stations' => [['lines' => [['line' => '13A']]]]];
+        $alerts = [
+            ['title' => 'Sammelstoerung', 'description' => '...', 'lines' => ['U6', '13A'], 'stops' => []],
+        ];
+
+        $this->assertCount(1, board_filter_alerts_for_favorite($alerts, $favorite));
+    }
+
+    public function test_alerts_filter_drops_alert_with_no_matching_line(): void
+    {
+        $favorite = ['stations' => [['lines' => [['line' => 'U6']]]]];
+        $alerts = [['title' => 'X', 'description' => '', 'lines' => ['U3'], 'stops' => []]];
+
+        $this->assertSame([], board_filter_alerts_for_favorite($alerts, $favorite));
+    }
+
+    public function test_alerts_filter_handles_favorite_with_no_stations(): void
+    {
+        $favorite = ['stations' => []];
+        $alerts = [['title' => 'X', 'description' => '', 'lines' => ['U6'], 'stops' => []]];
+
+        $this->assertSame([], board_filter_alerts_for_favorite($alerts, $favorite));
+    }
 }

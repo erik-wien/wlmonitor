@@ -50,4 +50,31 @@ class BoardEndpointTest extends TestCase
         $sel = board_selected_favorites($this->favs(), '3,7');
         $this->assertSame('60200103,60200470,60200368', board_all_divas($sel));
     }
+
+    // --- board_battery_percent_from_mv() / board_wifi_bars_from_rssi() -------
+
+    public function test_battery_percent_clamps_at_full_lipo_voltage(): void
+    {
+        $this->assertSame(100, board_battery_percent_from_mv(4200));
+        $this->assertSame(100, board_battery_percent_from_mv(4500));
+    }
+
+    public function test_battery_percent_clamps_at_zero_below_lipo_floor(): void
+    {
+        $this->assertSame(0, board_battery_percent_from_mv(3300));
+        $this->assertSame(0, board_battery_percent_from_mv(2900));
+    }
+
+    public function test_battery_percent_is_linear_at_midpoint(): void
+    {
+        $this->assertSame(50, board_battery_percent_from_mv(3750));
+    }
+
+    public function test_wifi_bars_thresholds(): void
+    {
+        $this->assertSame(3, board_wifi_bars_from_rssi(-50));
+        $this->assertSame(2, board_wifi_bars_from_rssi(-65));
+        $this->assertSame(1, board_wifi_bars_from_rssi(-75));
+        $this->assertSame(0, board_wifi_bars_from_rssi(-90));
+    }
 }

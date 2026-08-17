@@ -263,3 +263,59 @@ function board_all_divas(array $favs): string
     }
     return implode(',', $divas);
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// Board-Protokoll: Störungen + Gerätesignale (Spec §8, §3, §9)
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Filtert monitor_get()['alerts'] auf die Linien des aktiven Favoriten
+ * (Spec §8). Kein Normalisieren noetig -- inc/monitor.php kreuzreferenziert
+ * relatedLines bereits mit einem blossen Gleichheitsvergleich.
+ *
+ * @param list<array{title:string,description:string,priority:string,lines:list<string>,stops:list<string>}> $alerts
+ * @param array{stations: list<array{lines: list<array{line:string}>}>} $favorite board_favorite()-Form
+ * @return list<array{title:string,description:string,priority:string,lines:list<string>,stops:list<string>}>
+ */
+function board_filter_alerts_for_favorite(array $alerts, array $favorite): array
+{
+    $favoriteLines = [];
+    foreach ($favorite['stations'] ?? [] as $station) {
+        foreach ($station['lines'] ?? [] as $line) {
+            $favoriteLines[(string) ($line['line'] ?? '')] = true;
+        }
+    }
+
+    return array_values(array_filter($alerts, static function (array $alert) use ($favoriteLines): bool {
+        foreach ($alert['lines'] ?? [] as $line) {
+            if (isset($favoriteLines[(string) $line])) {
+                return true;
+            }
+        }
+        return false;
+    }));
+}
+
+/**
+ * Roher Akku-Millivolt-Wert -> grober Prozentwert (Spec §3, §13: bewusst
+ * keine kalibrierte Fuel-Gauge-Kurve). Lineare Spreizung ueber den ueblichen
+ * LiPo-Nutzbereich (3300-4200 mV), geklemmt auf 0-100.
+ */
+function board_battery_percent_from_mv(int $mv): int
+{
+    $percent = (int) round(($mv - 3300) / (4200 - 3300) * 100);
+    return max(0, min(100, $percent));
+}
+
+/**
+ * WLAN-RSSI (dBm) -> Balkenzahl 0-3 fuer die Kopfzeile (Spec §9). Grobe,
+ * uebliche Schwellwerte -- keine praezise Kalibrierung vorgesehen (Spec §13,
+ * analog zur Akku-Prozentanzeige).
+ */
+function board_wifi_bars_from_rssi(int $rssi): int
+{
+    if ($rssi >= -60) return 3;
+    if ($rssi >= -70) return 2;
+    if ($rssi >= -80) return 1;
+    return 0;
+}
