@@ -705,13 +705,22 @@ Icon-Zuordnungstabelle hier deckt trotzdem **alle 9** bereits ab.
   **minimaler lokaler Text-Fallback** für den Fall, dass der Server nicht
   erreichbar ist (§11) — dafür genügt GxEPD2s eingebaute Standardschrift
   (Adafruit-GFX-Default-Font), kein eigenes Bitmap-Font-Asset nötig.
-- **Touch/Tasten → Request:** Touch-Koordinaten werden serverseitig NICHT
-  ausgewertet — die Firmware bildet einen Touch-Punkt selbst auf eine der
-  fünf festen Zonen ab (3 Favoriten-Buttons, Pagination-Zurück,
-  Pagination-Vor; exakte Pixel-Rechtecke aus §9) und schickt nur das
-  Ergebnis (`X-Device-Touch`, §5). Die beiden physischen
-  Seiten-Navigationstasten lösen direkt `page_prev`/`page_next` aus, ohne
-  Touch-Koordinaten-Mapping. Die grüne Refresh-/Wake-Taste (GPIO3/KEY0)
+- **Touch → Request:** Touch-Koordinaten werden serverseitig NICHT
+  ausgewertet — die Firmware bildet einen Touch-Punkt selbst auf eine
+  Zone ab und schickt nur das Ergebnis (`X-Device-Touch`, §5):
+  - **3 Favoriten-Buttons** (nur so viele, wie `X-Board-Favorite-Count`
+    aus §5 angibt — die Touch-Leiste teilt sich dynamisch, exakte
+    Pixel-Rechtecke aus §9, gleiche Formel wie
+    `board_render_touch_bar_svg()`).
+  - **2 Pagination-Zonen** (linke/rechte Hälfte der Pagination-Pille aus
+    §9, deren Breite von `X-Board-Total-Pages` abhängt — bewusst die
+    ganze Pillenhälfte als Zielfläche, nicht nur das kleine Pfeil-Glyph:
+    Touch ist hier der primäre Eingabeweg, ein großzügiges Ziel schlägt
+    Genauigkeit).
+  Die beiden physischen Seiten-Navigationstasten lösen ZUSÄTZLICH direkt
+  `page_prev`/`page_next` aus (redundanter, sekundärer Weg — auf einem
+  wandmontierten Gerät sind sie schlecht erreichbar/kaum sichtbar, Touch
+  bleibt der primäre Weg). Die grüne Refresh-/Wake-Taste (GPIO3/KEY0)
   weckt aus dem Tiefschlaf, löst aber keinen `X-Device-Touch`-Wert aus.
 - **Battery/RSSI:** wird als Request-Header mitgeschickt (§5); genaue
   Auslesemethode (Spannungsteiler über den ADC, GPIO1, Enable-Pin GPIO40)
