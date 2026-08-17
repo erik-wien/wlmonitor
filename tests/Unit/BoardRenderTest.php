@@ -199,4 +199,74 @@ class BoardRenderTest extends TestCase
             '"mmmmmmmmmm" muss deutlich breiter rendern als "iiiiiiiiii" -- ' .
             'eine echte Schrift wurde geladen und benutzt (kein leerer/fehlender Font-Fallback)');
     }
+
+    // --- board_frame_diff() / board_crop_and_pack() (Board-Protokoll-Plan) ---
+
+    public function test_frame_diff_returns_null_for_identical_frames(): void
+    {
+        $packed = str_repeat("\xFF", 16);
+        $this->assertNull(board_frame_diff($packed, $packed, 16, 8));
+    }
+
+    public function test_frame_diff_returns_full_bounds_when_lengths_differ(): void
+    {
+        $old = str_repeat("\xFF", 8);
+        $new = str_repeat("\xFF", 16);
+        $diff = board_frame_diff($old, $new, 16, 8);
+        $this->assertSame(['x' => 0, 'y' => 0, 'w' => 16, 'h' => 8], $diff);
+    }
+
+    public function test_frame_diff_returns_tight_bounding_box_around_single_changed_byte(): void
+    {
+        // 16px breit (2 Byte/Zeile), 4 Zeilen. Byte-Index 1 (Spalten 8-15) in
+        // Zeile 2 (0-indiziert) unterscheidet sich -- alle anderen Bytes gleich.
+        $rowBytes = 2;
+        $old = str_repeat("\xFF", $rowBytes * 4);
+        $new = $old;
+        $new[2 * $rowBytes + 1] = "\x00";
+
+        $diff = board_frame_diff($old, $new, 16, 4);
+
+        $this->assertSame(['x' => 8, 'y' => 2, 'w' => 8, 'h' => 1], $diff);
+    }
+
+    public function test_frame_diff_spans_multiple_rows_and_columns(): void
+    {
+        $rowBytes = 2;
+        $old = str_repeat("\xFF", $rowBytes * 4);
+        $new = $old;
+        $new[0 * $rowBytes + 0] = "\x00"; // Zeile 0, Byte 0 (Spalten 0-7)
+        $new[3 * $rowBytes + 1] = "\x00"; // Zeile 3, Byte 1 (Spalten 8-15)
+
+        $diff = board_frame_diff($old, $new, 16, 4);
+
+        $this->assertSame(['x' => 0, 'y' => 0, 'w' => 16, 'h' => 4], $diff);
+    }
+
+    public function test_crop_and_pack_matches_packing_the_region_directly(): void
+    {
+        // 16x8 PNG, linke Haelfte schwarz, rechte weiss.
+        $png = $this->makeTestPng(16, 8, fn($x, $y) => $x < 8 ? [0, 0, 0] : [255, 255, 255]);
+
+        $cropped = board_crop_and_pack($png, 8, 0, 8, 8);
+
+        // Muss identisch sein zum direkten Packen einer separat erzeugten,
+        // rein weissen 8x8-PNG derselben Region.
+        $expected = $this->makeTestPng(8, 8, fn($x, $y) => [255, 255, 255]);
+        $expectedPacked = png_to_1bpp_packed($expected, 8, 8);
+
+        $this->assertSame($expectedPacked, $cropped);
+    }
+
+    public function test_crop_and_pack_of_the_black_half_matches_too(): void
+    {
+        $png = $this->makeTestPng(16, 8, fn($x, $y) => $x < 8 ? [0, 0, 0] : [255, 255, 255]);
+
+        $cropped = board_crop_and_pack($png, 0, 0, 8, 8);
+
+        $expected = $this->makeTestPng(8, 8, fn($x, $y) => [0, 0, 0]);
+        $expectedPacked = png_to_1bpp_packed($expected, 8, 8);
+
+        $this->assertSame($expectedPacked, $cropped);
+    }
 }
