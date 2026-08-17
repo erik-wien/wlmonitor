@@ -49,9 +49,6 @@
 // Konstruktoraufruf unten aendern.
 #define EPD_DC_PIN      -1  // UNBEKANNT/UNBESTAETIGT -- s. Kommentar oben
 
-static const int PANEL_W = 1872;
-static const int PANEL_H = 1404;
-
 // WLAN-Balken-Rechteck der Kopfzeile (Spec §9: translate(1665,46), 3 Balken).
 static const int WIFI_ICON_X = 1665;
 static const int WIFI_ICON_Y = 46;

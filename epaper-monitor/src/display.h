@@ -21,6 +21,9 @@ void showErrorBanner(ErrorBanner banner, const char* sinceTime);
 // (Spec §9/§10/§11) -- wird unmittelbar vor esp_deep_sleep_start() gerufen.
 void markSleepIcon();
 
-// Versetzt das Panel in den stromsparenden Ruhezustand (unabhaengig vom
-// ESP32-Tiefschlaf -- das Panel selbst hat einen eigenen deep-power-down).
+// Versetzt das Panel in Standby (unabhaengig vom ESP32-Tiefschlaf). Kein
+// echtes Deep-Sleep: GxEPD2_it103_1872x1404::hibernate() ruft nur
+// _PowerOff() -- der IT8951-eigene Tiefschlaf ist in der Bibliothek
+// bewusst deaktiviert (senkt laut Bibliothekskommentar den Verbrauch nicht,
+// braucht sogar mehr Strom als Standby).
 void sleepPanel();
