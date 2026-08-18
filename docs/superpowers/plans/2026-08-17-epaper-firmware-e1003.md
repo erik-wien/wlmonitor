@@ -1558,6 +1558,13 @@ board_build.arduino.memory_type = qio_opi
 build_flags =
     -DCORE_DEBUG_LEVEL=0
     -DBOARD_HAS_PSRAM
+; hw_bringup.cpp (Task 9) hat ein eigenes setup()/loop() -- ohne diesen
+; Filter wuerde [env:esp32dev] es zusammen mit main.cpp kompilieren und
+; mit "multiple definition of setup()/loop()" scheitern (Task 8's
+; Whole-Branch-Review deckte das als Vorwarnung auf, vor Task 9 gefixt).
+build_src_filter =
+    +<*>
+    -<hw_bringup.cpp>
 lib_deps =
     zinggjm/GxEPD2@^1.5.3
     adafruit/Adafruit GFX Library@^1.11.9
