@@ -1,45 +1,79 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiManager.h>
+#include <Preferences.h>
 #include <esp_sleep.h>
 #include <esp_timer.h>
-#include "config.h"
+#include <esp_crt_bundle.h>
+#include <time.h>
+#include "board_config.h"
 #include "board_client.h"
-#include "board_model.h"
-#include "layout.h"
-#include "error_state.h"
 #include "display.h"
+#include "touch.h"
+#include "buttons.h"
+#include "battery.h"
+#include "error_state.h"
 
-// Ueberlebt Tiefschlaf (RTC-Speicher). Anker fuer estimateNow() -- siehe
-// layout.h und Spec §8 "Keine Uhr noetig": der Zeitstempel kommt aus der
-// letzten erfolgreichen Serverantwort, nicht aus einer eigenen RTC/NTP-Uhr.
-RTC_DATA_ATTR time_t rtcAnchorGeneratedEpoch = 0;
-RTC_DATA_ATTR uint64_t rtcAnchorUptimeMs = 0;
+// Ueberlebt Tiefschlaf (RTC-Speicher, ESP32-intern -- keine externe RTC
+// noetig, s. Spec §10 und Global Constraints).
 RTC_DATA_ATTR int rtcConsecutiveFailures = 0;
+RTC_DATA_ATTR char rtcLastEtag[80] = "";
+RTC_DATA_ATTR int rtcLastFavoriteCount = 0;
+RTC_DATA_ATTR int rtcLastTotalPages = 1;
 
 static const uint32_t WIFI_TIMEOUT_MS = 15000;
 static const uint32_t HTTP_TIMEOUT_MS = 8000;
+static const uint32_t WAKE_BUTTON_LONG_PRESS_MS = 3000;
 
-static uint64_t uptimeMs() {
-    return (uint64_t) (esp_timer_get_time() / 1000);
+static Preferences prefs;
+
+static String loadToken() {
+    prefs.begin("board", true);
+    String token = prefs.getString("token", "");
+    prefs.end();
+    return token;
 }
 
-static bool connectWifi() {
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    uint32_t start = millis();
-    while (WiFi.status() != WL_CONNECTED) {
-        if (millis() - start > WIFI_TIMEOUT_MS) {
-            Serial.printf("[wifi] Zeitueberschreitung, letzter Status: %d\n", WiFi.status());
-            return false;
-        }
-        delay(200);
+static void saveToken(const String& token) {
+    if (token.length() == 0) return;
+    prefs.begin("board", false);
+    prefs.putString("token", token);
+    prefs.end();
+}
+
+static bool provisionAndConnect(String& outToken) {
+    WiFiManager wm;
+    String previousToken = loadToken();
+    WiFiManagerParameter tokenParam("token", "API-Token (profil.php)", previousToken.c_str(), 128);
+    wm.addParameter(&tokenParam);
+
+    if (isWakeButtonHeld(WAKE_BUTTON_LONG_PRESS_MS)) {
+        wm.resetSettings(); // langer Tastendruck -> zurueck in den Access-Point-Modus (Spec §10)
     }
-    Serial.printf("[wifi] verbunden, IP %s, %lums\n", WiFi.localIP().toString().c_str(), (unsigned long) (millis() - start));
+
+    bool connected = wm.autoConnect("wlmonitor-setup");
+    if (!connected) return false;
+
+    outToken = String(tokenParam.getValue());
+    saveToken(outToken);
     return true;
 }
 
+static void syncTimeForTls() {
+    // Best-effort SNTP-Sync (Global Constraints): TLS-Zertifikatspruefung
+    // braucht eine ungefaehr richtige Uhr, "kein NTP" aus Spec §10 bezog
+    // sich nur auf die Zeitstempel-ANZEIGE, nicht auf TLS. Kurzer Timeout,
+    // Fehlschlag ist nicht fatal -- der HTTPS-Request laeuft trotzdem an.
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    struct tm timeinfo;
+    getLocalTime(&timeinfo, 3000); // max 3s warten, Ergebnis wird nicht ausgewertet
+}
+
 static void goToSleep() {
+    markSleepIcon();
+    sleepPanel();
     WiFi.disconnect(true);
+    esp_sleep_enable_ext1_wakeup(1ULL << 3, ESP_EXT1_WAKEUP_ANY_LOW); // GPIO3/KEY0
     esp_sleep_enable_timer_wakeup((uint64_t) POLL_INTERVAL_SEC * 1000000ULL);
     esp_deep_sleep_start();
 }
@@ -47,78 +81,66 @@ static void goToSleep() {
 void setup() {
     Serial.begin(115200);
     delay(300);
-    Serial.println("[boot] setup() start");
 
-    uint64_t now = uptimeMs();
-    time_t estimatedNow = (rtcAnchorGeneratedEpoch == 0)
-        ? 0
-        : estimateNow(rtcAnchorGeneratedEpoch, rtcAnchorUptimeMs, now);
-
-    Serial.println("[display] initDisplay()");
     initDisplay();
-    Serial.println("[display] initDisplay() zurueck");
+    initTouch(); // Rueckgabewert bewusst ignoriert -- fehlender Touch ist nicht fatal, s. touch.h
 
-    if (!connectWifi()) {
+    String token;
+    if (!provisionAndConnect(token)) {
+        // Kein WLAN verbunden und keine Zugangsdaten hinterlegt --
+        // WiFiManager-Portal wurde bereits versucht, hier bleibt nur:
+        // wie ein WLAN-Ausfall behandeln.
         ErrorState st = nextErrorState(FetchOutcome::NetworkUnavailable, rtcConsecutiveFailures);
         rtcConsecutiveFailures = st.consecutiveFailures;
-        Serial.printf("[error] kein WLAN, consecutiveFailures=%d, banner=%d\n", st.consecutiveFailures, (int) st.banner);
-        if (st.banner != ErrorBanner::None && rtcAnchorGeneratedEpoch != 0) {
-            BoardResponse empty;
-            Serial.println("[display] renderBoard() (Fehlerbanner)");
-            renderBoard(empty, rtcAnchorGeneratedEpoch, estimatedNow, st.banner);
-            Serial.println("[display] renderBoard() zurueck");
+        if (st.banner != ErrorBanner::None) {
+            showErrorBanner(st.banner, "??:??");
         }
-        Serial.println("[sleep] goToSleep()");
         goToSleep();
         return;
     }
 
-    std::string body;
-    Serial.println("[http] fetchBoard()");
-    BoardFetchResult fetch = fetchBoard(BOARD_HOST, BOARD_PORT, BOARD_FAV_IDS, BOARD_TOKEN, HTTP_TIMEOUT_MS, body);
-    Serial.printf("[http] Ergebnis=%d, Antwortlaenge=%d\n", (int) fetch, (int) body.size());
-    if (!body.empty()) {
-        Serial.printf("[http] Antwort (erste 200 Zeichen): %s\n", body.substr(0, 200).c_str());
+    syncTimeForTls();
+
+    const char* touchValue = nullptr;
+    TouchZone zone = pollTouch(rtcLastFavoriteCount, rtcLastTotalPages);
+    if (zone != TouchZone::None) {
+        touchValue = touchZoneToHeaderValue(zone);
+    } else {
+        // Kein Touch -- sekundaerer Tasten-Weg (Spec §10).
+        touchValue = readPageButtons();
     }
 
-    FetchOutcome outcome;
-    BoardResponse board;
+    int batteryMv = readBatteryMillivolts();
+    int rssi = WiFi.RSSI();
 
-    if (fetch == BoardFetchResult::Ok) {
-        ParseStatus parseStatus = parseBoardResponse(body, board);
-        Serial.printf("[parse] ParseStatus=%d, Favoriten=%d\n", (int) parseStatus, (int) board.favorites.size());
-        outcome = (parseStatus == ParseStatus::Ok) ? FetchOutcome::Success : FetchOutcome::UnreadableResponse;
-    } else if (fetch == BoardFetchResult::Unauthorized) {
-        outcome = FetchOutcome::Unauthorized;
-    } else {
-        // Unavailable und ServerError: wie WLAN-Ausfall, Spec §9.
-        outcome = FetchOutcome::NetworkUnavailable;
+    BoardFetchResult fetch;
+    fetchBoard(token.c_str(), touchValue, rtcLastEtag, batteryMv, rssi, HTTP_TIMEOUT_MS, fetch);
+
+    FetchOutcome outcome;
+    switch (fetch.outcome) {
+        case BoardFetchOutcome::Success:           outcome = FetchOutcome::Success; break;
+        case BoardFetchOutcome::Unauthorized:       outcome = FetchOutcome::Unauthorized; break;
+        case BoardFetchOutcome::UnreadableResponse: outcome = FetchOutcome::UnreadableResponse; break;
+        default:                                    outcome = FetchOutcome::NetworkUnavailable; break;
     }
 
     ErrorState st = nextErrorState(outcome, rtcConsecutiveFailures);
     rtcConsecutiveFailures = st.consecutiveFailures;
-    Serial.printf("[state] outcome=%d, consecutiveFailures=%d, banner=%d\n", (int) outcome, st.consecutiveFailures, (int) st.banner);
 
     if (outcome == FetchOutcome::Success) {
-        time_t generatedEpoch;
-        if (parseIso8601(board.generated, generatedEpoch)) {
-            rtcAnchorGeneratedEpoch = generatedEpoch;
-            rtcAnchorUptimeMs = now;
-            estimatedNow = generatedEpoch;
+        if (fetch.parsed.isPatch) {
+            applyPatch(fetch.body.data(), fetch.parsed.x, fetch.parsed.y, fetch.parsed.w, fetch.parsed.h);
+        } else {
+            applyFullFrame(fetch.body.data(), fetch.parsed.w, fetch.parsed.h);
         }
-        Serial.println("[display] renderBoard() (Erfolg)");
-        renderBoard(board, rtcAnchorGeneratedEpoch, estimatedNow, ErrorBanner::None);
-        Serial.println("[display] renderBoard() zurueck");
-    } else if (st.banner != ErrorBanner::None && rtcAnchorGeneratedEpoch != 0) {
-        // Nur neu zeichnen, wenn es etwas zu melden gibt (Spec §9: "Bild
-        // bleiben lassen" unterhalb der Fehlerschwelle).
-        BoardResponse empty;
-        Serial.println("[display] renderBoard() (Fehlerbanner)");
-        renderBoard(empty, rtcAnchorGeneratedEpoch, estimatedNow, st.banner);
-        Serial.println("[display] renderBoard() zurueck");
+        strncpy(rtcLastEtag, fetch.parsed.etag.c_str(), sizeof(rtcLastEtag) - 1);
+        rtcLastEtag[sizeof(rtcLastEtag) - 1] = '\0';
+        rtcLastFavoriteCount = fetch.parsed.favoriteCount;
+        rtcLastTotalPages = fetch.parsed.totalPages;
+    } else if (st.banner != ErrorBanner::None) {
+        showErrorBanner(st.banner, "??:??"); // Firmware fuehrt keine eigene Uhr (Spec §10), kein echter Zeitstempel verfuegbar
     }
 
-    Serial.println("[sleep] goToSleep()");
     goToSleep();
 }
 
