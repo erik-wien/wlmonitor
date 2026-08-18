@@ -82,6 +82,13 @@ geprüft werden:
 - KEY1/KEY2-Tastenrollen (`src/buttons.cpp`) — nur KEY0 (Wake) ist bestätigt.
 - Batterie-mV-Skalierungsfaktor (`src/battery.cpp`) — `*2`-Divisor-Frage
   ungeklärt, siehe Kommentar dort.
+- **Touch/Tasten-Weckung vs. Poll-Timing** (`src/main.cpp`) — GPIO2 (Touch-INT)
+  und GPIO4/GPIO5 (Seiten-Tasten) sind seit dem Whole-Branch-Review als
+  Weckquellen ergänzt (`goToSleep()`), aber `pollTouch()`/`readPageButtons()`
+  laufen erst nach WLAN-Connect+SNTP — ein kurzer Tipp könnte in dieser Zeit
+  schon wieder losgelassen sein. Braucht echten Hardwaretest; ggf. muss die
+  Weckursache (`esp_sleep_get_wakeup_cause()`) stattdessen vor dem
+  WLAN-Connect ausgewertet werden.
 
 **Bereits gegen echten Bibliotheks-Quellcode verifiziert** (nicht mehr auf
 der obigen Liste, s. Task 5): `GxEPD2_it103_1872x1404`-Klassenname und

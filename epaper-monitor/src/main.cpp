@@ -4,7 +4,6 @@
 #include <Preferences.h>
 #include <esp_sleep.h>
 #include <esp_timer.h>
-#include <esp_crt_bundle.h>
 #include <time.h>
 #include "board_config.h"
 #include "board_client.h"
@@ -21,9 +20,14 @@ RTC_DATA_ATTR char rtcLastEtag[80] = "";
 RTC_DATA_ATTR int rtcLastFavoriteCount = 0;
 RTC_DATA_ATTR int rtcLastTotalPages = 1;
 
-static const uint32_t WIFI_TIMEOUT_MS = 15000;
 static const uint32_t HTTP_TIMEOUT_MS = 8000;
 static const uint32_t WAKE_BUTTON_LONG_PRESS_MS = 3000;
+// WiFiManager blockiert per Default unbegrenzt im Access-Point-Portal, wenn
+// autoConnect() mit gespeicherten Zugangsdaten trotzdem nicht verbindet
+// (z. B. Router kurz down) -- ohne Timeout wuerde ein batteriebetriebenes
+// Geraet dann bis zum manuellen Eingriff im Portal-Modus haengen bleiben,
+// statt in den Offline-Eskalations-/Tiefschlaf-Zyklus zu fallen (Spec §11).
+static const uint32_t WIFI_PORTAL_TIMEOUT_S = 180;
 
 static Preferences prefs;
 
@@ -51,6 +55,7 @@ static bool provisionAndConnect(String& outToken) {
         wm.resetSettings(); // langer Tastendruck -> zurueck in den Access-Point-Modus (Spec §10)
     }
 
+    wm.setConfigPortalTimeout(WIFI_PORTAL_TIMEOUT_S); // s. Kommentar bei WIFI_PORTAL_TIMEOUT_S
     bool connected = wm.autoConnect("wlmonitor-setup");
     if (!connected) return false;
 
@@ -73,7 +78,17 @@ static void goToSleep() {
     markSleepIcon();
     sleepPanel();
     WiFi.disconnect(true);
-    esp_sleep_enable_ext1_wakeup(1ULL << 3, ESP_EXT1_WAKEUP_ANY_LOW); // GPIO3/KEY0
+    // Weckquellen: GPIO2 (Touch-INT, zieht bei anliegendem Touch aktiv-low),
+    // GPIO3 (KEY0/Wake), GPIO4 (KEY1), GPIO5 (KEY2) -- alle vier auf dem
+    // ESP32-S3 RTC-IO-faehig. Ohne GPIO2/4/5 in dieser Maske koennten Touch
+    // und die Seiten-Tasten das Geraet ueberhaupt nicht aufwecken (nur der
+    // Timer oder KEY0 wuerden je einen setup()-Durchlauf ausloesen) --
+    // pollTouch()/readPageButtons() liefen dann leer, obwohl Spec §4
+    // Touch/Taste explizit als Weckquellen neben dem Timer nennt.
+    // Review-Befund (Whole-Branch-Review, 2026-08-17): urspruenglich fehlte
+    // das, s. Ticket-Historie im Progress-Ledger.
+    const uint64_t wakePinMask = (1ULL << 2) | (1ULL << 3) | (1ULL << 4) | (1ULL << 5);
+    esp_sleep_enable_ext1_wakeup(wakePinMask, ESP_EXT1_WAKEUP_ANY_LOW);
     esp_sleep_enable_timer_wakeup((uint64_t) POLL_INTERVAL_SEC * 1000000ULL);
     esp_deep_sleep_start();
 }
@@ -101,6 +116,15 @@ void setup() {
 
     syncTimeForTls();
 
+    // UNVERIFIZIERT ohne Hardware: pollTouch()/readPageButtons() laufen erst
+    // hier, nach WLAN-Connect+SNTP (typisch mehrere Sekunden nach dem
+    // Aufwachen) -- ein kurzer Tipp/Tastendruck koennte in dieser Zeit schon
+    // wieder losgelassen sein, obwohl er das Geraet per Weckquelle (s.
+    // goToSleep()) korrekt geweckt hat. Ob das in der Praxis ein Problem ist
+    // (GT911-INT bleibt evtl. bis zur Quittierung aktiv, ein bewusster Tipp
+    // dauert oft laenger als der Connect) laesst sich erst mit echter
+    // Hardware klaeren -- ggf. muss die Weckursache (esp_sleep_get_wakeup_cause())
+    // stattdessen VOR dem WLAN-Connect ausgewertet werden.
     const char* touchValue = nullptr;
     TouchZone zone = pollTouch(rtcLastFavoriteCount, rtcLastTotalPages);
     if (zone != TouchZone::None) {
