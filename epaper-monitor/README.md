@@ -25,7 +25,7 @@ pio device monitor
 
 Zeigt „HELLO E1003" auf dem Panel? Dann weiter mit dem vollen Flash unten.
 Zeigt sich nichts: erst Verkabelung/Pins/GxEPD2-Panelklasse prüfen (s.
-`src/display.h`s Kommentare), bevor an der restlichen Firmware gesucht wird.
+`src/display.cpp`s Kommentare), bevor an der restlichen Firmware gesucht wird.
 
 ## Konfigurieren — kein config.h mehr
 
