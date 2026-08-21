@@ -189,6 +189,11 @@ void setup() {
     }
 
     syncTimeForTls();
+    { time_t now = time(nullptr); struct tm tmv; gmtime_r(&now, &tmv);
+      Serial.printf("[time] %04d-%02d-%02d %02d:%02d:%02d UTC, RSSI %d, heap %lu\n",
+                    tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday,
+                    tmv.tm_hour, tmv.tm_min, tmv.tm_sec,
+                    (int) WiFi.RSSI(), (unsigned long) ESP.getFreeHeap()); }
 
     int batteryMv = readBatteryMillivolts();
     int rssi = WiFi.RSSI();
@@ -216,6 +221,11 @@ void setup() {
 
     ErrorState st = nextErrorState(outcome, rtcConsecutiveFailures);
     rtcConsecutiveFailures = st.consecutiveFailures;
+
+    Serial.printf("[board] outcome=%d mode=%s %dx%d @%d,%d body=%u\n",
+                  (int) fetch.outcome, fetch.parsed.isPatch ? "patch" : "full",
+                  fetch.parsed.w, fetch.parsed.h, fetch.parsed.x, fetch.parsed.y,
+                  (unsigned) fetch.body.size());
 
     if (outcome == FetchOutcome::Success) {
         if (fetch.parsed.isPatch) {

@@ -786,6 +786,32 @@ die X-Position wird auf gerade Werte abgerundet.
 
 I²C0-Adressen: GT911 `0x5D`/`0x14`, PCF8563 `0x51`, SHT4x `0x44`.
 
+### ⚠️ Strapping-Pins des ESP32-S3
+
+Der ESP32-S3 wertet beim Reset vier Pins als **Strapping-Pins** aus:
+
+| GPIO | Strapping-Funktion | Belegung am E1003 |
+|---|---|---|
+| 0 | Boot-Modus | – |
+| **3** | JTAG-Quellwahl | **KEY0** (grüne Taste, Weckpin) |
+| **45** | `VDD_SPI`-Spannung (0 = 3,3 V, 1 = 1,8 V) | **Buzzer** |
+| 46 | Boot-Modus / ROM-Meldungen | – |
+
+Zwei davon sind auf diesem Board mit Bedienelementen belegt. Relevant, weil
+der Pegel **im Moment des Resets** zählt:
+
+- **GPIO45 (Buzzer):** liegt der Pin beim Reset HIGH, wählt der Chip 1,8 V
+  für `VDD_SPI`. Der externe Flash läuft aber mit 3,3 V — der Chip startet
+  dann nicht und bleibt auf UART0 stumm. `tone()` darf den Pin also nicht
+  in einem HIGH-Zustand hinterlassen; nach jedem Ton `noTone()` **und** den
+  Pin definiert nach LOW ziehen.
+- **GPIO3 (KEY0):** beim Reset gedrückt (= LOW) verändert das die
+  JTAG-Quellwahl.
+
+Seeeds Referenzschaltung dürfte das über Pulldowns abfangen; verifiziert
+ist das hier nicht. Bei einem Board, das plötzlich weder bootet noch
+flashbar ist, gehören diese beiden Pins zu den ersten Verdächtigen.
+
 ---
 
 ## 18. Flashen

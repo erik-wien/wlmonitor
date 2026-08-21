@@ -2,6 +2,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include "board_config.h"
+#include <Arduino.h>
 
 namespace {
 
@@ -52,8 +53,16 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
         http.addHeader("If-None-Match", lastEtag);
     }
 
+    // Diagnose (2026-08-21): nach fw11 erreichten die Abrufe den Server nicht
+    // mehr. status <= 0 ist ein HTTPClient-Fehlercode (negativ), sonst der
+    // HTTP-Status -- ohne Ausgabe ist beides nicht unterscheidbar.
+    uint32_t t0 = millis();
     int status = http.GET();
+    Serial.printf("[fetch] GET -> %d nach %lums, heap=%lu psram=%lu\n",
+                  status, (unsigned long)(millis() - t0),
+                  (unsigned long) ESP.getFreeHeap(), (unsigned long) ESP.getFreePsram());
     if (status <= 0) {
+        Serial.printf("[fetch] Fehler: %s\n", http.errorToString(status).c_str());
         http.end();
         out.outcome = BoardFetchOutcome::NetworkUnavailable;
         return;
