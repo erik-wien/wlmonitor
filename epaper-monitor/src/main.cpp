@@ -4,6 +4,7 @@
 #include <Preferences.h>
 #include <esp_sleep.h>
 #include <esp_timer.h>
+#include <driver/rtc_io.h>
 #include <time.h>
 #include "board_config.h"
 #include "board_client.h"
@@ -11,6 +12,7 @@
 #include "touch.h"
 #include "buttons.h"
 #include "battery.h"
+#include "sensor.h"
 #include "buzzer.h"
 #include "error_state.h"
 
@@ -90,6 +92,17 @@ static void goToSleep() {
     // das, s. Ticket-Historie im Progress-Ledger.
     const uint64_t wakePinMask = (1ULL << 2) | (1ULL << 3) | (1ULL << 4) | (1ULL << 5);
     esp_sleep_enable_ext1_wakeup(wakePinMask, ESP_EXT1_WAKEUP_ANY_LOW);
+
+    // Pull-ups im RTC-Bereich halten (docs/hardware/reterminal-e1003.md §15).
+    // Die normalen GPIO-Pull-ups sind im Deep Sleep NICHT zwingend aktiv --
+    // ohne das koennen die Weckpins floaten (Fehlweckungen) oder ein
+    // Tastendruck wird nicht sauber als LOW erkannt. Seeeds LowPower-Beispiel
+    // macht das fuer seinen einen Weckpin; wir wecken ueber vier (Touch-INT
+    // GPIO2 + KEY0/1/2), also fuer jeden einzeln.
+    for (int pin : {2, 3, 4, 5}) {
+        rtc_gpio_pullup_en(static_cast<gpio_num_t>(pin));
+        rtc_gpio_pulldown_dis(static_cast<gpio_num_t>(pin));
+    }
     esp_sleep_enable_timer_wakeup((uint64_t) POLL_INTERVAL_SEC * 1000000ULL);
     esp_deep_sleep_start();
 }
@@ -111,6 +124,11 @@ void setup() {
 
     initDisplay();
     initTouch(); // Rueckgabewert bewusst ignoriert -- fehlender Touch ist nicht fatal, s. touch.h
+
+    // Nach initTouch(), weil der SHT4x am selben I2C-Bus haengt und Wire
+    // dort initialisiert wird. Ohne das faehrt der IT8951 dauerhaft mit der
+    // Standardannahme 16 C (s. display.h / sensor.h).
+    applyPanelTemperature(readAmbientTemperature());
 
     int touchX = 0, touchY = 0;
     const char* touchValue = nullptr;

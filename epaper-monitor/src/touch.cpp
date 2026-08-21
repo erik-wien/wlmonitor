@@ -1,6 +1,10 @@
 #include "touch.h"
+#include <Arduino.h>
 #include <Wire.h>
 
+// GT911 kapazitiver Touch, nur auf dem E1003 vorhanden.
+// Alle Werte aus docs/hardware/reterminal-e1003.md §7 (Seeed-Wiki
+// "Touch Screen (E1003 Only)" + Beispiel E1003_TouchDraw.ino).
 #define TOUCH_SDA_PIN   19
 #define TOUCH_SCL_PIN   20
 #define TOUCH_INT_PIN   2
@@ -8,11 +12,23 @@
 
 #define GT911_ADDR_1 0x5D
 #define GT911_ADDR_2 0x14
-#define GT911_REG_STATUS 0x814E
-#define GT911_REG_POINT0 0x814F
-#define GT911_REG_COMMAND 0x8040
+
+#define GT911_REG_COMMAND    0x8040
+#define GT911_REG_MAX_X      0x8048   // 2 Byte, little endian
+#define GT911_REG_MAX_Y      0x804A   // 2 Byte, little endian
+#define GT911_REG_PRODUCT_ID 0x8140   // 4 Byte ASCII, "911" + NUL
+#define GT911_REG_STATUS     0x814E
+#define GT911_REG_POINT0     0x814F
+
+// Panelmasse im Querformat, wie board.php rendert.
+#define PANEL_WIDTH  1872
+#define PANEL_HEIGHT 1404
 
 static uint8_t s_touchAddr = 0;
+// Aus dem Controller gelesene Touch-Aufloesung. 0 = nicht gelesen, dann
+// wird auf die Panelmasse zurueckgefallen.
+static int s_touchMaxX = 0;
+static int s_touchMaxY = 0;
 
 static void i2cWriteReg16(uint8_t addr, uint16_t reg, uint8_t value) {
     Wire.beginTransmission(addr);
@@ -32,25 +48,34 @@ static bool i2cReadReg16(uint8_t addr, uint16_t reg, uint8_t* buf, size_t len) {
     return true;
 }
 
+// Probe ueber die PRODUKT-ID, nicht ueber das Statusregister: ein blosses
+// ACK auf dem Bus beweist nicht, dass dort ein GT911 sitzt (auf demselben
+// I2C0 haengen laut Doku auch PCF8563 @0x51 und SHT4x @0x44). Der GT911
+// liefert an 0x8140 den ASCII-String "911".
 static bool probeGt911(uint8_t addr) {
-    uint8_t status;
-    return i2cReadReg16(addr, GT911_REG_STATUS, &status, 1);
+    uint8_t id[4] = {0, 0, 0, 0};
+    if (!i2cReadReg16(addr, GT911_REG_PRODUCT_ID, id, sizeof(id))) return false;
+    return id[0] == '9' && id[1] == '1' && id[2] == '1';
 }
 
+// Reset-Timing exakt nach Seeed-Vorgabe: LOW 20ms, dann HIGH 120ms.
+// Vorher standen hier 10ms/50ms -- deutlich zu kurz, der Controller kann
+// danach noch nicht antwortbereit sein (haeufigste Ursache dafuer, dass
+// Touch gar nicht reagiert).
 static void resetTouchController() {
     pinMode(TOUCH_RESET_PIN, OUTPUT);
     digitalWrite(TOUCH_RESET_PIN, LOW);
-    delay(10);
+    delay(20);
     digitalWrite(TOUCH_RESET_PIN, HIGH);
-    delay(50);
+    delay(120);
 }
 
 bool initTouch() {
     Wire.begin(TOUCH_SDA_PIN, TOUCH_SCL_PIN);
-    // 400kHz lt. Seeed-Doku ("Initialize I2C at 400 kHz on GPIO19/GPIO20"),
-    // ESP32-Arduino-Default waere sonst 100kHz.
+    // 400kHz lt. Doku; ESP32-Arduino-Default waere 100kHz.
     Wire.setClock(400000);
-    pinMode(TOUCH_INT_PIN, INPUT);
+    // INPUT_PULLUP lt. Doku (vorher INPUT).
+    pinMode(TOUCH_INT_PIN, INPUT_PULLUP);
     resetTouchController();
 
     if (probeGt911(GT911_ADDR_1)) {
@@ -59,8 +84,18 @@ bool initTouch() {
         s_touchAddr = GT911_ADDR_2;
     } else {
         s_touchAddr = 0;
+        Serial.println("[touch] kein GT911 gefunden (0x5D/0x14 ohne Produkt-ID 911)");
         return false;
     }
+
+    // Touch-Aufloesung aus dem Controller lesen, statt sie anzunehmen.
+    uint8_t res[4];
+    if (i2cReadReg16(s_touchAddr, GT911_REG_MAX_X, res, sizeof(res))) {
+        s_touchMaxX = res[0] | (res[1] << 8);
+        s_touchMaxY = res[2] | (res[3] << 8);
+    }
+    Serial.printf("[touch] GT911 @0x%02X, Bereich %dx%d, Panel %dx%d\n",
+                  s_touchAddr, s_touchMaxX, s_touchMaxY, PANEL_WIDTH, PANEL_HEIGHT);
 
     i2cWriteReg16(s_touchAddr, GT911_REG_COMMAND, 0x00);
     return true;
@@ -79,7 +114,7 @@ TouchZone pollTouch(int favoriteCount, int totalPages, int* outRawX, int* outRaw
         return TouchZone::None;
     }
 
-    uint8_t point[4]; // x_low, x_high, y_low, y_high (erste 4 Byte des Punkt-0-Datensatzes)
+    uint8_t point[4]; // x_low, x_high, y_low, y_high (erste 4 Byte von Punkt 0)
     if (!i2cReadReg16(s_touchAddr, GT911_REG_POINT0, point, sizeof(point))) {
         i2cWriteReg16(s_touchAddr, GT911_REG_STATUS, 0x00); // Statusregister quittieren
         return TouchZone::None;
@@ -88,14 +123,25 @@ TouchZone pollTouch(int favoriteCount, int totalPages, int* outRawX, int* outRaw
 
     int rawX = point[0] | (point[1] << 8);
     int rawY = point[2] | (point[3] << 8);
-    // GT911 liefert Rohkoordinaten im nativen Panel-Koordinatensystem
-    // (1404x1872 Hochformat); das Display laeuft um 90 Grad gedreht
-    // (Spec §3) -- mapTouchToZone() erwartet Querformat-Koordinaten
-    // (1872x1404). Rotation unverifiziert ohne Hardware: exaktes
-    // Vorzeichen/Achsen-Mapping (rawY->x oder PANEL_HEIGHT-rawY->x usw.)
-    // muss am echten Geraet kalibriert werden.
-    int x = rawY;
-    int y = 1404 - rawX;
+
+    // KORREKTUR ggue. der vorigen Fassung: dort wurde um 90 Grad gedreht
+    // (x = rawY; y = 1404 - rawX), unter der Annahme, der GT911 liefere
+    // Hochformat-Rohwerte. Seeeds eigenes Beispiel gibt aber
+    // "raw=(468,302) screen=(468,302)" aus -- Rohwerte und Bildschirm-
+    // koordinaten sind IDENTISCH, der Controller ist bereits auf das
+    // Querformat konfiguriert. Statt einer festen Drehung jetzt eine reine
+    // Skalierung ueber die aus dem Controller gelesene Touch-Aufloesung
+    // (entspricht Seeeds mapTouchToDisplay()); sind Touch- und Panelmasse
+    // gleich, ist das die Identitaet.
+    const int maxX = s_touchMaxX > 0 ? s_touchMaxX : PANEL_WIDTH;
+    const int maxY = s_touchMaxY > 0 ? s_touchMaxY : PANEL_HEIGHT;
+    int x = (int) ((int32_t) rawX * (PANEL_WIDTH  - 1) / (maxX > 1 ? maxX - 1 : 1));
+    int y = (int) ((int32_t) rawY * (PANEL_HEIGHT - 1) / (maxY > 1 ? maxY - 1 : 1));
+
+    if (x < 0) x = 0; else if (x >= PANEL_WIDTH)  x = PANEL_WIDTH  - 1;
+    if (y < 0) y = 0; else if (y >= PANEL_HEIGHT) y = PANEL_HEIGHT - 1;
+
+    Serial.printf("[touch] raw=(%d,%d) screen=(%d,%d)\n", rawX, rawY, x, y);
 
     if (outRawX != nullptr) *outRawX = x;
     if (outRawY != nullptr) *outRawY = y;

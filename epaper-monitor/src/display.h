@@ -30,6 +30,12 @@ void sleepPanel();
 // welcher Firmware-Stand gerade laeuft, unabhaengig vom Server-Frame-Inhalt.
 void showBuildMarker(int build);
 
+// Setzt die Panel-Temperatur, die Seeed_GFX bei jedem wake() an den IT8951
+// schickt (Standard sonst fest 16 C). celsius = NAN laesst den bisherigen
+// Wert stehen. Erst nach initTouch() aufrufen -- der Sensor haengt am
+// selben I2C-Bus. Siehe sensor.h und docs/hardware/reterminal-e1003.md §5.5.
+void applyPanelTemperature(float celsius);
+
 // Zeichnet "in:<label>" neben dem Build-Marker -- sofortiges sichtbares
 // Feedback, ob/welche Touch-/Tasten-Interaktion diesen Weckzyklus erkannt
 // wurde (Debug-Hilfe, Nutzerwunsch 2026-08-21). label z. B. "fav0",

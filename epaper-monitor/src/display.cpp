@@ -32,6 +32,22 @@ void initDisplay() {
     epaper.begin();
 }
 
+// EPaper::setTemp() nimmt einen parameterlosen Funktionszeiger, ruft ihn
+// genau einmal auf und merkt sich das Ergebnis in _temp -- deshalb der
+// Umweg ueber eine Dateistatische statt einer Lambda-Capture.
+static float s_panelTemp = NAN;
+static float panelTempCallback() { return s_panelTemp; }
+
+void applyPanelTemperature(float celsius) {
+    if (isnan(celsius)) {
+        Serial.println("[temp] SHT4x nicht lesbar -- Panel bleibt bei 16 C");
+        return;
+    }
+    s_panelTemp = celsius;
+    epaper.setTemp(panelTempCallback);
+    Serial.printf("[temp] Panel-Temperatur gesetzt: %.1f C\n", celsius);
+}
+
 // board.php liefert 1bpp-Rohdaten: MSB-first, Zeilenbreite auf ein Vielfaches
 // von 8 aufgerundet, 1=weiss/0=schwarz (Spec §6, s. display.h). EPaper::
 // drawBufferPixel(x, y, byte, /*bpp=*/1) schreibt genau ein Byte direkt in
