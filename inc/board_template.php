@@ -36,10 +36,13 @@ const BOARD_ICON_ID_BY_CATEGORY = [
  * Schriftgroesse fuer das Liniennummern-Label im Badge: 26px bei bis zu
  * zwei Zeichen (z.B. "U6", "18"), 24px bei drei oder mehr Zeichen (z.B.
  * "WLB") -- sonst wuerde das Label ueber den 68px-Badge-Rand hinausragen.
+ * Bei U-Bahn/Strassenbahn ist das Label (fast immer 1-2 Zeichen) im Badge
+ * spuerbar kleiner als bei Bus/Bahn -- 30% groesser auf Nutzerwunsch.
  */
-function board_badge_label_font_size(string $label): int
+function board_badge_label_font_size(string $label, string $badgeType = ''): int
 {
-    return mb_strlen($label, 'UTF-8') >= 3 ? 24 : 26;
+    $base = mb_strlen($label, 'UTF-8') >= 3 ? 24 : 26;
+    return in_array($badgeType, ['metro', 'tram'], true) ? (int) round($base * 1.3) : $base;
 }
 
 /**
@@ -136,7 +139,7 @@ function board_svg_defs(): string
 </g>
 
 <g id="badgeTram"><circle r="34" fill="black"/></g>
-<g id="badgeBus"><rect x="-34" y="-34" width="68" height="68" rx="14" fill="black"/></g>
+<g id="badgeBus"><rect x="-34" y="-34" width="68" height="68" rx="14" fill="#404040"/></g>
 <g id="badgeMetro"><rect x="-34" y="-34" width="68" height="68" fill="black"/></g>
 <g id="badgeTrain"><rect x="-34" y="-34" width="68" height="68" rx="14" fill="white" stroke="black" stroke-width="5"/></g>
 <g id="starNow" stroke-width="7" stroke-linecap="round">
@@ -574,7 +577,7 @@ function board_render_departure_row(array $item): string
 {
     $r = $item['r'];
     $badgeShape = BOARD_BADGE_SHAPE_BY_TYPE[$item['badge_type']] ?? BOARD_BADGE_SHAPE_BY_TYPE['other'];
-    $labelSize = board_badge_label_font_size($item['label']);
+    $labelSize = board_badge_label_font_size($item['label'], $item['badge_type']);
     $isGray = $item['style'] === 'gray';
     $isDelayed = $item['style'] === 'delayed';
     $fill = $isGray ? '#808080' : 'black';

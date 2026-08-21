@@ -5,6 +5,11 @@
  *
  * GET /board.php
  * Authorization: Bearer <token>      (X-Auth-Token als Ausweichheader)
+ * ?token=<token>                     (Ausweich fuer Browser-Aufrufe ohne
+ *                                      Header-Kontrolle, z.B. Adresszeile;
+ *                                      nur Fallback -- ein Header-Token hat
+ *                                      Vorrang. Selbe Guelitgkeitspruefung
+ *                                      wie der Header, siehe auth_api_token_resolve())
  * X-Device-Battery-mV: <n>           (optional)
  * X-Device-RSSI: <n>                 (optional)
  * X-Device-Touch: fav0|fav1|fav2|page_prev|page_next   (optional)
@@ -20,6 +25,10 @@
  *
  * ?debug=svg / ?debug=png liefern Zwischenstufen der Rendering-Pipeline
  * (gleiche Auth, aber OHNE Diff-/Patch-/State-Logik, Spec §6).
+ * ?part=monitor (nur zusammen mit debug=svg/png) liefert ausschliesslich die
+ * Abfahrten-/Stoerungsspalte, ohne Kopf-/Fusszeile, Touch-Leiste oder
+ * Wetterkarte -- zugeschnitten auf 1113x1220 (die linke Spalte des
+ * Vollbilds). Das reale Geraeteprotokoll ignoriert diesen Parameter.
  *
  * Spec: docs/superpowers/specs/2026-08-15-epaper-monitor-v2-design.md
  */
@@ -44,6 +53,17 @@ function board_error_out(array $payload, int $status): never
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     exit;
+}
+
+if (auth_api_request_user() === null) {
+    $queryToken = (string) ($_GET['token'] ?? '');
+    if ($queryToken !== '') {
+        auth_api_token_presented(true);
+        $queryTokenUserId = auth_api_token_resolve($con, $queryToken);
+        if ($queryTokenUserId !== null) {
+            auth_api_request_user($queryTokenUserId);
+        }
+    }
 }
 
 $userId = auth_api_request_user();
@@ -111,20 +131,49 @@ try {
     $rssi = $_SERVER['HTTP_X_DEVICE_RSSI'] ?? null;
     $wifiBars = is_numeric($rssi) ? board_wifi_bars_from_rssi((int) $rssi) : 0;
 
-    $svg = board_render_svg(
-        $touchBarTitles,
-        $resolved['activeFavoriteIndex'],
-        $activeFavorite,
-        $filteredAlerts,
-        $requestedPage,
-        $weather,
-        $dataStand,
-        $renderedAt,
-        $batteryPercent,
-        $wifiBars
-    );
-
     $debug = (string) ($_GET['debug'] ?? '');
+    $part = (string) ($_GET['part'] ?? '');
+
+    if ($part === 'monitor' && ($debug === 'svg' || $debug === 'png')) {
+        // Nur die Abfahrten-/Stoerungsseite, ohne Kopf-/Fusszeile, Touch-
+        // Leiste oder Wetterkarte -- zugeschnitten auf die linke Spalte, die
+        // im Vollbild durch die Trennlinien bei x=1113 und y=90..1310
+        // definiert ist (board_render_chrome_svg()). Nur fuer debug=svg/png,
+        // das reale Geraeteprotokoll bleibt unveraendert das Vollbild.
+        $items = $requestedPage <= $totalDeparturePages
+            ? board_paginate_departures($activeFavorite, $requestedPage)['items']
+            : null;
+        $mainOnlySvg = $items !== null
+            ? board_render_departures_svg($items)
+            : board_render_disruptions_svg(board_layout_disruptions($filteredAlerts));
+        $standSvg = board_render_stand_and_pagination_svg($dataStand, $requestedPage, $totalPages);
+        $defs = board_svg_defs();
+
+        $svg = <<<SVG
+<svg xmlns="http://www.w3.org/2000/svg" width="1113" height="1220" viewBox="0 90 1113 1220">
+<defs>
+{$defs}
+</defs>
+<rect x="0" y="90" width="1113" height="1220" fill="white"/>
+{$mainOnlySvg}
+{$standSvg}
+</svg>
+SVG;
+    } else {
+        $svg = board_render_svg(
+            $touchBarTitles,
+            $resolved['activeFavoriteIndex'],
+            $activeFavorite,
+            $filteredAlerts,
+            $requestedPage,
+            $weather,
+            $dataStand,
+            $renderedAt,
+            $batteryPercent,
+            $wifiBars
+        );
+    }
+
     if ($debug === 'svg') {
         header('Content-Type: image/svg+xml; charset=utf-8');
         echo $svg;

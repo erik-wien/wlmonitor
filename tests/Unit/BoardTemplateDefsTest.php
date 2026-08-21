@@ -71,4 +71,12 @@ class BoardTemplateDefsTest extends TestCase
         $this->assertSame(26, board_badge_label_font_size('18'));
         $this->assertSame(24, board_badge_label_font_size('WLB'));
     }
+
+    public function test_badge_label_font_size_grows_30_percent_for_metro_and_tram(): void
+    {
+        $this->assertSame(34, board_badge_label_font_size('U6', 'metro'));
+        $this->assertSame(34, board_badge_label_font_size('18', 'tram'));
+        $this->assertSame(31, board_badge_label_font_size('WLB', 'metro'));
+        $this->assertSame(26, board_badge_label_font_size('U6', 'bus'));
+    }
 }
