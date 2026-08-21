@@ -1,53 +1,26 @@
 #include "display.h"
-#include <it8951/GxEPD2_it103_1872x1404.h>
-#include <GxEPD2_BW.h>
-#include <Fonts/FreeSansBold9pt7b.h>
+#include <Arduino.h>
+#include "TFT_eSPI.h"
+// FreeSansBold9pt7b kommt bereits ueber TFT_eSPI.h -> Fonts/GFXFF/gfxfont.h
+// (LOAD_GFXFF in Setup522 bindet alle Standard-Free-Fonts automatisch ein,
+// s. Doppel-Definitionsfehler beim Versuch, sie hier nochmal zu includieren).
 
-// Setup522_Seeed_reTerminal_E1003 (IT8951-Controller, 1872x1404) -- Panel-/
-// SPI-Pins aus den Global Constraints (Seeed-Wiki, unverifiziert ohne Hardware).
+// Setup522_Seeed_reTerminal_E1003 (BOARD_SCREEN_COMBO=522, s. platformio.ini)
+// -- Seeeds eigene, offiziell fuer dieses Panel gepflegte Treiberklasse
+// (Extensions/EPaper.h in Seeed_GFX), nicht der Community-GxEPD2-Treiber.
 //
-// KORREKTUR ggue. commit 137f563: die dort verwendete Klasse
-// GxEPD2_ED103TC2_1872x1404 existiert NICHT in der tatsaechlich installierten
-// GxEPD2@1.5.3 (lib_deps in platformio.ini). Durch Lesen des echten
-// Bibliotheks-Quellcodes bestaetigt (.pio/libdeps/esp32dev/GxEPD2/src/it8951/
-// GxEPD2_it103_1872x1404.h/.cpp): die reale Klasse fuer ein 1872x1404-Panel am
-// IT8951-Controller heisst GxEPD2_it103_1872x1404 (Kommentar im Header:
-// "ES103TC1 10.3\" e-paper panel" -- der Panelname weicht von der Spec
-// ("ED103TC2") geringfuegig ab, aber Controller (IT8951) + Aufloesung
-// (1872x1404) + Groesse (10.3") passen; naeher kommt man ohne Hardware nicht
-// heran, siehe Task-Report).
-#define EPD_SCK_PIN     7
-#define EPD_MISO_PIN    8
-#define EPD_MOSI_PIN    9
-#define EPD_CS_PIN      10
-#define EPD_RES_PIN     12
-#define EPD_BUSY_PIN    13
-#define EPD_TFT_ENABLE  11
-#define EPD_ITE_ENABLE  21
-
-// *** UNGEKLAERTE LUECKE: DC-Pin -- vor dem ersten Flash pruefen! ***
-// GxEPD2_EPD::GxEPD2_EPD(cs, dc, rst, busy, ...) verlangt einen DC-Pin als
-// 2. Konstruktorargument. Die Seeed-Wiki-Pinliste (Quelle der Konstanten oben)
-// fuehrt aber KEINEN DC-Pin fuer die E1003-ePaper-Schnittstelle auf.
+// KORREKTUR ggue. dem vorigen GxEPD2-basierten Code: der Community-Treiber
+// (GxEPD2_it103_1872x1404) hat VCOM hart auf einen fremden Panel-Sticker-Wert
+// codiert -- Refresh-Kommandos liefen sauber durch (Busy-Handshake/Timing
+// passten), aber am Panel aenderte sich sichtbar NICHTS (verifiziert am
+// echten Board, 2026-08-19). Seeeds eigener ED103TC2-Treiber (Setup522)
+// wurde am selben Board getestet: "HELLO E1003" rendert korrekt.
 //
-// -1 ist GxEPD2s eigene, in der Bibliothek durchgaengig verwendete Konvention
-// fuer "Pin nicht vorhanden/nicht verdrahtet" (siehe GxEPD2_EPD.cpp: cs/dc/
-// rst/busy werden jeweils nur mit "if (_pin >= 0) { pinMode(...); ... }"
-// angefasst -- bei -1 passiert schlicht nichts). Stuetzender Befund aus dem
-// Lesen von GxEPD2_it103_1872x1404.cpp: die Membervariable _dc wird dort in
-// KEINER einzigen Methode referenziert -- das IT8951-Protokoll unterscheidet
-// Kommando/Daten ueber 16-Bit-Praeambel-Worte im SPI-Datenstrom selbst
-// (0x6000 fuer Kommando, 0x0000/0x1000 fuer Daten, siehe _writeCommand16/
-// _writeData16/_readData16), nicht ueber eine eigene DC-Leitung. Das ist ein
-// starkes Indiz, dass -1 hier nicht nur ein sicherer Platzhalter, sondern der
-// tatsaechlich korrekte Wert ist -- passend dazu, dass die Seeed-Pinliste
-// keinen DC-Pin kennt.
-//
-// TROTZDEM NICHT ungeprueft fuer bare Muenze nehmen: vor dem ersten Flash
-// gegen ein echtes E1003-Schaltplan/Seeeds eigene Beispiel-Firmware
-// gegenchecken. Sollte sich doch ein realer DC-Pin finden, hier UND im
-// Konstruktoraufruf unten aendern.
-#define EPD_DC_PIN      -1  // UNBEKANNT/UNBESTAETIGT -- s. Kommentar oben
+// Pin-Zuordnung kommt komplett aus Setup522 (SCLK=7, MISO=8, MOSI=9, CS=10,
+// DC=-1, BUSY=13, RST=12, ENABLE=11, ITE_ENABLE=21) -- kein eigener
+// Pin-Kram mehr in dieser Datei noetig, epaper.begin() erledigt Pins/SPI/
+// Reset-Sequenz intern (am Bring-up-Test verifiziert).
+static EPaper epaper;
 
 // WLAN-Balken-Rechteck der Kopfzeile (Spec §9: translate(1665,46), 3 Balken).
 static const int WIFI_ICON_X = 1665;
@@ -55,86 +28,54 @@ static const int WIFI_ICON_Y = 46;
 static const int WIFI_ICON_W = 54;
 static const int WIFI_ICON_H = 28;
 
-// Seitenhoehe fuer den GxEPD2_BW-Pufferpfad unten (nur fuer Text). 128 Zeilen
-// reichen locker fuer beide Rechtecke (Banner 70px, Sleep-Icon 28px hoch) und
-// halten den RAM-Puffer klein: (1872/8)*128 Byte = 29952 Byte statt >300 KB
-// bei voller Panelhoehe.
-static const uint16_t TEXT_PAGE_HEIGHT = 128;
-
-// GxEPD2_GFX (im Task-Auftrag als Wrapper-Klasse genannt) ist in der
-// installierten GxEPD2@1.5.3 eine rein abstrakte Schnittstelle (nur "= 0"
-// virtuelle Methoden, siehe GxEPD2_GFX.h) -- sie laesst sich nicht direkt
-// instanziieren. Es gibt in dieser Bibliotheksversion auch keine fertige
-// konkrete GxEPD2_GFX-Unterklasse fuer IT8951-Panels: GxEPD2_BW/_3C/_4C/_7C
-// binden per __has_include nur Klassen aus den Ordnern epd/ und gdey/ ein,
-// nicht it8951/. Der reale, kompilierbare Ersatz mit identischer Text-API
-// (fillScreen/setFont/setCursor/print/setPartialWindow/firstPage/nextPage)
-// ist das GxEPD2_BW<...>-Template selbst (Adafruit_GFX als Basisklasse) --
-// GxEPD2_it103_1872x1404 implementiert alle dafuer noetigen virtuellen
-// GxEPD2_EPD-Methoden (clearScreen/writeScreenBuffer/writeImage/
-// writeImagePart), das Template bindet rein strukturell (kein Bezug zur
-// epd/-Vorauswahl). Das ist exakt das gleiche Muster wie im alten (falschen)
-// 137f563-Code, nur jetzt mit der echten Panelklasse.
-//
-// Es existiert genau EIN Panel-Objekt (epd.epd2) -- fuer den reinen
-// Pixel-Blit (applyFullFrame/applyPatch) wird direkt darauf zugegriffen,
-// ganz ohne die GFX-Zwischenschicht (die Protokoll-Bytes werden 1:1
-// durchgereicht). Fuer die zwei Text-Funktionen wird die GFX-Huelle (epd
-// selbst) verwendet. Ein zweites, eigenstaendiges Panel-Objekt zu erzeugen
-// waere falsch, weil dann zwei getrennte GxEPD2_EPD-Instanzen (mit jeweils
-// eigenem _initial_write/_initial_refresh/_hibernating-Zustand) um dieselbe
-// Hardware konkurrieren wuerden.
-static GxEPD2_BW<GxEPD2_it103_1872x1404, TEXT_PAGE_HEIGHT> epd(
-    GxEPD2_it103_1872x1404(EPD_CS_PIN, EPD_DC_PIN, EPD_RES_PIN, EPD_BUSY_PIN));
-
 void initDisplay() {
-    pinMode(EPD_TFT_ENABLE, OUTPUT);
-    digitalWrite(EPD_TFT_ENABLE, HIGH);
-    pinMode(EPD_ITE_ENABLE, OUTPUT);
-    digitalWrite(EPD_ITE_ENABLE, HIGH);
+    epaper.begin();
+}
 
-    // GxEPD2_it103_1872x1404 spricht das SPI-Peripheriegeraet ausschliesslich
-    // ueber das globale `SPI`-Objekt an (SPI.beginTransaction/.transfer/
-    // .endTransaction direkt in praktisch jeder Methode in
-    // GxEPD2_it103_1872x1404.cpp) -- GxEPD2_EPD::selectSPI()/_pSPIx wird von
-    // dieser Treiberklasse NIE gelesen (anders als bei den meisten anderen
-    // GxEPD2-Panelklassen). Ein separates SPIClass-Objekt + selectSPI(), wie
-    // es der alte 137f563-Code verwendet hat, waere hier also wirkungslos
-    // gewesen. Stattdessen muessen die E1003-eigenen SPI-Pins direkt auf dem
-    // globalen SPI-Objekt gebunden werden, bevor epd.init() laeuft (das ruft
-    // intern nur noch SPI.begin() ohne Parameter -- auf dem ESP32 ein No-Op,
-    // wenn der Bus schon mit expliziten Pins gestartet wurde). ss=-1, weil
-    // GxEPD2 den CS-Pin selbst per digitalWrite() manuell steuert.
-    SPI.begin(EPD_SCK_PIN, EPD_MISO_PIN, EPD_MOSI_PIN, -1);
+// board.php liefert 1bpp-Rohdaten: MSB-first, Zeilenbreite auf ein Vielfaches
+// von 8 aufgerundet, 1=weiss/0=schwarz (Spec §6, s. display.h). EPaper::
+// drawBufferPixel(x, y, byte, /*bpp=*/1) schreibt genau ein Byte direkt in
+// den internen Sprite-Puffer an Byte-Position (x/8, y) -- gleiche MSB-first-
+// Packung, gleiche Bit-Konvention (TFT_eSPI Sprite.cpp::drawPixel fuer bpp==1:
+// bit gesetzt <=> uebergebene Farbe truthy; epaper.begin() ruft
+// setTextColor(TFT_BLACK, TFT_WHITE), TFT_WHITE=0xFFFF ist truthy -> bit=1,
+// TFT_BLACK=0 -> bit=0 -- exakt board.phps Konvention, kein Ratewert,
+// gegen den Bibliotheks-Quellcode verifiziert). Direkter Byte-Pass-Through,
+// keine Pixel-fuer-Pixel-GFX-Zwischenschicht.
+static void pushPackedBytes(const uint8_t* packed, int x, int y, int w, int h) {
+    const int rowBytes = (w + 7) / 8;
+    for (int row = 0; row < h; row++) {
+        for (int col = 0; col < rowBytes; col++) {
+            epaper.drawBufferPixel(x + col * 8, y + row, packed[row * rowBytes + col], 1);
+        }
+    }
+}
 
-    epd.init(0, true, 20, false);
-    // Kein setRotation() noetig: GxEPD2_it103_1872x1404 ist bereits nativ
-    // WIDTH=1872 x HEIGHT=1404 (siehe Klassenheader) -- die alte, falsche
-    // Panelklasse hatte offenbar vertauschte native Masse und brauchte
-    // deshalb eine Drehung um 90 Grad.
+// EPaper::updataPartial() rundet das X-Fenster INTERN auf 8px-Grenzen nach
+// aussen (align_px=8 in Extensions/EPaper.cpp), unabhaengig davon, ob das
+// aufgerufene Rechteck selbst ausgerichtet ist -- liest also bis zu 7px vor
+// x und nach (x+w) direkt aus dem Puffer. Ist dieser Rand nicht selbst
+// beschrieben, zeigt das Update dort stehengebliebenen alten Inhalt (am
+// echten Geraet beobachtet, 2026-08-21: ein schwarzer Balken direkt rechts
+// neben so gut wie jedem Partial-Update). Vor JEDEM updataPartial() den
+// tatsaechlich gelesenen, aufgerundeten Bereich weiss vorbelegen, damit der
+// Rand garantiert leer statt zufaellig ist -- Y ist von diesem Rundungs-Bug
+// nicht betroffen (updataPartial() rundet nur X).
+static void clearAlignedForPartial(int x, int y, int w, int h) {
+    const int x0 = x & ~7;
+    const int x1 = (x + w + 7) & ~7;
+    epaper.fillRect(x0, y, x1 - x0, h, TFT_WHITE);
 }
 
 void applyFullFrame(const uint8_t* packed, int w, int h) {
-    // Direkter Pass-Through ueber das rohe Panel-Objekt (epd.epd2), keine
-    // GFX-Zwischenschicht -- writeImage()/drawImage() erwarten exakt das
-    // Protokollformat (1bpp MSB-first, Zeilenbreite auf 8 aufgerundet).
-    //
-    // invert-Wert per Quellcode-Analyse hergeleitet (nicht geraten): in
-    // GxEPD2_it103_1872x1404::writeImage() gilt
-    //   data = bitmap_byte; if (invert) data = ~data; _send8pixel(~data);
-    // und in _send8pixel() wird pro gesetztem Bit (bit==1) ein 0x00-Byte
-    // (schwarz) ans Panel gesendet, pro geloeschtem Bit (bit==0) ein
-    // 0xFF-Byte (weiss). Bei invert=false ist das an _send8pixel
-    // uebergebene Byte ~bitmap_byte, d.h. bitmap_byte-Bit 0 -> gesendet 1 ->
-    // schwarz, bitmap_byte-Bit 1 -> gesendet 0 -> weiss. Das entspricht
-    // exakt der Protokoll-Konvention (Spec §6, s. display.h): 1=weiss,
-    // 0=schwarz. invert=false ist also nachweislich richtig, kein Ratewert.
-    epd.epd2.drawImage(packed, 0, 0, w, h, /*invert=*/false);
+    pushPackedBytes(packed, 0, 0, w, h);
+    epaper.update();
 }
 
 void applyPatch(const uint8_t* packed, int x, int y, int w, int h) {
-    // Gleiche Bit-Konvention/Herleitung wie applyFullFrame.
-    epd.epd2.drawImage(packed, x, y, w, h, /*invert=*/false);
+    clearAlignedForPartial(x, y, w, h);
+    pushPackedBytes(packed, x, y, w, h);
+    epaper.updataPartial(x, y, w, h);
 }
 
 void showErrorBanner(ErrorBanner banner, const char* sinceTime) {
@@ -150,29 +91,61 @@ void showErrorBanner(ErrorBanner banner, const char* sinceTime) {
     // Kleines Banner-Rechteck oben links in der Kopfzeile, ueberlagert den
     // Server-Renderzeit-Text nicht (der sitzt zentriert bei x=936).
     const int bannerX = 16, bannerY = 10, bannerW = 700, bannerH = 70;
-    epd.setPartialWindow(bannerX, bannerY, bannerW, bannerH);
-    epd.firstPage();
-    do {
-        epd.fillRect(bannerX, bannerY, bannerW, bannerH, GxEPD_WHITE);
-        epd.setFont(&FreeSansBold9pt7b);
-        epd.setTextColor(GxEPD_BLACK);
-        epd.setCursor(bannerX + 8, bannerY + bannerH - 20);
-        epd.print(text);
-    } while (epd.nextPage());
+    clearAlignedForPartial(bannerX, bannerY, bannerW, bannerH);
+    epaper.setFreeFont(&FreeSansBold9pt7b);
+    epaper.setTextColor(TFT_BLACK, TFT_WHITE);
+    epaper.setCursor(bannerX + 8, bannerY + bannerH - 20);
+    epaper.print(text);
+    epaper.updataPartial(bannerX, bannerY, bannerW, bannerH);
 }
 
 void markSleepIcon() {
-    epd.setPartialWindow(WIFI_ICON_X, WIFI_ICON_Y, WIFI_ICON_W, WIFI_ICON_H);
-    epd.firstPage();
-    do {
-        epd.fillRect(WIFI_ICON_X, WIFI_ICON_Y, WIFI_ICON_W, WIFI_ICON_H, GxEPD_WHITE);
-        epd.setFont(&FreeSansBold9pt7b);
-        epd.setTextColor(GxEPD_BLACK);
-        epd.setCursor(WIFI_ICON_X, WIFI_ICON_Y + WIFI_ICON_H - 6);
-        epd.print("zzz");
-    } while (epd.nextPage());
+    clearAlignedForPartial(WIFI_ICON_X, WIFI_ICON_Y, WIFI_ICON_W, WIFI_ICON_H);
+    epaper.setFreeFont(&FreeSansBold9pt7b);
+    epaper.setTextColor(TFT_BLACK, TFT_WHITE);
+    epaper.setCursor(WIFI_ICON_X, WIFI_ICON_Y + WIFI_ICON_H - 6);
+    epaper.print("zzz");
+    epaper.updataPartial(WIFI_ICON_X, WIFI_ICON_Y, WIFI_ICON_W, WIFI_ICON_H);
 }
 
 void sleepPanel() {
-    epd.epd2.hibernate();
+    epaper.sleep();
+}
+
+void showBuildMarker(int build) {
+    char text[16];
+    snprintf(text, sizeof(text), "fw%d", build);
+
+    // Direkt rechts neben "Stand HH:MM" (server-gerendert bei x=16, y=1286,
+    // 24px -- endet bei ca. x=161), vor der Pagination-Pille (beginnt bei
+    // x=793), s. board_render_stand_and_pagination_svg(). setTextSize(2) --
+    // Nutzerwunsch 2026-08-21 ("Text doppelt so gross").
+    const int x = 190, y = 1256, w = 150, h = 50;
+    clearAlignedForPartial(x, y, w, h);
+    epaper.setFreeFont(&FreeSansBold9pt7b);
+    epaper.setTextSize(2);
+    epaper.setTextColor(TFT_BLACK, TFT_WHITE);
+    epaper.setCursor(x, y + h - 14);
+    epaper.print(text);
+    epaper.setTextSize(1);
+    epaper.updataPartial(x, y, w, h);
+}
+
+void showInputMarker(const char* label) {
+    char text[80];
+    snprintf(text, sizeof(text), "in:%s", label);
+
+    // Direkt rechts neben dem Build-Marker (x=190..340), gleiche Zeile.
+    // Breit genug fuer "K2 Update [-X-]" bei doppelter Schriftgroesse
+    // (Nutzerwunsch 2026-08-21), bleibt vor der Pagination-Pille (x=793,
+    // s. board_render_stand_and_pagination_svg()).
+    const int x = 350, y = 1256, w = 440, h = 50;
+    clearAlignedForPartial(x, y, w, h);
+    epaper.setFreeFont(&FreeSansBold9pt7b);
+    epaper.setTextSize(2);
+    epaper.setTextColor(TFT_BLACK, TFT_WHITE);
+    epaper.setCursor(x, y + h - 14);
+    epaper.print(text);
+    epaper.setTextSize(1);
+    epaper.updataPartial(x, y, w, h);
 }

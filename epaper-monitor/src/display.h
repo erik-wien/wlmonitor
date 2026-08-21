@@ -21,9 +21,17 @@ void showErrorBanner(ErrorBanner banner, const char* sinceTime);
 // (Spec §9/§10/§11) -- wird unmittelbar vor esp_deep_sleep_start() gerufen.
 void markSleepIcon();
 
-// Versetzt das Panel in Standby (unabhaengig vom ESP32-Tiefschlaf). Kein
-// echtes Deep-Sleep: GxEPD2_it103_1872x1404::hibernate() ruft nur
-// _PowerOff() -- der IT8951-eigene Tiefschlaf ist in der Bibliothek
-// bewusst deaktiviert (senkt laut Bibliothekskommentar den Verbrauch nicht,
-// braucht sogar mehr Strom als Standby).
+// Versetzt das Panel in Standby (unabhaengig vom ESP32-Tiefschlaf), via
+// EPaper::sleep() (Seeed_GFX).
 void sleepPanel();
+
+// Zeichnet "fw<FIRMWARE_BUILD>" direkt neben "Stand HH:MM" (Debug-Hilfe,
+// s. FIRMWARE_BUILD in board_config.h) -- damit am Geraet sichtbar ist,
+// welcher Firmware-Stand gerade laeuft, unabhaengig vom Server-Frame-Inhalt.
+void showBuildMarker(int build);
+
+// Zeichnet "in:<label>" neben dem Build-Marker -- sofortiges sichtbares
+// Feedback, ob/welche Touch-/Tasten-Interaktion diesen Weckzyklus erkannt
+// wurde (Debug-Hilfe, Nutzerwunsch 2026-08-21). label z. B. "fav0",
+// "page_next", "full", oder "none" bei reinem Timer-Wake.
+void showInputMarker(const char* label);

@@ -47,6 +47,9 @@ static void resetTouchController() {
 
 bool initTouch() {
     Wire.begin(TOUCH_SDA_PIN, TOUCH_SCL_PIN);
+    // 400kHz lt. Seeed-Doku ("Initialize I2C at 400 kHz on GPIO19/GPIO20"),
+    // ESP32-Arduino-Default waere sonst 100kHz.
+    Wire.setClock(400000);
     pinMode(TOUCH_INT_PIN, INPUT);
     resetTouchController();
 
@@ -63,7 +66,7 @@ bool initTouch() {
     return true;
 }
 
-TouchZone pollTouch(int favoriteCount, int totalPages) {
+TouchZone pollTouch(int favoriteCount, int totalPages, int* outRawX, int* outRawY) {
     if (s_touchAddr == 0) return TouchZone::None;
 
     uint8_t status;
@@ -93,6 +96,9 @@ TouchZone pollTouch(int favoriteCount, int totalPages) {
     // muss am echten Geraet kalibriert werden.
     int x = rawY;
     int y = 1404 - rawX;
+
+    if (outRawX != nullptr) *outRawX = x;
+    if (outRawY != nullptr) *outRawY = y;
 
     return mapTouchToZone(x, y, favoriteCount, totalPages);
 }

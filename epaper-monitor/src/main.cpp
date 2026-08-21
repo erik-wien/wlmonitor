@@ -11,6 +11,7 @@
 #include "touch.h"
 #include "buttons.h"
 #include "battery.h"
+#include "buzzer.h"
 #include "error_state.h"
 
 // Ueberlebt Tiefschlaf (RTC-Speicher, ESP32-intern -- keine externe RTC
@@ -94,11 +95,66 @@ static void goToSleep() {
 }
 
 void setup() {
+    // Tasten als ALLERERSTE Aktion, noch vor Serial.begin()/initDisplay()/
+    // initTouch() -- live bestaetigt (2026-08-21): ein kurzer Tastendruck
+    // wurde selbst an der (vermeintlich schon frueh genug) vorigen Stelle
+    // nicht erkannt, nur ein LANGER Druck. Grund: Serial.begin()+delay(300)
+    // + initDisplay() (SPI/IT8951-Reset-Pulse) + initTouch() (I2C/GT911-
+    // Reset) verbrauchen zusammen schon 500ms-1s+ Bootzeit, bevor ueberhaupt
+    // geprueft wird -- ein normaler kurzer Tipp ist bis dahin laengst
+    // losgelassen.
+    bool fullUpdateRequested = isFullUpdateButtonHeld();
+    RawButtonStates raw = readRawButtonStates();
+
     Serial.begin(115200);
     delay(300);
 
     initDisplay();
     initTouch(); // Rueckgabewert bewusst ignoriert -- fehlender Touch ist nicht fatal, s. touch.h
+
+    int touchX = 0, touchY = 0;
+    const char* touchValue = nullptr;
+    TouchZone zone = pollTouch(rtcLastFavoriteCount, rtcLastTotalPages, &touchX, &touchY);
+    if (zone != TouchZone::None) {
+        touchValue = touchZoneToHeaderValue(zone);
+    } else {
+        // Kein Touch -- sekundaerer Tasten-Weg (Spec §10).
+        touchValue = readPageButtons();
+    }
+
+    // Diagnose-Text (Nutzerwunsch 2026-08-21): explizit WAS erkannt wurde
+    // (Touch-Koordinaten bzw. welche Taste mit ihrer Funktion), PLUS immer
+    // die rohen, unentprellten Pin-Zustaende aller drei Tasten -- damit
+    // sichtbar ist, ob ein Tastendruck ueberhaupt am GPIO ankommt, auch
+    // wenn die interpretierte Aktion "none" bleibt.
+    char inputLabel[48];
+    if (fullUpdateRequested) {
+        snprintf(inputLabel, sizeof(inputLabel), "K2 Update");
+    } else if (zone != TouchZone::None) {
+        snprintf(inputLabel, sizeof(inputLabel), "t %d,%d", touchX, touchY);
+    } else if (touchValue != nullptr) {
+        snprintf(inputLabel, sizeof(inputLabel), "K1 Weiter");
+    } else if (raw.key0Low) {
+        snprintf(inputLabel, sizeof(inputLabel), "K0 Wach");
+    } else {
+        snprintf(inputLabel, sizeof(inputLabel), "none");
+    }
+    // "-" = losgelassen, "X" = gedrueckt (statt H/L, Nutzerwunsch 2026-08-21:
+    // "H"/"L" ist nicht selbsterklaerend). Reihenfolge immer K0,K1,K2 --
+    // ohne Einzel-Labels, damit es bei doppelter Schriftgroesse noch passt.
+    char inputLabelWithRaw[64];
+    snprintf(inputLabelWithRaw, sizeof(inputLabelWithRaw), "%s [%c%c%c]", inputLabel,
+             raw.key0Low ? 'X' : '-', raw.key1Low ? 'X' : '-', raw.key2Low ? 'X' : '-');
+
+    // Unmittelbares Feedback (Nutzerwunsch 2026-08-21) -- noch vor WLAN-
+    // Connect/Fetch, nicht erst am Ende mit dem Rest. Piepton zusaetzlich
+    // zum visuellen Marker: der Marker braucht ~1-2s (e-Paper-Partial-
+    // Update), der Ton ist wirklich sofort. Nur bei tatsaechlich erkannter
+    // Interaktion, nicht bei reinem Timer-Wake.
+    if (fullUpdateRequested || touchValue != nullptr || raw.key0Low) {
+        beepConfirm();
+    }
+    showInputMarker(inputLabelWithRaw);
 
     String token;
     if (!provisionAndConnect(token)) {
@@ -116,26 +172,18 @@ void setup() {
 
     syncTimeForTls();
 
-    // UNVERIFIZIERT ohne Hardware: pollTouch()/readPageButtons() laufen erst
-    // hier, nach WLAN-Connect+SNTP (typisch mehrere Sekunden nach dem
-    // Aufwachen) -- ein kurzer Tipp/Tastendruck koennte in dieser Zeit schon
-    // wieder losgelassen sein, obwohl er das Geraet per Weckquelle (s.
-    // goToSleep()) korrekt geweckt hat. Ob das in der Praxis ein Problem ist
-    // (GT911-INT bleibt evtl. bis zur Quittierung aktiv, ein bewusster Tipp
-    // dauert oft laenger als der Connect) laesst sich erst mit echter
-    // Hardware klaeren -- ggf. muss die Weckursache (esp_sleep_get_wakeup_cause())
-    // stattdessen VOR dem WLAN-Connect ausgewertet werden.
-    const char* touchValue = nullptr;
-    TouchZone zone = pollTouch(rtcLastFavoriteCount, rtcLastTotalPages);
-    if (zone != TouchZone::None) {
-        touchValue = touchZoneToHeaderValue(zone);
-    } else {
-        // Kein Touch -- sekundaerer Tasten-Weg (Spec §10).
-        touchValue = readPageButtons();
-    }
-
     int batteryMv = readBatteryMillivolts();
     int rssi = WiFi.RSSI();
+
+    // Debug-Taste "vollstaendiges Update" (Nutzervorgabe 2026-08-21, um
+    // Patch-Darstellungsfehler von echten Full-Frame-Rendern zu unterscheiden):
+    // rtcLastEtag leeren -> fetchBoard() schickt kein If-None-Match mehr ->
+    // board.php::canPatch() ist false (s. board.php, prueft If-None-Match !=
+    // '') -> Server liefert automatisch mode=full, keine Server-Aenderung
+    // noetig. Taste selbst wurde schon ganz oben in setup() gelesen (Timing).
+    if (fullUpdateRequested) {
+        rtcLastEtag[0] = '\0';
+    }
 
     BoardFetchResult fetch;
     fetchBoard(token.c_str(), touchValue, rtcLastEtag, batteryMv, rssi, HTTP_TIMEOUT_MS, fetch);
@@ -161,6 +209,7 @@ void setup() {
         rtcLastEtag[sizeof(rtcLastEtag) - 1] = '\0';
         rtcLastFavoriteCount = fetch.parsed.favoriteCount;
         rtcLastTotalPages = fetch.parsed.totalPages;
+        showBuildMarker(FIRMWARE_BUILD);
     } else if (st.banner != ErrorBanner::None) {
         showErrorBanner(st.banner, "??:??"); // Firmware fuehrt keine eigene Uhr (Spec §10), kein echter Zeitstempel verfuegbar
     }

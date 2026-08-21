@@ -10,5 +10,7 @@ bool initTouch();
 // Fragt einen aktuell anliegenden Touch-Punkt ab (nicht blockierend -- gibt
 // sofort TouchZone::None zurueck, wenn gerade nichts beruehrt wird) und
 // bildet ihn ueber favoriteCount/totalPages (aus der letzten Antwort) auf
-// eine Zone ab.
-TouchZone pollTouch(int favoriteCount, int totalPages);
+// eine Zone ab. outRawX/outRawY (optional): liefern die zuletzt gelesenen,
+// auf Panel-Ausrichtung gemappten Koordinaten -- fuer Debug-Anzeige
+// (Nutzerwunsch 2026-08-21), unveraendert wenn kein Touch anliegt.
+TouchZone pollTouch(int favoriteCount, int totalPages, int* outRawX = nullptr, int* outRawY = nullptr);
