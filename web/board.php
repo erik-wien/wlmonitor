@@ -6,10 +6,20 @@
  * GET /board.php
  * Authorization: Bearer <token>      (X-Auth-Token als Ausweichheader)
  * ?token=<token>                     (Ausweich fuer Browser-Aufrufe ohne
- *                                      Header-Kontrolle, z.B. Adresszeile;
- *                                      nur Fallback -- ein Header-Token hat
- *                                      Vorrang. Selbe Guelitgkeitspruefung
- *                                      wie der Header, siehe auth_api_token_resolve())
+ *                                      Header-Kontrolle, z.B. Adresszeile
+ *                                      oder SenseCraft; nur Fallback -- ein
+ *                                      Header-Token hat Vorrang. Selbe
+ *                                      Guelitgkeitspruefung wie der Header,
+ *                                      siehe auth_api_token_resolve())
+ *
+ * ACHTUNG zum ?token=-Weg: ein Token in der URL landet in nginx-/Proxy-
+ * Zugriffslogs, im Browserverlauf und potenziell in Referer-Headern -- anders
+ * als ein Header-Token. Der Link ist damit ein dauerhaftes Geheimnis wie ein
+ * iCal-Feed-Link. Bewusst akzeptiert (Nutzerentscheidung 2026-08-18), weil
+ * Geraete/Browser ohne Header-Kontrolle sonst gar nicht zugreifen koennen.
+ * Empfehlung: dafuer ein EIGENES, jederzeit widerrufbares Token aus
+ * profil.php verwenden, nicht dasselbe wie fuer das E-Paper-Geraet.
+ * Der Token-Wert selbst wird nie ins auth_log geschrieben.
  * X-Device-Battery-mV: <n>           (optional)
  * X-Device-RSSI: <n>                 (optional)
  * X-Device-Touch: fav0|fav1|fav2|page_prev|page_next   (optional)
@@ -34,6 +44,24 @@
  */
 declare(strict_types=1);
 
+// Query-Token auf den regulaeren Header-Weg heben -- BEVOR initialize.php
+// laeuft. Nur so durchlaeuft es exakt denselben Pfad wie ein Header-Token:
+//   - auth_bootstrap() erkennt eine Token-Anfrage und startet KEINE Sitzung
+//     (sonst bekaeme jeder Query-Token-Abruf eine PHP-Session + Set-Cookie,
+//     entgegen dem "bewusst keine Sitzung"-Design dieses Endpunkts).
+//   - auth_apply_api_token() aufloest es regulaer, kein Sonderpfad noetig.
+//   - auth_api_token_from_request() liefert es weiter unten zurueck, sodass
+//     board_state_hash() den RICHTIGEN Zustand pro Token trifft. Ohne das
+//     lieferte die Funktion '' und ALLE Query-Token-Geraete teilten sich
+//     einen einzigen Zustand (sha256('')) -- gemeinsamer aktiver Favorit,
+//     gemeinsame Seite und gemeinsamer Vorgaenger-Frame, gegen den gepatcht
+//     wird. Gefunden im Sicherheits-Review 2026-08-21.
+// Ein echter Header hat weiterhin Vorrang.
+if (empty($_SERVER['HTTP_AUTHORIZATION']) && empty($_SERVER['HTTP_X_AUTH_TOKEN'])
+    && !empty($_GET['token'])) {
+    $_SERVER['HTTP_X_AUTH_TOKEN'] = (string) $_GET['token'];
+}
+
 require_once __DIR__ . '/../inc/initialize.php';
 require_once __DIR__ . '/../inc/favorites.php';
 require_once __DIR__ . '/../inc/monitor.php';
@@ -53,17 +81,6 @@ function board_error_out(array $payload, int $status): never
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     exit;
-}
-
-if (auth_api_request_user() === null) {
-    $queryToken = (string) ($_GET['token'] ?? '');
-    if ($queryToken !== '') {
-        auth_api_token_presented(true);
-        $queryTokenUserId = auth_api_token_resolve($con, $queryToken);
-        if ($queryTokenUserId !== null) {
-            auth_api_request_user($queryTokenUserId);
-        }
-    }
 }
 
 $userId = auth_api_request_user();
