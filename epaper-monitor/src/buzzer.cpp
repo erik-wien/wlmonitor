@@ -13,11 +13,33 @@
 // Siehe docs/hardware/reterminal-e1003.md §17 "Strapping-Pins".
 #define BUZZER_PIN 45
 
-void beepConfirm() {
-    // "Single beep: Confirmation" -- 1kHz/100ms, s. Doku-Beispiel.
-    tone(BUZZER_PIN, 1000, 100);
-    delay(110);          // Ton auslaufen lassen (tone() ist nicht blockierend)
+static void settleStrappingPin() {
+    delay(10);
     noTone(BUZZER_PIN);
     pinMode(BUZZER_PIN, OUTPUT);
     digitalWrite(BUZZER_PIN, LOW);   // Strapping-Pegel definiert LOW halten
+}
+
+void buzzerWarmup() {
+    tone(BUZZER_PIN, 1000, 1);
+    delay(5);
+    settleStrappingPin();
+}
+
+void beepConfirm() {
+    // Einfach = "empfangsbereit" (Nutzervorgabe 2026-08-21).
+    tone(BUZZER_PIN, 1000, 100);
+    delay(110);          // Ton auslaufen lassen (tone() ist nicht blockierend)
+    settleStrappingPin();
+}
+
+void beepRecognized() {
+    // Doppelt = "Eingabe erkannt, ich lade" (Nutzervorgabe 2026-08-21).
+    tone(BUZZER_PIN, 1500, 80);
+    delay(90);
+    noTone(BUZZER_PIN);
+    delay(60);
+    tone(BUZZER_PIN, 1500, 80);
+    delay(90);
+    settleStrappingPin();
 }

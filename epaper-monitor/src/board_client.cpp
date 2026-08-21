@@ -37,6 +37,20 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
     http.setTimeout(timeoutMs);
     http.collectHeaders(HEADER_NAMES, HEADER_COUNT);
 
+    // Getrennte Zeitmessung (Nutzerwunsch 2026-08-21): TCP-Connect+TLS-Handshake
+    // manuell VOR http.begin() ausfuehren. HTTPClient::GET() erkennt einen
+    // schon verbundenen Client und ueberspringt seinen eigenen Connect-Schritt
+    // -- damit misst die bestehende Zeitmessung um http.GET() danach nur noch
+    // Request+Response, nicht mehr Connect+TLS+Request+Response in einem Topf.
+    uint32_t tConnect = millis();
+    bool connected = client.connect(BOARD_HOST, BOARD_PORT);
+    Serial.printf("[fetch] TCP+TLS connect: %s nach %lums\n",
+                  connected ? "ok" : "FEHLGESCHLAGEN", (unsigned long) (millis() - tConnect));
+    if (!connected) {
+        out.outcome = BoardFetchOutcome::NetworkUnavailable;
+        return;
+    }
+
     String url = String("https://") + BOARD_HOST + ":" + BOARD_PORT + "/board.php";
     if (!http.begin(client, url)) {
         out.outcome = BoardFetchOutcome::NetworkUnavailable;

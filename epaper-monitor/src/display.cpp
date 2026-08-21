@@ -128,6 +128,15 @@ void sleepPanel() {
     epaper.sleep();
 }
 
+void drawTouchBlob(int x, int y) {
+    const int r = 24;
+    const int bx = x - r - 4, by = y - r - 4, bw = 2 * (r + 4), bh = 2 * (r + 4);
+    clearAlignedForPartial(bx, by, bw, bh);
+    epaper.fillCircle(x, y, r, TFT_BLACK);
+    epaper.drawCircle(x, y, r + 6, TFT_BLACK);
+    epaper.updataPartial(bx, by, bw, bh);
+}
+
 void showBuildMarker(int build) {
     char text[16];
     snprintf(text, sizeof(text), "fw%d", build);

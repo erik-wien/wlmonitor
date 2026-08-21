@@ -36,6 +36,10 @@ void showBuildMarker(int build);
 // selben I2C-Bus. Siehe sensor.h und docs/hardware/reterminal-e1003.md §5.5.
 void applyPanelTemperature(float celsius);
 
+// Zeichnet einen fetten Punkt an der erkannten Touch-Position -- sofortiges
+// visuelles Feedback zur Kalibrierung (Nutzerwunsch 2026-08-21).
+void drawTouchBlob(int x, int y);
+
 // Zeichnet "in:<label>" neben dem Build-Marker -- sofortiges sichtbares
 // Feedback, ob/welche Touch-/Tasten-Interaktion diesen Weckzyklus erkannt
 // wurde (Debug-Hilfe, Nutzerwunsch 2026-08-21). label z. B. "fav0",

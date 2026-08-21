@@ -25,12 +25,18 @@ RTC_DATA_ATTR int rtcLastTotalPages = 1;
 
 static const uint32_t HTTP_TIMEOUT_MS = 8000;
 static const uint32_t WAKE_BUTTON_LONG_PRESS_MS = 3000;
-// WiFiManager blockiert per Default unbegrenzt im Access-Point-Portal, wenn
-// autoConnect() mit gespeicherten Zugangsdaten trotzdem nicht verbindet
-// (z. B. Router kurz down) -- ohne Timeout wuerde ein batteriebetriebenes
-// Geraet dann bis zum manuellen Eingriff im Portal-Modus haengen bleiben,
-// statt in den Offline-Eskalations-/Tiefschlaf-Zyklus zu fallen (Spec §11).
 static const uint32_t WIFI_PORTAL_TIMEOUT_S = 180;
+
+// Aktiv-Session (Nutzervorgabe 2026-08-21): "nach dem Aufwachen nur EINE
+// Aktion ist Bloedsinn". Nach dem Aufwachen bleibt das Geraet in einer
+// ECHTEN Schleife wach -- kein Deep Sleep zwischen einzelnen Aktionen.
+// Eingaben werden sofort quittiert, Inhalt laedt periodisch nach. Erst nach
+// ACTIVE_IDLE_TIMEOUT_MS ohne Eingabe geht es in den Tiefschlaf zurueck.
+// Werte bewusst grosszuegig ("einmal die Woche laden ist ok" -- Nutzer).
+static const uint32_t ACTIVE_IDLE_TIMEOUT_MS = 5UL * 60 * 1000;   // 5 Minuten
+static const uint32_t REFRESH_INTERVAL_MS    = 25UL * 1000;      // 25 Sekunden
+static const uint32_t INPUT_POLL_MS          = 30;               // wie Seeeds Touch-Beispiel
+static const uint32_t POST_HIT_COOLDOWN_MS   = 900;              // ein gehaltener Finger loest nicht mehrfach aus
 
 static Preferences prefs;
 
@@ -58,7 +64,7 @@ static bool provisionAndConnect(String& outToken) {
         wm.resetSettings(); // langer Tastendruck -> zurueck in den Access-Point-Modus (Spec §10)
     }
 
-    wm.setConfigPortalTimeout(WIFI_PORTAL_TIMEOUT_S); // s. Kommentar bei WIFI_PORTAL_TIMEOUT_S
+    wm.setConfigPortalTimeout(WIFI_PORTAL_TIMEOUT_S);
     bool connected = wm.autoConnect("wlmonitor-setup");
     if (!connected) return false;
 
@@ -68,180 +74,41 @@ static bool provisionAndConnect(String& outToken) {
 }
 
 static void syncTimeForTls() {
-    // Best-effort SNTP-Sync (Global Constraints): TLS-Zertifikatspruefung
-    // braucht eine ungefaehr richtige Uhr, "kein NTP" aus Spec §10 bezog
-    // sich nur auf die Zeitstempel-ANZEIGE, nicht auf TLS. Kurzer Timeout,
-    // Fehlschlag ist nicht fatal -- der HTTPS-Request laeuft trotzdem an.
     configTime(0, 0, "pool.ntp.org", "time.nist.gov");
     struct tm timeinfo;
-    getLocalTime(&timeinfo, 3000); // max 3s warten, Ergebnis wird nicht ausgewertet
+    getLocalTime(&timeinfo, 3000);
 }
 
 static void goToSleep() {
     markSleepIcon();
     sleepPanel();
     WiFi.disconnect(true);
-    // Weckquellen: GPIO2 (Touch-INT, zieht bei anliegendem Touch aktiv-low),
-    // GPIO3 (KEY0/Wake), GPIO4 (KEY1), GPIO5 (KEY2) -- alle vier auf dem
-    // ESP32-S3 RTC-IO-faehig. Ohne GPIO2/4/5 in dieser Maske koennten Touch
-    // und die Seiten-Tasten das Geraet ueberhaupt nicht aufwecken (nur der
-    // Timer oder KEY0 wuerden je einen setup()-Durchlauf ausloesen) --
-    // pollTouch()/readPageButtons() liefen dann leer, obwohl Spec §4
-    // Touch/Taste explizit als Weckquellen neben dem Timer nennt.
-    // Review-Befund (Whole-Branch-Review, 2026-08-17): urspruenglich fehlte
-    // das, s. Ticket-Historie im Progress-Ledger.
-    // GPIO2 (Touch-INT) BEWUSST NICHT in der Maske: der GT911 setzt seinen
-    // Interrupt im normalen Scanbetrieb staendig neu, quittieren hilft nicht
-    // (am Geraet gemessen 2026-08-21: "[sleep] GPIO2=L" trotz
-    // touchClearInterrupt(), Zyklus 9s statt 120s -> Dauerwecken, Akkufresser).
-    // Aufwecken geht damit ueber die Tasten und den Timer; Touch wird im
-    // wachen Zyklus weiterhin ausgewertet. Seeeds eigene Firmware weckt
-    // ebenfalls per Taste, nicht per Bildschirmberuehrung.
+    // GPIO2 (Touch-INT) bewusst NICHT in der Weckmaske: der GT911 haelt
+    // seinen Interrupt im normalen Scanbetrieb dauerhaft aktiv, quittieren
+    // hilft nicht (am Geraet gemessen: Dauerwecken alle ~9s). Aufwecken
+    // laeuft ueber die Tasten und den Timer; Touch wird waehrend der
+    // Aktiv-Session ausgewertet, s. runActiveSession().
     const uint64_t wakePinMask = (1ULL << 3) | (1ULL << 4) | (1ULL << 5);
     esp_sleep_enable_ext1_wakeup(wakePinMask, ESP_EXT1_WAKEUP_ANY_LOW);
 
-    // Pull-ups im RTC-Bereich halten (docs/hardware/reterminal-e1003.md §15).
-    // Die normalen GPIO-Pull-ups sind im Deep Sleep NICHT zwingend aktiv --
-    // ohne das koennen die Weckpins floaten (Fehlweckungen) oder ein
-    // Tastendruck wird nicht sauber als LOW erkannt. Seeeds LowPower-Beispiel
-    // macht das fuer seinen einen Weckpin; wir wecken ueber vier (Touch-INT
-    // GPIO2 + KEY0/1/2), also fuer jeden einzeln.
     for (int pin : {3, 4, 5}) {
         rtc_gpio_pullup_en(static_cast<gpio_num_t>(pin));
         rtc_gpio_pulldown_dis(static_cast<gpio_num_t>(pin));
     }
-    // GT911-Interrupt loslassen, sonst haelt er GPIO2 auf LOW.
     touchClearInterrupt();
-
-    // Pegel der Weckpins UNMITTELBAR vor dem Einschlafen. Liegt hier schon
-    // einer auf LOW, weckt ESP_EXT1_WAKEUP_ANY_LOW sofort wieder.
-    Serial.print("[sleep] Pegel vor dem Schlafen:");
-    for (int pin : {2, 3, 4, 5}) {
-        pinMode(pin, INPUT);
-        Serial.printf(" GPIO%d=%c", pin, digitalRead(pin) == LOW ? 'L' : 'H');
-    }
-    Serial.println();
-    Serial.flush();
 
     esp_sleep_enable_timer_wakeup((uint64_t) POLL_INTERVAL_SEC * 1000000ULL);
     esp_deep_sleep_start();
 }
 
-void setup() {
-    // Tasten als ALLERERSTE Aktion, noch vor Serial.begin()/initDisplay()/
-    // initTouch() -- live bestaetigt (2026-08-21): ein kurzer Tastendruck
-    // wurde selbst an der (vermeintlich schon frueh genug) vorigen Stelle
-    // nicht erkannt, nur ein LANGER Druck. Grund: Serial.begin()+delay(300)
-    // + initDisplay() (SPI/IT8951-Reset-Pulse) + initTouch() (I2C/GT911-
-    // Reset) verbrauchen zusammen schon 500ms-1s+ Bootzeit, bevor ueberhaupt
-    // geprueft wird -- ein normaler kurzer Tipp ist bis dahin laengst
-    // losgelassen.
-    bool fullUpdateRequested = isFullUpdateButtonHeld();
-    RawButtonStates raw = readRawButtonStates();
-
-    Serial.begin(115200);
-    delay(300);
-
-    // Weckursache protokollieren (2026-08-21): das Geraet wacht alle ~9s
-    // statt der eingestellten POLL_INTERVAL_SEC. ext1_wakeup_status() nennt
-    // die exakte Pin-Maske, die geweckt hat -- damit ist eindeutig, welcher
-    // der vier Weckpins (GPIO2 Touch-INT, GPIO3/4/5 Tasten) LOW zieht.
-    {
-        esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
-        uint64_t ext1 = esp_sleep_get_ext1_wakeup_status();
-        Serial.printf("[wake] Ursache=%d ext1-Maske=0x%llx", (int) cause,
-                      (unsigned long long) ext1);
-        for (int pin : {2, 3, 4, 5}) {
-            if (ext1 & (1ULL << pin)) Serial.printf(" -> GPIO%d", pin);
-        }
-        Serial.println();
-    }
-
-    initDisplay();
-    initTouch(); // Rueckgabewert bewusst ignoriert -- fehlender Touch ist nicht fatal, s. touch.h
-
-    // Nach initTouch(), weil der SHT4x am selben I2C-Bus haengt und Wire
-    // dort initialisiert wird. Ohne das faehrt der IT8951 dauerhaft mit der
-    // Standardannahme 16 C (s. display.h / sensor.h).
-    applyPanelTemperature(readAmbientTemperature());
-
-    int touchX = 0, touchY = 0;
-    const char* touchValue = nullptr;
-    TouchZone zone = pollTouch(rtcLastFavoriteCount, rtcLastTotalPages, &touchX, &touchY);
-    if (zone != TouchZone::None) {
-        touchValue = touchZoneToHeaderValue(zone);
-    } else {
-        // Kein Touch -- sekundaerer Tasten-Weg (Spec §10).
-        touchValue = readPageButtons();
-    }
-
-    // Diagnose-Text (Nutzerwunsch 2026-08-21): explizit WAS erkannt wurde
-    // (Touch-Koordinaten bzw. welche Taste mit ihrer Funktion), PLUS immer
-    // die rohen, unentprellten Pin-Zustaende aller drei Tasten -- damit
-    // sichtbar ist, ob ein Tastendruck ueberhaupt am GPIO ankommt, auch
-    // wenn die interpretierte Aktion "none" bleibt.
-    char inputLabel[48];
-    if (fullUpdateRequested) {
-        snprintf(inputLabel, sizeof(inputLabel), "K2 Update");
-    } else if (zone != TouchZone::None) {
-        snprintf(inputLabel, sizeof(inputLabel), "t %d,%d", touchX, touchY);
-    } else if (touchValue != nullptr) {
-        snprintf(inputLabel, sizeof(inputLabel), "K1 Weiter");
-    } else if (raw.key0Low) {
-        snprintf(inputLabel, sizeof(inputLabel), "K0 Wach");
-    } else {
-        snprintf(inputLabel, sizeof(inputLabel), "none");
-    }
-    // "-" = losgelassen, "X" = gedrueckt (statt H/L, Nutzerwunsch 2026-08-21:
-    // "H"/"L" ist nicht selbsterklaerend). Reihenfolge immer K0,K1,K2 --
-    // ohne Einzel-Labels, damit es bei doppelter Schriftgroesse noch passt.
-    char inputLabelWithRaw[64];
-    snprintf(inputLabelWithRaw, sizeof(inputLabelWithRaw), "%s [%c%c%c]", inputLabel,
-             raw.key0Low ? 'X' : '-', raw.key1Low ? 'X' : '-', raw.key2Low ? 'X' : '-');
-
-    // Unmittelbares Feedback (Nutzerwunsch 2026-08-21) -- noch vor WLAN-
-    // Connect/Fetch, nicht erst am Ende mit dem Rest. Piepton zusaetzlich
-    // zum visuellen Marker: der Marker braucht ~1-2s (e-Paper-Partial-
-    // Update), der Ton ist wirklich sofort. Nur bei tatsaechlich erkannter
-    // Interaktion, nicht bei reinem Timer-Wake.
-    if (fullUpdateRequested || touchValue != nullptr || raw.key0Low) {
-        beepConfirm();
-    }
-    showInputMarker(inputLabelWithRaw);
-
-    String token;
-    if (!provisionAndConnect(token)) {
-        // Kein WLAN verbunden und keine Zugangsdaten hinterlegt --
-        // WiFiManager-Portal wurde bereits versucht, hier bleibt nur:
-        // wie ein WLAN-Ausfall behandeln.
-        ErrorState st = nextErrorState(FetchOutcome::NetworkUnavailable, rtcConsecutiveFailures);
-        rtcConsecutiveFailures = st.consecutiveFailures;
-        if (st.banner != ErrorBanner::None) {
-            showErrorBanner(st.banner, "??:??");
-        }
-        goToSleep();
-        return;
-    }
-
-    syncTimeForTls();
-    { time_t now = time(nullptr); struct tm tmv; gmtime_r(&now, &tmv);
-      Serial.printf("[time] %04d-%02d-%02d %02d:%02d:%02d UTC, RSSI %d, heap %lu\n",
-                    tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday,
-                    tmv.tm_hour, tmv.tm_min, tmv.tm_sec,
-                    (int) WiFi.RSSI(), (unsigned long) ESP.getFreeHeap()); }
+// Ein Abruf+Render-Zyklus. touchValue darf nullptr sein (reiner Zeit-Refresh).
+// forceFull leert rtcLastEtag, damit board.php ohne If-None-Match antwortet
+// und automatisch ein Vollbild statt eines Patches liefert.
+static void fetchAndRender(const String& token, const char* touchValue, bool forceFull) {
+    if (forceFull) rtcLastEtag[0] = '\0';
 
     int batteryMv = readBatteryMillivolts();
     int rssi = WiFi.RSSI();
-
-    // Debug-Taste "vollstaendiges Update" (Nutzervorgabe 2026-08-21, um
-    // Patch-Darstellungsfehler von echten Full-Frame-Rendern zu unterscheiden):
-    // rtcLastEtag leeren -> fetchBoard() schickt kein If-None-Match mehr ->
-    // board.php::canPatch() ist false (s. board.php, prueft If-None-Match !=
-    // '') -> Server liefert automatisch mode=full, keine Server-Aenderung
-    // noetig. Taste selbst wurde schon ganz oben in setup() gelesen (Timing).
-    if (fullUpdateRequested) {
-        rtcLastEtag[0] = '\0';
-    }
 
     BoardFetchResult fetch;
     fetchBoard(token.c_str(), touchValue, rtcLastEtag, batteryMv, rssi, HTTP_TIMEOUT_MS, fetch);
@@ -274,12 +141,100 @@ void setup() {
         rtcLastTotalPages = fetch.parsed.totalPages;
         showBuildMarker(FIRMWARE_BUILD);
     } else if (st.banner != ErrorBanner::None) {
-        showErrorBanner(st.banner, "??:??"); // Firmware fuehrt keine eigene Uhr (Spec §10), kein echter Zeitstempel verfuegbar
+        showErrorBanner(st.banner, "??:??");
     }
+}
+
+// Bleibt wach, bis ACTIVE_IDLE_TIMEOUT_MS lang keine Eingabe mehr kam.
+// Eingaben (Touch/Tasten) loesen sofort einen Abruf aus; ohne Eingabe wird
+// trotzdem alle REFRESH_INTERVAL_MS nachgeladen.
+static void runActiveSession(const String& token, bool forceFullFirst) {
+    // "Bereit"-Piep GENAU HIER, nicht schon beim Booten: erst ab jetzt wird
+    // tatsaechlich auf Touch/Tasten gehoert. Ein frueherer Piep (z.B. beim
+    // Aufwachen) waere ein falsches "jetzt tippen"-Signal, waehrend Display/
+    // Touch/WLAN noch initialisieren (Nutzerbefund 2026-08-21: "muss kurz
+    // warten, sonst wird der touch nicht erkannt").
+    beepConfirm();
+    Serial.println("[active] bereit, Eingaben werden jetzt ausgewertet");
+    uint32_t lastActivity = millis();
+    int lastHitX = -1000, lastHitY = -1000;
+    uint32_t lastHitMs = 0;
+    // Sofortiger erster Refresh: lastRefresh liegt schon "in der Vergangenheit".
+    uint32_t lastRefresh = millis() - REFRESH_INTERVAL_MS;
+    bool firstRefreshDone = false;
+
+    while (millis() - lastActivity < ACTIVE_IDLE_TIMEOUT_MS) {
+        const char* touchValue = nullptr;
+        bool forceFull = (!firstRefreshDone && forceFullFirst);
+
+        int touchX = 0, touchY = 0;
+        TouchZone zone = pollTouch(rtcLastFavoriteCount, rtcLastTotalPages, &touchX, &touchY);
+        if (zone != TouchZone::None) {
+            bool sameAsLastHit = (millis() - lastHitMs < 3000)
+                && abs(touchX - lastHitX) < 24 && abs(touchY - lastHitY) < 24;
+            if (!sameAsLastHit) {
+                touchValue = touchZoneToHeaderValue(zone);
+                beepRecognized();
+                drawTouchBlob(touchX, touchY);
+                lastHitX = touchX; lastHitY = touchY; lastHitMs = millis();
+            }
+        } else if (const char* btn = readPageButtons()) {
+            touchValue = btn;
+            beepRecognized();
+        } else if (isFullUpdateButtonHeld()) {
+            forceFull = true;
+            beepRecognized();
+        }
+
+        bool dueForRefresh = (millis() - lastRefresh >= REFRESH_INTERVAL_MS);
+        if (touchValue != nullptr || forceFull || dueForRefresh) {
+            fetchAndRender(token, touchValue, forceFull);
+            lastRefresh = millis();
+            firstRefreshDone = true;
+            if (touchValue != nullptr || forceFull) {
+                lastActivity = millis();
+                delay(POST_HIT_COOLDOWN_MS); // gehaltener Finger loest nicht mehrfach aus
+            }
+        }
+
+        delay(INPUT_POLL_MS);
+    }
+    Serial.println("[active] 5 Minuten ohne Eingabe -- gehe schlafen");
+}
+
+void setup() {
+    buzzerWarmup();
+    bool fullUpdateRequested = isFullUpdateButtonHeld();
+
+    Serial.begin(115200);
+    delay(300);
+
+    initDisplay();
+    initTouch(); // Rueckgabewert bewusst ignoriert -- fehlender Touch ist nicht fatal, s. touch.h
+    applyPanelTemperature(readAmbientTemperature());
+
+    String token;
+    if (!provisionAndConnect(token)) {
+        ErrorState st = nextErrorState(FetchOutcome::NetworkUnavailable, rtcConsecutiveFailures);
+        rtcConsecutiveFailures = st.consecutiveFailures;
+        if (st.banner != ErrorBanner::None) {
+            showErrorBanner(st.banner, "??:??");
+        }
+        goToSleep();
+        return;
+    }
+
+    syncTimeForTls();
+
+    // Touch-/Tastenpruefung startet HIER, nicht erst nach einem ersten Abruf
+    // (der bisher WLAN-Connect+Zeit-Sync+Fetch bloehte -- spuerbare Verzoegerung
+    // zwischen Piep und tatsaechlicher Touch-Reaktion, Nutzerbefund 2026-08-21).
+    // runActiveSession() macht den ersten Abruf selbst, als Teil der Schleife.
+    runActiveSession(token, fullUpdateRequested);
 
     goToSleep();
 }
 
 void loop() {
-    // Ungenutzt: setup() geht in Tiefschlaf, bevor loop() je aufgerufen wird.
+    // Ungenutzt: setup() kehrt erst nach goToSleep() zurueck.
 }

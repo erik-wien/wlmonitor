@@ -62,20 +62,33 @@ static bool probeGt911(uint8_t addr) {
 // Vorher standen hier 10ms/50ms -- deutlich zu kurz, der Controller kann
 // danach noch nicht antwortbereit sein (haeufigste Ursache dafuer, dass
 // Touch gar nicht reagiert).
+// Kanonische GT911-Startsequenz. Der Controller waehlt seine I2C-Adresse
+// anhand des INT-PEGELS im Moment, in dem RESET losgelassen wird:
+//   INT LOW  -> 0x5D     INT HIGH -> 0x14
+// Deshalb INT waehrend des Resets aktiv LOW treiben und erst DANACH auf
+// Eingang schalten. Vorher wurde INT schon vor dem Reset auf INPUT_PULLUP
+// gesetzt -> der Chip meldete sich auf 0x14, lieferte aber weder eine
+// Aufloesung ("Bereich 0x0") noch jemals Touch-Daten (am Geraet gemessen
+// 2026-08-21). Seeeds Beispiel setzt INT erst nach dem Reset und erhaelt
+// entsprechend 0x5D. Timing 20ms/120ms wie in der Doku.
 static void resetTouchController() {
+    pinMode(TOUCH_INT_PIN, OUTPUT);
+    digitalWrite(TOUCH_INT_PIN, LOW);
     pinMode(TOUCH_RESET_PIN, OUTPUT);
     digitalWrite(TOUCH_RESET_PIN, LOW);
     delay(20);
     digitalWrite(TOUCH_RESET_PIN, HIGH);
-    delay(120);
+    delay(120);                            // INT liegt hier noch LOW -> 0x5D
+    pinMode(TOUCH_INT_PIN, INPUT_PULLUP);  // erst jetzt als Eingang
+    delay(50);
 }
 
 bool initTouch() {
     Wire.begin(TOUCH_SDA_PIN, TOUCH_SCL_PIN);
     // 400kHz lt. Doku; ESP32-Arduino-Default waere 100kHz.
     Wire.setClock(400000);
-    // INPUT_PULLUP lt. Doku (vorher INPUT).
-    pinMode(TOUCH_INT_PIN, INPUT_PULLUP);
+    // INT-Pin wird in resetTouchController() gesetzt -- die Reihenfolge
+    // entscheidet ueber die I2C-Adresse, s. dort.
     resetTouchController();
 
     if (probeGt911(GT911_ADDR_1)) {
@@ -108,6 +121,11 @@ TouchZone pollTouch(int favoriteCount, int totalPages, int* outRawX, int* outRaw
     if (!i2cReadReg16(s_touchAddr, GT911_REG_STATUS, &status, 1)) {
         return TouchZone::None;
     }
+    // Diagnose: jede Regung des Statusregisters melden. Bleibt das dauerhaft
+    // 0x00, waehrend ein Finger auflegt, scannt der Controller nicht bzw.
+    // meldet nichts -- dann liegt es nicht am Zeitfenster.
+    if (status != 0) Serial.printf("[touch] status=0x%02X\n", status);
+
     uint8_t touchCount = status & 0x0F;
     bool bufferReady = (status & 0x80) != 0;
 
@@ -126,15 +144,21 @@ TouchZone pollTouch(int favoriteCount, int totalPages, int* outRawX, int* outRaw
         return TouchZone::None;
     }
 
-    uint8_t point[4]; // x_low, x_high, y_low, y_high (erste 4 Byte von Punkt 0)
+    // BUGFIX (2026-08-21): ein Touch-Punktdatensatz ist 8 Byte:
+    // Byte0=Track-ID, dann X_low,X_high,Y_low,Y_high,Size_low,Size_high,Res.
+    // Vorher wurden nur 4 Byte gelesen und Byte0 (Track-ID) faelschlich als
+    // X_low interpretiert -- alle Koordinaten waren um ein Byte verschoben,
+    // reiner Datenmuell. Gefunden durch Abgleich mit Nutzers funktionierendem
+    // Referenzcode (Seeeds E1003_TouchDraw.ino).
+    uint8_t point[8];
     if (!i2cReadReg16(s_touchAddr, GT911_REG_POINT0, point, sizeof(point))) {
-        i2cWriteReg16(s_touchAddr, GT911_REG_STATUS, 0x00); // Statusregister quittieren
+        i2cWriteReg16(s_touchAddr, GT911_REG_STATUS, 0x00);
         return TouchZone::None;
     }
     i2cWriteReg16(s_touchAddr, GT911_REG_STATUS, 0x00);
 
-    int rawX = point[0] | (point[1] << 8);
-    int rawY = point[2] | (point[3] << 8);
+    int rawX = point[1] | (point[2] << 8);
+    int rawY = point[3] | (point[4] << 8);
 
     // KORREKTUR ggue. der vorigen Fassung: dort wurde um 90 Grad gedreht
     // (x = rawY; y = 1404 - rawX), unter der Annahme, der GT911 liefere
@@ -147,6 +171,10 @@ TouchZone pollTouch(int favoriteCount, int totalPages, int* outRawX, int* outRaw
     // gleich, ist das die Identitaet.
     const int maxX = s_touchMaxX > 0 ? s_touchMaxX : PANEL_WIDTH;
     const int maxY = s_touchMaxY > 0 ? s_touchMaxY : PANEL_HEIGHT;
+    // ZURUECKGESETZT (2026-08-21): der X-Spiegel-Versuch beruhte auf einer
+    // einzelnen Messung und war falsch (Nutzer meldet jetzt spiegelverkehrt).
+    // Zurueck auf 1:1 wie in Seeeds Referenz ("raw==screen"). Kalibrierung
+    // ab jetzt ueber drawTouchBlob() live am Geraet, nicht mehr geraten.
     int x = (int) ((int32_t) rawX * (PANEL_WIDTH  - 1) / (maxX > 1 ? maxX - 1 : 1));
     int y = (int) ((int32_t) rawY * (PANEL_HEIGHT - 1) / (maxY > 1 ? maxY - 1 : 1));
 
