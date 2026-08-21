@@ -110,7 +110,19 @@ TouchZone pollTouch(int favoriteCount, int totalPages, int* outRawX, int* outRaw
     }
     uint8_t touchCount = status & 0x0F;
     bool bufferReady = (status & 0x80) != 0;
-    if (!bufferReady || touchCount == 0) {
+
+    if (!bufferReady) {
+        // Kein neuer Datensatz -- INT wird nicht von uns gehalten.
+        return TouchZone::None;
+    }
+    if (touchCount == 0) {
+        // "Puffer bereit, aber null Punkte" ist der Loslass-Fall. Auch DAS
+        // muss quittiert werden, sonst haelt der GT911 seinen INT (GPIO2)
+        // dauerhaft aktiv -- und da GPIO2 in der ext1-Weckmaske steht,
+        // weckt das Geraet sofort nach jedem esp_deep_sleep_start() wieder
+        // auf. Am Geraet gemessen (2026-08-21): "[sleep] GPIO2=L" +
+        // "[wake] ext1-Maske=0x4 -> GPIO2", Zyklus ~9s statt 120s.
+        i2cWriteReg16(s_touchAddr, GT911_REG_STATUS, 0x00);
         return TouchZone::None;
     }
 
@@ -147,4 +159,12 @@ TouchZone pollTouch(int favoriteCount, int totalPages, int* outRawX, int* outRaw
     if (outRawY != nullptr) *outRawY = y;
 
     return mapTouchToZone(x, y, favoriteCount, totalPages);
+}
+
+void touchClearInterrupt() {
+    if (s_touchAddr == 0) return;
+    // Vor dem Tiefschlaf sicherstellen, dass der GT911 seinen INT losgelassen
+    // hat. Ein spaeterer echter Touch zieht ihn erneut LOW und weckt dann
+    // regulaer -- die Weckquelle bleibt also erhalten.
+    i2cWriteReg16(s_touchAddr, GT911_REG_STATUS, 0x00);
 }

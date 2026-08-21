@@ -14,3 +14,7 @@ bool initTouch();
 // auf Panel-Ausrichtung gemappten Koordinaten -- fuer Debug-Anzeige
 // (Nutzerwunsch 2026-08-21), unveraendert wenn kein Touch anliegt.
 TouchZone pollTouch(int favoriteCount, int totalPages, int* outRawX = nullptr, int* outRawY = nullptr);
+
+// Quittiert einen anstehenden GT911-Interrupt, damit GPIO2 vor dem
+// Tiefschlaf nicht LOW haengt (sonst weckt ext1 sofort wieder).
+void touchClearInterrupt();

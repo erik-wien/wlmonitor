@@ -90,7 +90,14 @@ static void goToSleep() {
     // Touch/Taste explizit als Weckquellen neben dem Timer nennt.
     // Review-Befund (Whole-Branch-Review, 2026-08-17): urspruenglich fehlte
     // das, s. Ticket-Historie im Progress-Ledger.
-    const uint64_t wakePinMask = (1ULL << 2) | (1ULL << 3) | (1ULL << 4) | (1ULL << 5);
+    // GPIO2 (Touch-INT) BEWUSST NICHT in der Maske: der GT911 setzt seinen
+    // Interrupt im normalen Scanbetrieb staendig neu, quittieren hilft nicht
+    // (am Geraet gemessen 2026-08-21: "[sleep] GPIO2=L" trotz
+    // touchClearInterrupt(), Zyklus 9s statt 120s -> Dauerwecken, Akkufresser).
+    // Aufwecken geht damit ueber die Tasten und den Timer; Touch wird im
+    // wachen Zyklus weiterhin ausgewertet. Seeeds eigene Firmware weckt
+    // ebenfalls per Taste, nicht per Bildschirmberuehrung.
+    const uint64_t wakePinMask = (1ULL << 3) | (1ULL << 4) | (1ULL << 5);
     esp_sleep_enable_ext1_wakeup(wakePinMask, ESP_EXT1_WAKEUP_ANY_LOW);
 
     // Pull-ups im RTC-Bereich halten (docs/hardware/reterminal-e1003.md §15).
@@ -99,10 +106,23 @@ static void goToSleep() {
     // Tastendruck wird nicht sauber als LOW erkannt. Seeeds LowPower-Beispiel
     // macht das fuer seinen einen Weckpin; wir wecken ueber vier (Touch-INT
     // GPIO2 + KEY0/1/2), also fuer jeden einzeln.
-    for (int pin : {2, 3, 4, 5}) {
+    for (int pin : {3, 4, 5}) {
         rtc_gpio_pullup_en(static_cast<gpio_num_t>(pin));
         rtc_gpio_pulldown_dis(static_cast<gpio_num_t>(pin));
     }
+    // GT911-Interrupt loslassen, sonst haelt er GPIO2 auf LOW.
+    touchClearInterrupt();
+
+    // Pegel der Weckpins UNMITTELBAR vor dem Einschlafen. Liegt hier schon
+    // einer auf LOW, weckt ESP_EXT1_WAKEUP_ANY_LOW sofort wieder.
+    Serial.print("[sleep] Pegel vor dem Schlafen:");
+    for (int pin : {2, 3, 4, 5}) {
+        pinMode(pin, INPUT);
+        Serial.printf(" GPIO%d=%c", pin, digitalRead(pin) == LOW ? 'L' : 'H');
+    }
+    Serial.println();
+    Serial.flush();
+
     esp_sleep_enable_timer_wakeup((uint64_t) POLL_INTERVAL_SEC * 1000000ULL);
     esp_deep_sleep_start();
 }
@@ -121,6 +141,21 @@ void setup() {
 
     Serial.begin(115200);
     delay(300);
+
+    // Weckursache protokollieren (2026-08-21): das Geraet wacht alle ~9s
+    // statt der eingestellten POLL_INTERVAL_SEC. ext1_wakeup_status() nennt
+    // die exakte Pin-Maske, die geweckt hat -- damit ist eindeutig, welcher
+    // der vier Weckpins (GPIO2 Touch-INT, GPIO3/4/5 Tasten) LOW zieht.
+    {
+        esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+        uint64_t ext1 = esp_sleep_get_ext1_wakeup_status();
+        Serial.printf("[wake] Ursache=%d ext1-Maske=0x%llx", (int) cause,
+                      (unsigned long long) ext1);
+        for (int pin : {2, 3, 4, 5}) {
+            if (ext1 & (1ULL << pin)) Serial.printf(" -> GPIO%d", pin);
+        }
+        Serial.println();
+    }
 
     initDisplay();
     initTouch(); // Rueckgabewert bewusst ignoriert -- fehlender Touch ist nicht fatal, s. touch.h
