@@ -5,6 +5,14 @@ ESP32-S3-Firmware für den E-Paper-Abfahrtsmonitor (Seeed reTerminal E1003,
 Spec §6/§13). Spec:
 `../docs/superpowers/specs/2026-08-15-epaper-monitor-v2-design.md`.
 
+> **Vor jeder Änderung an dieser Firmware lesen:**
+> [`../docs/hardware/reterminal-e1003.md`](../docs/hardware/reterminal-e1003.md)
+> — verbindliche Hardware-Referenz (Pins, Display-Bibliothek, Batterie,
+> Tasten, Touch, Buzzer, Flashen). Der Firmware-Plan von 2026-08-17 stützte
+> sich auf ein inzwischen verschwundenes Claude-Memory und legte deshalb u. a.
+> die **falsche Display-Bibliothek** fest (GxEPD2 statt Seeed_GFX) — die
+> Hardware-Referenz ersetzt ihn in allen Hardware-Fragen.
+
 ## Bauen
 
 ```bash

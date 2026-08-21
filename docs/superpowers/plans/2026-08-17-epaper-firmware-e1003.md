@@ -1,5 +1,33 @@
 # reTerminal E1003 Firmware Implementation Plan
 
+> ## ⚠️ ÜBERHOLT IN ALLEN HARDWARE-FRAGEN (Korrektur 2026-08-21)
+>
+> Dieser Plan wurde **ohne physische Hardware** geschrieben und stützte seine
+> Hardware-Angaben auf ein Claude-Memory `reference_reterminal_e1003_arduino`
+> (s. „Pins" weiter unten), **das nicht mehr existiert**. Beim ersten echten
+> Hardwaretest zeigten sich dadurch mehrere Fehler:
+>
+> - **Falsche Display-Bibliothek.** Der Plan schreibt GxEPD2
+>   (`GxEPD2_it103_1872x1404`) vor. Dieser Treiber hat ein fremdes VCOM hart
+>   einkodiert — am echten E1003 blieb das Panel **komplett unverändert**,
+>   obwohl alle Refresh-Zyklen sauber durchliefen. Korrekt ist Seeeds eigene
+>   **Seeed_GFX** mit `BOARD_SCREEN_COMBO=522` (Treiber `ED103TC2`).
+> - **Batterie:** Der Plan *nennt* den ×2-Spannungsteiler (Task 7, Step 4:
+>   „der **dokumentierte** *2-Spannungsteiler-Faktor"), wendet ihn aber nicht
+>   an und vertagt auf Multimeter-Kalibrierung → Anzeige dauerhaft 0 %.
+>   Korrekt ist `return raw * 2;` — der Faktor ist von Seeed dokumentiert und
+>   brauchte nie eine Kalibrierung.
+> - **Tasten:** `INPUT` statt `INPUT_PULLUP` (Hardware hat eigene Pull-ups);
+>   physische Rollen KEY0=rechts/grün, KEY1=Mitte, KEY2=links sind
+>   dokumentiert, nicht „UNCONFIRMED".
+> - **Touch:** I2C muss mit 400 kHz laufen.
+> - **Buzzer** (GPIO45) fehlt im Plan komplett.
+> - **Serial:** `ARDUINO_USB_CDC_ON_BOOT=0` nötig, sonst ist `Serial` stumm.
+>
+> **Verbindlich ist ab sofort [`../../hardware/reterminal-e1003.md`](../../hardware/reterminal-e1003.md).**
+> Der Rest dieses Plans (Board-Protokoll, Touch-Zonen-Mathematik,
+> Fehler-Eskalation, Testaufbau) bleibt gültig.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace `epaper-monitor/`'s old Waveshare/GxEPD2/v1-JSON firmware
