@@ -116,12 +116,19 @@ void showErrorBanner(ErrorBanner banner, const char* sinceTime) {
 }
 
 void markSleepIcon() {
-    clearAlignedForPartial(WIFI_ICON_X, WIFI_ICON_Y, WIFI_ICON_W, WIFI_ICON_H);
+    // setTextSize(1) war bei dieser Panel-DPI unlesbar (Nutzerbefund
+    // 2026-08-22) -- Groesse 2 wie showBuildMarker()/showInputMarker(),
+    // Flaeche entsprechend vergroessert (Breite reicht bis x=1755, Panel
+    // endet bei 1872).
+    const int x = WIFI_ICON_X, y = WIFI_ICON_Y, w = 90, h = 50;
+    clearAlignedForPartial(x, y, w, h);
     epaper.setFreeFont(&FreeSansBold9pt7b);
+    epaper.setTextSize(2);
     epaper.setTextColor(TFT_BLACK, TFT_WHITE);
-    epaper.setCursor(WIFI_ICON_X, WIFI_ICON_Y + WIFI_ICON_H - 6);
+    epaper.setCursor(x, y + h - 14);
     epaper.print("zzz");
-    epaper.updataPartial(WIFI_ICON_X, WIFI_ICON_Y, WIFI_ICON_W, WIFI_ICON_H);
+    epaper.setTextSize(1);
+    epaper.updataPartial(x, y, w, h);
 }
 
 void sleepPanel() {
@@ -130,10 +137,14 @@ void sleepPanel() {
 
 void drawTouchBlob(int x, int y) {
     const int r = 24;
-    const int bx = x - r - 4, by = y - r - 4, bw = 2 * (r + 4), bh = 2 * (r + 4);
+    // Nutzerbefund 2026-08-22: die Oberkante des Blobs erschien dort, wo
+    // tatsaechlich getippt wurde, statt der Mitte -- um die halbe Blob-
+    // Hoehe (r+6, der aussere Ring) nach oben verschoben.
+    const int cy = y - (r + 6);
+    const int bx = x - r - 4, by = cy - r - 4, bw = 2 * (r + 4), bh = 2 * (r + 4);
     clearAlignedForPartial(bx, by, bw, bh);
-    epaper.fillCircle(x, y, r, TFT_BLACK);
-    epaper.drawCircle(x, y, r + 6, TFT_BLACK);
+    epaper.fillCircle(x, cy, r, TFT_BLACK);
+    epaper.drawCircle(x, cy, r + 6, TFT_BLACK);
     epaper.updataPartial(bx, by, bw, bh);
 }
 
