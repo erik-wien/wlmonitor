@@ -147,6 +147,12 @@ try {
     $batteryPercent = is_numeric($batteryMv) ? board_battery_percent_from_mv((int) $batteryMv) : 0;
     $rssi = $_SERVER['HTTP_X_DEVICE_RSSI'] ?? null;
     $wifiBars = is_numeric($rssi) ? board_wifi_bars_from_rssi((int) $rssi) : 0;
+    // Firmware-Marke: seit 2026-08-22 serverseitig gerendert statt lokal aufs
+    // Panel gezeichnet -- das lokale 256x50-Overlay kostete gemessene 1104 ms,
+    // mehr als ein komplettes Vollbild. Fehlt der Header (Browser-Aufruf,
+    // aeltere Firmware), bleibt die Marke einfach weg.
+    $firmwareRaw = $_SERVER['HTTP_X_DEVICE_FIRMWARE'] ?? null;
+    $firmwareBuild = is_numeric($firmwareRaw) ? (int) $firmwareRaw : null;
 
     $debug = (string) ($_GET['debug'] ?? '');
     $part = (string) ($_GET['part'] ?? '');
@@ -187,7 +193,8 @@ SVG;
             $dataStand,
             $renderedAt,
             $batteryPercent,
-            $wifiBars
+            $wifiBars,
+            $firmwareBuild
         );
     }
 

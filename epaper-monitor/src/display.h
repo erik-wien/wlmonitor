@@ -26,13 +26,6 @@ void markSleepIcon();
 // EPaper::sleep() (Seeed_GFX).
 void sleepPanel();
 
-// Zeichnet "fw<FIRMWARE_BUILD>" plus ein Kaestchen fuer die Art des letzten
-// Panel-Schreibvorgangs (gefuellt = Vollbild, hohl = Patch) rechtsbuendig ans
-// Ende der Statusleiste (Debug-Hilfe, s. FIRMWARE_BUILD in board_config.h) --
-// damit am Geraet sichtbar ist, welcher Firmware-Stand laeuft und ob das
-// zuletzt gezeigte Bild ein Vollbild war, unabhaengig vom Server-Frame-Inhalt.
-void showBuildMarker(int build, bool lastFrameWasFull);
-
 // Setzt die Panel-Temperatur, die Seeed_GFX bei jedem wake() an den IT8951
 // schickt (Standard sonst fest 16 C). celsius = NAN laesst den bisherigen
 // Wert stehen. Erst nach initTouch() aufrufen -- der Sensor haengt am

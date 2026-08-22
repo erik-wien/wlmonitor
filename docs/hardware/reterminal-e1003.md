@@ -995,3 +995,48 @@ lokal übermalt. Aus demselben Grund liegt die Firmware-Schrift bei
 `FreeSans12pt7b`/`setTextSize(1)` (≈17px Versalhöhe ≈ Atkinson 24px) und nicht
 mehr bei `FreeSansBold9pt7b`/`setTextSize(2)` (≈24px — das war der „zu wuchtig"-
 Befund vom 2026-08-22).
+
+### 20.8 Jeder Panel-Schreibvorgang kostet ~500 ms Grundgebühr
+
+**Am Gerät gemessen (fw43/fw45, 2026-08-22).** Die Dauer eines Updates hängt
+weit weniger von der Fläche ab, als man annehmen würde:
+
+| Fläche | Modus | Dauer |
+|---|---|---|
+| 40×448 px | DU (Patch) | 557 ms |
+| 960×1255 | DU | 642 ms |
+| 1640×1255 | DU | 755 ms |
+| **1872×1404 (Vollbild)** | GC16 | **1024 ms** |
+| 450×50 (Status-Overlay) | DU | 490 ms |
+| 256×50 (Firmware-Marke) | DU | **1104 ms** |
+
+Ein 256×50-Rechteck kostete also **mehr als das ganze Panel**. Die Fixkosten
+stecken in `wake()`/`sleep()` und dem Controller-Handshake, die jedes
+`updataPartial()` mitbezahlt — nicht in den Pixeln.
+
+**Konsequenz 1: Teilaktualisierungen abgeschafft.** Sie waren die Ursache der
+Darstellungsfehler (doppelte Zeichen, angefressene Buchstaben — DU kennt keinen
+vollen Waveform-Durchlauf) und sparten dabei fast nichts: höchstens ~470 ms
+Panel-Zeit, während ein Patch ein *zweites* Status-Overlay erzwingt (nur das
+Vollbild bringt „Bereit" serverseitig mit). Am Netz war ebenfalls nichts zu
+holen — der GET dauert 600–820 ms weitgehend unabhängig von 2 KB oder 257 KB,
+weil die Server-Renderzeit dominiert, und die Patches deckten typisch 150–257 KB
+von 328 KB ab.
+
+**Konsequenz 2: lokale Overlays sind teuer, nicht billig.** Alles, was ohnehin
+im Server-Frame stehen kann, gehört dorthin. Die Firmware-Marke wandert per
+Header `X-Device-Firmware` in `board_render_firmware_marker_svg()` und kostet im
+Bild exakt nichts. Übrig bleibt ein einziges lokales Overlay („Lade …"), weil es
+*während* des Requests sichtbar sein muss.
+
+Zykluszeiten über diesen Umbau (Aktiv-Session, 25-s-Refresh):
+
+| Stand | Zyklus | Artefakte |
+|---|---|---|
+| Patches (fw42) | 2,9–6,2 s | ja |
+| nur Vollbilder (fw44) | 4,77 s | nein |
+| + Marke serverseitig (fw46) | **3,64 s** | nein |
+
+Aufschlüsselung fw46: Overlay „Lade …" 494 · GET 598 · Body lesen (328 KB)
+1490 · Panel 1024 ms. Der größte verbliebene Posten ist der **Body-Download mit
+~224 KB/s** — der einzige Punkt, an dem Patches je wirklich gewonnen hätten.

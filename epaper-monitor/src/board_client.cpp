@@ -124,6 +124,10 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
         http.addHeader("Authorization", String("Bearer ") + token);
         http.addHeader("X-Device-Battery-mV", String(batteryMv));
         http.addHeader("X-Device-RSSI", String(rssi));
+        // Firmware-Stand: der Server rendert die Marke "FW<n>" in die
+        // Statusleiste. Lokal aufs Panel gezeichnet kostete sie gemessene
+        // 1104 ms pro Zyklus (s. docs/hardware/reterminal-e1003.md §20.8).
+        http.addHeader("X-Device-Firmware", String(FIRMWARE_BUILD));
         if (touchValue != nullptr) {
             http.addHeader("X-Device-Touch", touchValue);
         }
@@ -219,6 +223,8 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
     // Bei -1 (kein Content-Length) laesst sich Vollstaendigkeit nicht pruefen
     // -> ebenfalls als unsauber behandeln, s. connectionDirty oben.
     connectionDirty = (contentLength != 0);
+    Serial.printf("[perf] Body lesen: %u Bytes in %lu ms\n",
+                  (unsigned) out.body.size(), (unsigned long) (millis() - readStart));
     http.end();
 
     out.parsed = validateBoardResponse(headers, out.body.size());

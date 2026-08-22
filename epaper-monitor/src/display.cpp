@@ -144,13 +144,18 @@ static void clearAlignedForPartial(int x, int y, int w, int h) {
 
 void applyFullFrame(const uint8_t* packed, int w, int h) {
     pushPackedBytes(packed, 0, 0, w, h);
+    const uint32_t t0 = millis();
     epaper.update();
+    Serial.printf("[perf] panel full %dx%d: %lu ms\n", w, h, (unsigned long) (millis() - t0));
 }
 
 void applyPatch(const uint8_t* packed, int x, int y, int w, int h) {
     clearAlignedForPartial(x, y, w, h);
     pushPackedBytes(packed, x, y, w, h);
+    const uint32_t t0 = millis();
     epaper.updataPartial(x, y, w, h);
+    Serial.printf("[perf] panel patch %dx%d @%d,%d: %lu ms\n",
+                  w, h, x, y, (unsigned long) (millis() - t0));
 }
 
 void showErrorBanner(ErrorBanner banner, const char* sinceTime) {
@@ -214,7 +219,11 @@ void drawTouchBlob(int x, int y) {
 // den Firmware-Marker mit neu schreiben muss:
 //
 //   STATUS_*  x=1150..1600  Piktogramm + kurzes Wort  (wechselt oft)
-//   MARKER_*  x=1608..1864  "fw40" + Modus-Kaestchen  (wechselt fast nie)
+//
+// Rechts daneben (x=1608..1864) sitzt die Firmware-Marke "FW<n>" -- die
+// rendert seit fw46 der SERVER (board_render_firmware_marker_svg()), weil das
+// lokale 256x50-Overlay gemessene 1104 ms kostete, mehr als ein komplettes
+// Vollbild. Diese Datei zeichnet dort nichts mehr.
 //
 // Schrift: FreeSans12pt7b bei setTextSize(1). Die frueheren Marker liefen mit
 // FreeSansBold9pt7b bei setTextSize(2) -- also ~24px Versalhoehe gegen die
@@ -223,7 +232,6 @@ void drawTouchBlob(int x, int y) {
 static const int STATUS_X = 1150, STATUS_Y = 1256, STATUS_W = 450, STATUS_H = 50;
 static const int STATUS_ICON_CX = 1164, STATUS_ICON_CY = 1281;
 static const int STATUS_TEXT_X = 1194, STATUS_BASELINE = 1290;
-static const int MARKER_X = 1608, MARKER_W = 256;
 
 static void drawStatusIcon(StatusIcon icon, int cx, int cy) {
     switch (icon) {
@@ -260,41 +268,9 @@ void showStatus(StatusIcon icon, const char* text) {
     epaper.setTextColor(TFT_BLACK, TFT_WHITE);
     epaper.setCursor(STATUS_TEXT_X, STATUS_BASELINE);
     epaper.print(text);
+    const uint32_t t0 = millis();
     epaper.updataPartial(STATUS_X, STATUS_Y, STATUS_W, STATUS_H);
+    Serial.printf("[perf] Overlay Status (%dx%d): %lu ms\n",
+                  STATUS_W, STATUS_H, (unsigned long) (millis() - t0));
 }
 
-void showBuildMarker(int build, bool lastFrameWasFull) {
-    // VERSALIEN, nicht "fw41" (Nutzerbefund 2026-08-22, "alle Buchstaben gleich
-    // gross"): in FreeSans sitzt das kleine w auf x-Hoehe, waehrend f und die
-    // Ziffern Versalhoehe haben -- die Marke wirkte dadurch zerfranst und
-    // kleiner als sie ist. In Versalien sind alle vier Zeichen gleich hoch.
-    char text[16];
-    snprintf(text, sizeof(text), "FW%d", build);
-
-    clearAlignedForPartial(MARKER_X, STATUS_Y, MARKER_W, STATUS_H);
-    // 12pt statt 9pt (Nutzerwunsch "insgesamt um 20% groesser"). GFX-Schriften
-    // gibt es nur in festen Stufen -- die naechste ueber 9pt ist 12pt, also
-    // +33% statt der gewuenschten +20%. Damit liegt der Marker auf derselben
-    // Versalhoehe wie der Statustext links, was die Zeile eher ruhiger macht.
-    epaper.setFreeFont(&FreeSans12pt7b);
-    epaper.setTextColor(TFT_BLACK, TFT_WHITE);
-
-    // Rechtsbuendig ans Spaltenende (x=1856 wie die Kopfzeilen-Prozentzahl),
-    // Kaestchen dahinter. textWidth() beruecksichtigt die gesetzte GFX-Schrift.
-    const int boxSize = 15; // mit der Schrift mitgewachsen (12 * 12/9,5)
-    const int boxRight = 1856;
-    const int textRight = boxRight - boxSize - 8;
-    const int textX = textRight - epaper.textWidth(text);
-
-    epaper.setCursor(textX, STATUS_BASELINE);
-    epaper.print(text);
-
-    const int boxX = boxRight - boxSize, boxY = STATUS_BASELINE - boxSize;
-    if (lastFrameWasFull) {
-        epaper.fillRect(boxX, boxY, boxSize, boxSize, TFT_BLACK);
-    } else {
-        epaper.drawRect(boxX, boxY, boxSize, boxSize, TFT_BLACK);
-    }
-
-    epaper.updataPartial(MARKER_X, STATUS_Y, MARKER_W, STATUS_H);
-}

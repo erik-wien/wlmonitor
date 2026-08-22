@@ -182,6 +182,29 @@ class BoardTemplateWeatherTest extends TestCase
         $this->assertStringContainsString('>Bereit<', $svg);
     }
 
+    public function test_firmware_marker_is_rendered_server_side_when_the_device_sends_its_build(): void
+    {
+        // Seit 2026-08-22 rendert der SERVER die Marke -- lokal aufs Panel
+        // gezeichnet kostete sie gemessene 1104 ms pro Zyklus, mehr als ein
+        // komplettes Vollbild (1024 ms).
+        $svg = board_render_weather_svg($this->weatherFixture(), 46);
+
+        $this->assertStringContainsString('>FW46<', $svg);
+        $this->assertStringContainsString(
+            sprintf('x="%d" y="%d" text-anchor="end"', BOARD_STATUS_MARKER_RIGHT, BOARD_STATUS_BASELINE),
+            $svg
+        );
+    }
+
+    public function test_firmware_marker_is_omitted_without_the_device_header(): void
+    {
+        // Browser-Aufruf oder aeltere Firmware ohne X-Device-Firmware: lieber
+        // gar keine Marke als "FW0".
+        $svg = board_render_weather_svg($this->weatherFixture());
+
+        $this->assertStringNotContainsString('FW', $svg);
+    }
+
     public function test_idle_status_is_drawn_small_and_with_its_pictogram(): void
     {
         // Nutzerwunsch 2026-08-22: Schriftgroesse wie "Stand HH:MM" (24 statt

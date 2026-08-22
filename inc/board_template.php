@@ -324,12 +324,13 @@ function board_render_svg(
     DateTimeImmutable $dataStand,
     DateTimeImmutable $renderedAt,
     int $batteryPercent,
-    int $wifiBars
+    int $wifiBars,
+    ?int $firmwareBuild = null
 ): string {
     $defs = board_svg_defs();
     $chrome = board_render_chrome_svg($renderedAt, $batteryPercent, $wifiBars);
     $touchBar = board_render_touch_bar_svg($touchBarFavoriteTitles, $activeFavoriteIndex);
-    $weatherSvg = board_render_weather_svg($weather);
+    $weatherSvg = board_render_weather_svg($weather, $firmwareBuild);
 
     $departurePages = board_paginate_departures($activeFavorite, 1);
     $totalDeparturePages = $departurePages['totalPages'];
@@ -415,19 +416,19 @@ function board_wrap_text(string $text, int $maxCharsPerLine): array
  * Aussenmesswerte, 2026-08-22) -- ersetzt die vorherige interne SHT4x-
  * Sensorzeile des Geraets, die nur die Innenraumtemperatur am Display zeigte.
  */
-function board_render_weather_svg(array $weather): string
+function board_render_weather_svg(array $weather, ?int $firmwareBuild = null): string
 {
     $station = $weather['station'] ?? ['available' => false];
 
     if ($weather['available'] === false) {
-        return board_render_weather_card('icon_unbekannt', null, null, ['Wetterdaten werden geladen …'], $station);
+        return board_render_weather_card('icon_unbekannt', null, null, ['Wetterdaten werden geladen …'], $station, $firmwareBuild);
     }
 
     $iconId = BOARD_ICON_ID_BY_CATEGORY[$weather['icon_category']] ?? BOARD_ICON_ID_BY_CATEGORY['unbekannt'];
     $bodyText = $weather['text'] ?? $weather['text_error'] ?? '';
     $lines = board_wrap_text($bodyText, BOARD_WEATHER_TEXT_MAX_CHARS_PER_LINE);
 
-    return board_render_weather_card($iconId, $weather['temp_min'], $weather['temp_max'], $lines, $station);
+    return board_render_weather_card($iconId, $weather['temp_min'], $weather['temp_max'], $lines, $station, $firmwareBuild);
 }
 
 /**
@@ -453,6 +454,8 @@ const BOARD_STATUS_ICON_CY     = 1281;
 const BOARD_STATUS_TEXT_X      = 1194;
 const BOARD_STATUS_BASELINE    = 1290;
 const BOARD_STATUS_FONT_SIZE   = 24;
+/** Rechtes Ende der Statusleiste -- Firmware-Marke, rechtsbuendig. */
+const BOARD_STATUS_MARKER_RIGHT = 1856;
 
 /**
  * "Bereit"-Piktogramm: Ring mit Punkt in der Mitte (Zielscheibe/Standby).
@@ -472,6 +475,35 @@ function board_render_status_icon_svg(int $cx, int $cy): string
 }
 
 /**
+ * Firmware-Marke ("FW45") am rechten Ende der Statusleiste.
+ *
+ * Wird seit 2026-08-22 SERVERSEITIG gerendert, nicht mehr vom Geraet lokal
+ * aufs Panel gezeichnet. Grund ist eine Messung am echten Geraet: jede lokale
+ * Teilaktualisierung zahlt die vollen Panel-Fixkosten, und ausgerechnet dieses
+ * 256x50-Rechteck kostete **1104 ms** -- mehr als das komplette Vollbild
+ * (1024 ms). Der Wert kommt jetzt als Header `X-Device-Firmware` mit und
+ * kostet im Bild exakt nichts. Siehe docs/hardware/reterminal-e1003.md §20.8.
+ *
+ * Versalien, weil in FreeSans/Atkinson das kleine w auf x-Hoehe sitzt und die
+ * Marke dadurch zerfranst wirkte (Nutzerbefund 2026-08-22).
+ *
+ * @param int|null $build null = Geraet hat keinen Header geschickt (aelterer
+ *        Firmware-Stand oder Browser-Aufruf) -> gar nichts rendern.
+ */
+function board_render_firmware_marker_svg(?int $build): string
+{
+    if ($build === null) {
+        return '';
+    }
+
+    return sprintf(
+        '<text x="%d" y="%d" text-anchor="end" font-family="Atkinson Hyperlegible Next"'
+        . ' font-size="%d" fill="black">FW%d</text>',
+        BOARD_STATUS_MARKER_RIGHT, BOARD_STATUS_BASELINE, BOARD_STATUS_FONT_SIZE, $build
+    );
+}
+
+/**
  * @param list<string> $bodyLines
  * @param array{available: bool, temp_c?: float, humidity_pct?: int, wind_kmh?: int, wind_gusts_kmh?: int, wind_direction?: string, precipitation_mm?: float} $station
  */
@@ -480,7 +512,8 @@ function board_render_weather_card(
     ?int $tempMin,
     ?int $tempMax,
     array $bodyLines,
-    array $station = ['available' => false]
+    array $station = ['available' => false],
+    ?int $firmwareBuild = null
 ): string {
     // Haupt-Icon 25% groesser (Nutzerwunsch 2026-08-22): die Tabler-Dateien
     // sind 24x24 (Radius 12), das alte handgezeichnete Format kam auf ca.
@@ -555,7 +588,8 @@ function board_render_weather_card(
             '<text x="%d" y="%d" font-family="Atkinson Hyperlegible Next" font-size="%d" fill="black">%s</text>',
             BOARD_STATUS_TEXT_X, BOARD_STATUS_BASELINE, BOARD_STATUS_FONT_SIZE,
             htmlspecialchars(BOARD_STATUS_IDLE_TEXT, ENT_XML1)
-        );
+        )
+        . board_render_firmware_marker_svg($firmwareBuild);
 
     return <<<SVG
 {$iconSvg}
