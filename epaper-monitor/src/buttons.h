@@ -2,20 +2,26 @@
 #include <cstdint>
 #include <cstddef>
 
-// Liest die weisse "Seite weiter"-Taste (aktiv-low, ~50ms entprellt).
+// Liest die beiden weissen "Blaettern"-Tasten (aktiv-low, ~50ms entprellt).
 // Sekundaerer, redundanter Eingabeweg zu Touch (Spec §10) -- gibt
-// "page_next" oder nullptr (nicht gedrueckt) zurueck.
+// "page_next"/"page_prev" oder nullptr (keine gedrueckt) zurueck.
+// Nutzervorgabe 2026-08-22: die weissen Tasten sind das Blaettern-Paar,
+// die gruene Taste uebernimmt "Vollstaendiges Update" (s. isFullUpdateButtonHeld()).
 const char* readPageButtons();
 
-// Prueft, ob die gruene Wake-/Refresh-Taste (GPIO3/KEY0) beim Aufruf
-// mindestens holdMs lang gehalten wird (blockierend) -- fuer die
-// Neu-Provisionierung ohne Reflash (Spec §10).
+// Prueft, ob die gruene Taste (GPIO3/KEY0) beim Aufruf mindestens holdMs
+// lang gehalten wird (blockierend) -- fuer die Neu-Provisionierung ohne
+// Reflash (Spec §10). Nur beim Boot geprueft, nicht waehrend der Aktiv-
+// Session (dort uebernimmt isFullUpdateButtonHeld() denselben Pin).
 bool isWakeButtonHeld(uint32_t holdMs);
 
-// Prueft, ob die weisse "Vollstaendiges Update"-Taste (ganz links, GPIO5/
-// KEY2) gedrueckt ist, ~50ms entprellt. Erzwingt in main.cpp ein Vollbild
-// statt eines Patches (rtcLastEtag wird geleert -> board.php faellt ohne
-// If-None-Match automatisch auf mode=full zurueck, kein Server-Change noetig).
+// Prueft, ob die gruene Taste (GPIO3/KEY0) gedrueckt ist, ~50ms entprellt.
+// Waehrend das Geraet schlaeft, weckt jeder Druck auf diese Taste es auf
+// (Wake-Pinmaske in goToSleep()); ist es schon wach, erzwingt ein kurzer
+// Druck stattdessen ein Vollbild statt eines Patches (rtcLastEtag wird
+// geleert -> board.php faellt ohne If-None-Match automatisch auf mode=full
+// zurueck, kein Server-Change noetig) -- Nutzervorgabe 2026-08-22: "wecken"
+// und "Vollupdate" sind derselbe physische Knopf, je nach Geraetezustand.
 bool isFullUpdateButtonHeld();
 
 // Rohe, unentprellte Pin-Zustaende aller drei Tasten -- Debug-Hilfe

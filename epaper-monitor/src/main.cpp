@@ -194,14 +194,16 @@ static void fetchAndRender(const String& token, const char* touchValue, bool for
 // Bleibt wach, bis ACTIVE_IDLE_TIMEOUT_MS lang keine Eingabe mehr kam.
 // Eingaben (Touch/Tasten) loesen sofort einen Abruf aus; ohne Eingabe wird
 // trotzdem alle REFRESH_INTERVAL_MS nachgeladen.
-static void runActiveSession(const String& token, bool forceFullFirst) {
+static void runActiveSession(const String& token) {
     // Ersten Abruf VOR dem "bereit"-Piep, nicht mehr danach (2026-08-21):
     // ein sofortiger erzwungener Refresh als allererste Schleifenaktion
     // blockierte 2-3s, WAEHREND der Piep schon "jetzt tippen" signalisierte
     // -- Touch wurde in dieser Zeit gar nicht gepollt (Nutzerbefund: "Piep,
     // dann noch 2s bis wirklich empfangsbereit"). Jetzt: erst laden, dann
-    // piepen, dann WIRKLICH sofort pollen.
-    fetchAndRender(token, nullptr, forceFullFirst);
+    // piepen, dann WIRKLICH sofort pollen. Kein erzwungenes Vollbild fuer
+    // diesen ersten Abruf mehr (Nutzervorgabe 2026-08-22): die gruene Taste
+    // weckt nur noch, "Vollupdate" gilt erst innerhalb der Schleife unten.
+    fetchAndRender(token, nullptr, false);
 
     beepConfirm();
     Serial.println("[active] bereit, Eingaben werden jetzt ausgewertet");
@@ -256,13 +258,24 @@ static void runActiveSession(const String& token, bool forceFullFirst) {
 
         delay(INPUT_POLL_MS);
     }
-    Serial.println("[active] 5 Minuten ohne Eingabe -- gehe schlafen");
+
+    // Letzter Abruf vor dem Schlafengehen erzwingt ein Vollbild (Nutzervorgabe
+    // 2026-08-22, "damit der Schirm huebsch ist waehrend das Geraet schlaeft")
+    // -- unabhaengig davon, ob der letzte reguläre Abruf ein Patch war, zeigt
+    // das Panel waehrend des Tiefschlafs garantiert ein sauberes, vollstaendig
+    // synchronisiertes Bild statt moeglicher Patch-/Overlay-Reste.
+    Serial.println("[active] 5 Minuten ohne Eingabe -- letztes Vollbild vor dem Schlafen");
+    fetchAndRender(token, nullptr, true);
 }
 
 void setup() {
     buzzerWarmup();
-    bool fullUpdateRequested = isFullUpdateButtonHeld();
-
+    // KEIN Boot-Zeit-Check von isFullUpdateButtonHeld() mehr (Nutzervorgabe
+    // 2026-08-22): die gruene Taste ist jetzt derselbe Pin, der das Geraet
+    // aus dem Tiefschlaf weckt -- ein normaler Weck-Druck wuerde sonst JEDE
+    // Session mit einem erzwungenen Vollbild starten. Die Taste zaehlt erst
+    // als "Vollupdate", sobald das Geraet in der Aktiv-Session-Schleife
+    // laeuft (s. runActiveSession()), also wirklich schon wach ist.
     Serial.begin(115200);
     delay(300);
 
@@ -287,7 +300,7 @@ void setup() {
     // (der bisher WLAN-Connect+Zeit-Sync+Fetch bloehte -- spuerbare Verzoegerung
     // zwischen Piep und tatsaechlicher Touch-Reaktion, Nutzerbefund 2026-08-21).
     // runActiveSession() macht den ersten Abruf selbst, als Teil der Schleife.
-    runActiveSession(token, fullUpdateRequested);
+    runActiveSession(token);
 
     goToSleep();
 }

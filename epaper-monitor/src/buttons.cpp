@@ -3,11 +3,14 @@
 
 // Tastenbelegung, bestaetigt durch Seeeds reTerminal-E-Series-"User Buttons"-
 // Doku (Nutzer 2026-08-21): fuer E1001/E1002/E1003 ist KEY0 (GPIO3) die
-// gruene Taste rechts, KEY1 (GPIO4) die mittlere, KEY2 (GPIO5) die linke --
-// deckt sich exakt mit der Nutzervorgabe unten.
-//   KEY0 (GPIO3, gruen, rechts) -- kurz: aufwecken, lang: WLAN/Token-Reset
+// gruene Taste rechts, KEY1 (GPIO4) die mittlere, KEY2 (GPIO5) die linke.
+//   KEY0 (GPIO3, gruen, rechts) -- schlaeft: aufwecken. wach: kurz
+//                                  vollstaendiges Update, lang (beim Boot)
+//                                  WLAN/Token-Reset (Nutzervorgabe 2026-08-22:
+//                                  "wecken"/"Vollupdate" derselbe Knopf).
 //   KEY1 (GPIO4, Mitte, weiss)  -- Seite weiter
-//   KEY2 (GPIO5, links, weiss)  -- vollstaendiges Update erzwingen
+//   KEY2 (GPIO5, links, weiss)  -- Seite zurueck (Nutzervorgabe 2026-08-22:
+//                                  die weissen Tasten sind das Blaettern-Paar)
 //
 // pinMode(..., INPUT) OHNE _PULLUP: die Hardware hat laut derselben Doku
 // bereits eigene Pull-up-Widerstaende ("Hardware already has pull-up
@@ -20,10 +23,15 @@ static const uint32_t DEBOUNCE_MS = 50;
 
 const char* readPageButtons() {
     pinMode(PIN_KEY1, INPUT);
+    pinMode(PIN_KEY2, INPUT);
 
     if (digitalRead(PIN_KEY1) == LOW) {
         delay(DEBOUNCE_MS);
         if (digitalRead(PIN_KEY1) == LOW) return "page_next";
+    }
+    if (digitalRead(PIN_KEY2) == LOW) {
+        delay(DEBOUNCE_MS);
+        if (digitalRead(PIN_KEY2) == LOW) return "page_prev";
     }
     return nullptr;
 }
@@ -41,11 +49,11 @@ bool isWakeButtonHeld(uint32_t holdMs) {
 }
 
 bool isFullUpdateButtonHeld() {
-    pinMode(PIN_KEY2, INPUT);
-    if (digitalRead(PIN_KEY2) != LOW) return false;
+    pinMode(PIN_KEY0, INPUT);
+    if (digitalRead(PIN_KEY0) != LOW) return false;
 
     delay(DEBOUNCE_MS);
-    return digitalRead(PIN_KEY2) == LOW;
+    return digitalRead(PIN_KEY0) == LOW;
 }
 
 RawButtonStates readRawButtonStates() {
