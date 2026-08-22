@@ -264,16 +264,24 @@ void showStatus(StatusIcon icon, const char* text) {
 }
 
 void showBuildMarker(int build, bool lastFrameWasFull) {
+    // VERSALIEN, nicht "fw41" (Nutzerbefund 2026-08-22, "alle Buchstaben gleich
+    // gross"): in FreeSans sitzt das kleine w auf x-Hoehe, waehrend f und die
+    // Ziffern Versalhoehe haben -- die Marke wirkte dadurch zerfranst und
+    // kleiner als sie ist. In Versalien sind alle vier Zeichen gleich hoch.
     char text[16];
-    snprintf(text, sizeof(text), "fw%d", build);
+    snprintf(text, sizeof(text), "FW%d", build);
 
     clearAlignedForPartial(MARKER_X, STATUS_Y, MARKER_W, STATUS_H);
-    epaper.setFreeFont(&FreeSans9pt7b);
+    // 12pt statt 9pt (Nutzerwunsch "insgesamt um 20% groesser"). GFX-Schriften
+    // gibt es nur in festen Stufen -- die naechste ueber 9pt ist 12pt, also
+    // +33% statt der gewuenschten +20%. Damit liegt der Marker auf derselben
+    // Versalhoehe wie der Statustext links, was die Zeile eher ruhiger macht.
+    epaper.setFreeFont(&FreeSans12pt7b);
     epaper.setTextColor(TFT_BLACK, TFT_WHITE);
 
     // Rechtsbuendig ans Spaltenende (x=1856 wie die Kopfzeilen-Prozentzahl),
     // Kaestchen dahinter. textWidth() beruecksichtigt die gesetzte GFX-Schrift.
-    const int boxSize = 12;
+    const int boxSize = 15; // mit der Schrift mitgewachsen (12 * 12/9,5)
     const int boxRight = 1856;
     const int textRight = boxRight - boxSize - 8;
     const int textX = textRight - epaper.textWidth(text);
