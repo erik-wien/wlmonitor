@@ -15,6 +15,12 @@ auth_db:
   name: jardyx
   user: wlmonitor
   password: your_password
+auth_admin_db:
+  host: localhost
+  socket: /tmp/mysql.sock
+  name: jardyx
+  user: authadmin
+  password: your_password
 slack:
   bot_token: your_bot_token
 app:
