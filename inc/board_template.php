@@ -324,14 +324,12 @@ function board_render_svg(
     DateTimeImmutable $dataStand,
     DateTimeImmutable $renderedAt,
     int $batteryPercent,
-    int $wifiBars,
-    ?float $deviceTempC = null,
-    ?int $deviceHumidityPct = null
+    int $wifiBars
 ): string {
     $defs = board_svg_defs();
     $chrome = board_render_chrome_svg($renderedAt, $batteryPercent, $wifiBars);
     $touchBar = board_render_touch_bar_svg($touchBarFavoriteTitles, $activeFavoriteIndex);
-    $weatherSvg = board_render_weather_svg($weather, $deviceTempC, $deviceHumidityPct);
+    $weatherSvg = board_render_weather_svg($weather);
 
     $departurePages = board_paginate_departures($activeFavorite, 1);
     $totalDeparturePages = $departurePages['totalPages'];
@@ -406,28 +404,30 @@ function board_wrap_text(string $text, int $maxCharsPerLine): array
 }
 
 /**
- * Wetterkarte aus Spec §9: Icon, Temperatur "von-bis", Geraete-Sensorwerte,
+ * Wetterkarte aus Spec §9: Icon, Temperatur "von-bis", Stations-Messwerte,
  * Ueberschrift "Heute", Fliesstext mit manuellem Zeilenumbruch, Statuszeile.
  * $weather ist die Rueckgabe von weather_select_display() (inc/weather.php)
  * -- 'available' => false heisst "noch nie erfolgreich abgerufen" (z.B. vor
  * dem ersten Cron-Lauf), nicht dasselbe wie der ">6h veraltet"-Fall (dort
  * bleiben Icon/Temp erhalten, nur der Text wird ersetzt, s. Spec §8).
  *
- * $deviceTempC/$deviceHumidityPct kommen vom SHT4x im Geraet (X-Device-Temp-C/
- * X-Device-Humidity-Pct, s. web/board.php) -- unabhaengig von der Wetter-
- * vorhersage, zeigt die tatsaechliche Umgebung des Displays.
+ * $weather['station'] kommt von wetter.orf.at/wien/mariabrunn (echte
+ * Aussenmesswerte, 2026-08-22) -- ersetzt die vorherige interne SHT4x-
+ * Sensorzeile des Geraets, die nur die Innenraumtemperatur am Display zeigte.
  */
-function board_render_weather_svg(array $weather, ?float $deviceTempC = null, ?int $deviceHumidityPct = null): string
+function board_render_weather_svg(array $weather): string
 {
+    $station = $weather['station'] ?? ['available' => false];
+
     if ($weather['available'] === false) {
-        return board_render_weather_card('icon_unbekannt', null, null, ['Wetterdaten werden geladen …'], $deviceTempC, $deviceHumidityPct);
+        return board_render_weather_card('icon_unbekannt', null, null, ['Wetterdaten werden geladen …'], $station);
     }
 
     $iconId = BOARD_ICON_ID_BY_CATEGORY[$weather['icon_category']] ?? BOARD_ICON_ID_BY_CATEGORY['unbekannt'];
     $bodyText = $weather['text'] ?? $weather['text_error'] ?? '';
     $lines = board_wrap_text($bodyText, BOARD_WEATHER_TEXT_MAX_CHARS_PER_LINE);
 
-    return board_render_weather_card($iconId, $weather['temp_min'], $weather['temp_max'], $lines, $deviceTempC, $deviceHumidityPct);
+    return board_render_weather_card($iconId, $weather['temp_min'], $weather['temp_max'], $lines, $station);
 }
 
 /**
@@ -442,48 +442,50 @@ function board_render_weather_svg(array $weather, ?float $deviceTempC = null, ?i
  */
 const BOARD_STATUS_IDLE_TEXT = 'Warte auf Eingabe';
 
-/** @param list<string> $bodyLines */
+/**
+ * @param list<string> $bodyLines
+ * @param array{available: bool, temp_c?: float, humidity_pct?: int, wind_kmh?: int, wind_direction?: string, precipitation_mm?: float} $station
+ */
 function board_render_weather_card(
     string $iconId,
     ?int $tempMin,
     ?int $tempMax,
     array $bodyLines,
-    ?float $deviceTempC = null,
-    ?int $deviceHumidityPct = null
+    array $station = ['available' => false]
 ): string {
-    // Beide Zeilen 40px (Nutzerwunsch 2026-08-22: interne Sensorwerte waren
-    // bei 28px kaum lesbar) und gemeinsam mit dem Icon vertikal zentriert.
-    // Icon-Mitte liegt bei y=200 (translate weiter unten), Textmitte einer
-    // Zeile liegt ca. 14px unter ihrer Baseline (~0,35 * 40px):
-    // - mit Sensorzeile: zwei Zeilen im Block, 56px Abstand, Y1=186/Y2=242
-    //   fuer eine gemeinsame Blockmitte um y=214.
-    // - ohne Sensorzeile (kein Geraet/Lesefehler): nur die eine Zeile,
-    //   direkt an der Icon-Mitte zentriert, Y=214.
-    $hasSensorLine = $deviceTempC !== null && $deviceHumidityPct !== null;
-    $tempY = $hasSensorLine ? 186 : 214;
-
+    // Icon+Vorhersage-Temperatur bleiben wie urspruenglich als Einzeiler am
+    // Icon zentriert (Icon-Mitte y=200, Textmitte ~14px unter der Baseline
+    // bei 40px -> Y=214). Die Stationsmesswerte stehen als eigener,
+    // volle-Spaltenbreite-Block DARUNTER, nicht mehr an das Icon gekoppelt --
+    // vier Werte (Temp/Feuchte/Wind/Niederschlag) passen neben dem Icon
+    // (x=1330 bis 1856, nur 526px) sonst nicht verzerrungsfrei.
     $tempSvg = $tempMin !== null && $tempMax !== null
         ? sprintf(
-            '<text x="1330" y="%d" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="40" fill="black">%d° – %d°C</text>',
-            $tempY, $tempMin, $tempMax
+            '<text x="1330" y="214" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="40" fill="black">%d° – %d°C</text>',
+            $tempMin, $tempMax
         )
         : '';
 
-    $sensorSvg = $hasSensorLine
-        ? sprintf(
-            '<text x="1330" y="242" font-family="Atkinson Hyperlegible Next" font-weight="500" font-size="40" fill="black">%s°C • %d%% Rel.LF</text>',
-            number_format($deviceTempC, 1), $deviceHumidityPct
-        )
-        : '';
+    $stationSvg = '';
+    if ($station['available']) {
+        $stationSvg .= sprintf(
+            '<text x="1150" y="300" font-family="Atkinson Hyperlegible Next" font-weight="500" font-size="40" fill="black">%s°C • %d%% Rel.LF</text>',
+            number_format($station['temp_c'], 1), $station['humidity_pct']
+        );
+        $stationSvg .= sprintf(
+            '<text x="1150" y="356" font-family="Atkinson Hyperlegible Next" font-weight="500" font-size="40" fill="black">Wind %s %d km/h • %s mm/h Regen</text>',
+            htmlspecialchars($station['wind_direction'], ENT_XML1), $station['wind_kmh'], number_format($station['precipitation_mm'], 1)
+        );
+    }
 
     $headingSvg = $tempMin !== null
-        ? '<text x="1150" y="380" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="46" fill="black">Heute</text>'
+        ? '<text x="1150" y="430" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="46" fill="black">Heute</text>'
         : '';
 
     $bodySvg = '';
     foreach ($bodyLines as $i => $line) {
         // 46px statt 39px, Zeilenabstand 54px statt 46px (Nutzerwunsch 2026-08-22).
-        $y = 436 + $i * 54;
+        $y = 486 + $i * 54;
         $bodySvg .= sprintf(
             '<text x="1150" y="%d" font-family="Atkinson Hyperlegible Next" font-weight="500" font-size="46" fill="black">%s</text>',
             $y, htmlspecialchars($line, ENT_XML1)
@@ -500,7 +502,7 @@ function board_render_weather_card(
   <use href="#{$iconId}"/>
 </g>
 {$tempSvg}
-{$sensorSvg}
+{$stationSvg}
 {$headingSvg}
 {$bodySvg}
 {$statusSvg}

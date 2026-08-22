@@ -142,11 +142,9 @@ static void fetchAndRender(const String& token, const char* touchValue, bool for
 
     int batteryMv = readBatteryMillivolts();
     int rssi = WiFi.RSSI();
-    float tempC = NAN, humidityPct = NAN;
-    readAmbientConditions(tempC, humidityPct); // bleibt NAN bei Lesefehler -- fetchBoard laesst die Header dann weg
 
     BoardFetchResult fetch;
-    fetchBoard(token.c_str(), touchValue, rtcLastEtag, batteryMv, rssi, tempC, humidityPct, HTTP_TIMEOUT_MS, fetch);
+    fetchBoard(token.c_str(), touchValue, rtcLastEtag, batteryMv, rssi, HTTP_TIMEOUT_MS, fetch);
 
     FetchOutcome outcome;
     switch (fetch.outcome) {

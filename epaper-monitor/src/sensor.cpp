@@ -33,30 +33,3 @@ float readAmbientTemperature() {
 
     return celsius;
 }
-
-bool readAmbientConditions(float& outTempC, float& outHumidityPct) {
-    Wire.beginTransmission(SHT4X_ADDR);
-    Wire.write(SHT4X_CMD_MEASURE_HP);
-    if (Wire.endTransmission() != 0) return false;
-
-    delay(10);
-
-    uint8_t buf[6];
-    if (Wire.requestFrom((int) SHT4X_ADDR, (int) sizeof(buf)) != (int) sizeof(buf)) {
-        return false;
-    }
-    for (size_t i = 0; i < sizeof(buf); i++) buf[i] = Wire.read();
-
-    uint16_t tTicks = ((uint16_t) buf[0] << 8) | buf[1];
-    uint16_t rhTicks = ((uint16_t) buf[3] << 8) | buf[4];
-    float celsius = -45.0f + 175.0f * ((float) tTicks / 65535.0f);
-    float humidity = -6.0f + 125.0f * ((float) rhTicks / 65535.0f);
-
-    if (celsius < -40.0f || celsius > 85.0f) return false;
-    if (humidity < 0.0f) humidity = 0.0f;
-    if (humidity > 100.0f) humidity = 100.0f;
-
-    outTempC = celsius;
-    outHumidityPct = humidity;
-    return true;
-}

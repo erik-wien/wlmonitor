@@ -79,4 +79,62 @@ class WeatherSelectDisplayTest extends TestCase
         );
         $this->assertSame('Morgen-Text', $result['text']);
     }
+
+    // --- Stations-Messwerte (Mariabrunn, 2026-08-22) --------------------------
+    // Eigene fetched_at, unabhaengig von der Prognose (s. scripts/
+    // weather_fetch_cron.php -- beide Quellen koennen unabhaengig scheitern).
+
+    private function cacheWithStation(string $fetchedAt, string $stationFetchedAt): array
+    {
+        return array_merge($this->cache($fetchedAt), [
+            'station_fetched_at' => $stationFetchedAt,
+            'station' => ['temp_c' => 21.3, 'humidity_pct' => 47, 'wind_kmh' => 11, 'wind_direction' => 'West', 'precipitation_mm' => 0.0],
+        ]);
+    }
+
+    public function test_no_cache_has_unavailable_station_too(): void
+    {
+        $result = weather_select_display(null, new DateTimeImmutable('2026-08-15T12:00:00+02:00'));
+        $this->assertFalse($result['station']['available']);
+    }
+
+    public function test_cache_without_station_keys_has_unavailable_station(): void
+    {
+        // Alte Cache-Datei von vor 2026-08-22 hat noch keine station-Felder.
+        $result = weather_select_display($this->cache('2026-08-15T15:00:00+02:00'), new DateTimeImmutable('2026-08-15T15:01:00+02:00'));
+        $this->assertFalse($result['station']['available']);
+    }
+
+    public function test_fresh_station_data_is_available(): void
+    {
+        $result = weather_select_display(
+            $this->cacheWithStation('2026-08-15T15:00:00+02:00', '2026-08-15T15:00:00+02:00'),
+            new DateTimeImmutable('2026-08-15T15:01:00+02:00')
+        );
+        $this->assertTrue($result['station']['available']);
+        $this->assertSame(21.3, $result['station']['temp_c']);
+        $this->assertSame(47, $result['station']['humidity_pct']);
+        $this->assertSame(11, $result['station']['wind_kmh']);
+        $this->assertSame('West', $result['station']['wind_direction']);
+        $this->assertSame(0.0, $result['station']['precipitation_mm']);
+    }
+
+    public function test_station_data_older_than_6h_is_unavailable(): void
+    {
+        // Eigene Alterspruefung, unabhaengig von einer noch frischen Prognose.
+        $result = weather_select_display(
+            $this->cacheWithStation('2026-08-15T15:00:00+02:00', '2026-08-15T06:00:00+02:00'),
+            new DateTimeImmutable('2026-08-15T12:00:01+02:00') // Station 6h 0min 1s alt
+        );
+        $this->assertFalse($result['station']['available']);
+    }
+
+    public function test_station_data_exactly_6h_old_is_not_yet_stale(): void
+    {
+        $result = weather_select_display(
+            $this->cacheWithStation('2026-08-15T15:00:00+02:00', '2026-08-15T06:00:00+02:00'),
+            new DateTimeImmutable('2026-08-15T12:00:00+02:00') // exakt 6h
+        );
+        $this->assertTrue($result['station']['available']);
+    }
 }

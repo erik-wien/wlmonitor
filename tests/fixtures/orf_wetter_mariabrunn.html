@@ -1,0 +1,564 @@
+<!DOCTYPE html >
+<html lang="de" dir="ltr">
+<head>
+   <meta name="google-site-verification" content="x-x0HlFf8WLZAZ0GyCaEfTFs8bav35iVLSj30TnJA-w" />
+   <meta charset="utf-8" />
+   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+   <link rel="preload" href="//orf.at/fonts/ORFUniversal/Variable/Web/WOFF2/ORFUniversalVF_W_WghtWdthOpsz.woff2" as="font" type="font/woff2" crossorigin>
+   <link rel="preload" href="//orf.at/fonts/ORFUniversal/Variable/Web/WOFF2/ORFUniversalVF_Italic_W_WghtWdthOpsz.woff2" as="font" type="font/woff2" crossorigin>
+   <link rel="preload" href="//orf.at/fonts/ORFUniversalSC/Variable/Web/WOFF2/ORFUniversalSCVF_W_WghtOpsz.woff2" as="font" type="font/woff2" crossorigin>
+   <link rel='preload' href='https://data-d6e13c60e8.orf.at/iomm/latest/manager/base/es6/bundle.js' as='script' id='IOMmBundle' crossorigin>
+   <link rel='preload' href='https://data-d6e13c60e8.orf.at/iomm/latest/bootstrap/loader.js' as='script' crossorigin>
+
+   <title>Mariabrunn - wetter.ORF.at</title>
+   <link rel="stylesheet" type="text/css" href="https://orf.at/fonts/fonts-universal-compat.css">
+   <link rel="stylesheet" type="text/css" media="screen, handheld" title="CSS Stylesheet" href="/static/wetter/compressed//main.css?v=1.7" />
+
+   <link rel="stylesheet" type="text/css" media="all" title="CSS Stylesheet" href="/static/wetter/compressed//sprites.css?v=1.7" />
+
+   <!-- For mobile devices use reduced styles -->
+   <link rel="stylesheet" type="text/css" media="all and (max-device-width: 800px)" href="/static/wetter/3_3//css/maps_mobile.css" />
+
+   <link rel="stylesheet" type="text/css" media="print" title="CSS Stylesheet" href="/static/wetter/3_3//css/print.css" />
+
+   <script type="text/javascript">
+      var settings = {
+         /* Network Navigation Config */
+         "sitemap": {
+            "url": "//orf.at/mojo/1_3/storyserver/common/sitemap/js/sitemap.js",
+            "opacity": 0.9
+         },
+         /* For RaphaelJS image loading */
+         "staticUrl": "/static/wetter/3_3/",
+         "baseUri": "https://wetter.ORF.at",
+         "searchUrl": "/search/json",
+         "stationTemplate": function(data) {
+             var sOrC = (data.state || data.country);
+             if (sOrC) {
+                 return ['<span class="station" data-href="', data.href, '">', data.name, ', ', sOrC.name, '</span>'].join("");
+             }
+             return ['<span class="station" data-href="', data.href, '">', data.name, '</span>'].join("");
+         },
+         "countryTemplate": function(data) {
+             return ['<span class="Country" data-href="', data.href, '">', data.name.toUpperCase(), ' (', data.stations.length, ')</span>'].join("");
+         },
+         "videobar": {
+             vodUrl: "//tubestatic.orf.at/tvthek/vod/wetter.json",
+             playerUrl: "/video/",
+             items: 5,
+             responsive: {
+                1000: {
+                   items: 6
+                },
+                768: {
+                   items: 5
+                },
+                479: {
+                   items: 4
+                },
+                390: {
+                   items: 2
+                },
+                0: {
+                   items: 2
+                }
+             }
+          },
+          videoMissingImageUrl: "/static/wetter/3_3//images/tvthek/not_found.png"
+      };
+      var loc = {};
+      var ads = {
+              'path': '/wie/station',
+              'profile': {"temp":16,"day":1,"cloud":1,"rain":0,"snow":0,"warning":0,"subcategory":"oesterreichwetter","station":"Mariabrunn"},
+              'type': 'sb',
+              'jsonURL': '/static/wetter/3_3//wetter.json'
+          };
+      ads.profile.viewport = 'full';
+      ads.profile.platform = 'web';
+      
+   </script>
+
+   <script type="text/javascript" src="/static/wetter/compressed//main.js?v=1.7"> </script>
+
+   <script type="module" src="//orf.at/oon/media/9.0/oonmedia.js"></script>
+
+   <link rel="stylesheet" type="text/css" media="screen, handheld" href="//orf.at/mojo.compressed/1_4_1/news/news/dsgvo-banner.css?v=1.7"/>
+   <script type="text/javascript" src="//orf.at/mojo.compressed/1_4_1/news/news/dsgvo-banner.js?v=1.7"></script>
+
+   <meta name="robots" content="index, follow, noodp" />
+   <meta name="format-detection" content="telephone=no" />
+
+   <meta name="application-name" content="wetter.ORF.at"/>
+   <meta name="msapplication-TileImage" content="//wetter.orf.at/static/wetter/3_3/images/ms-metro-icon.png"/>
+   <meta name="msapplication-TileColor" content="#5286C1"/>
+   <meta name="msapplication-square70x70logo" content="//orf.at/mojo/1_3/storyserver/common/msapplicationtiles/target.128x128.png"/>
+   <meta name="msapplication-square150x150logo" content="//orf.at/mojo/1_3/storyserver/common/msapplicationtiles/target.270x270.png"/>
+   <meta name="msapplication-wide310x150logo" content="//orf.at/mojo/1_3/storyserver/common/msapplicationtiles/target.558x270.png" />
+   <meta name="msapplication-square310x310logo" content="//orf.at/mojo/1_3/storyserver/common/msapplicationtiles/target.558x558.png" />
+
+   <link rel="shortcut icon" href="//orf.at/favicon.ico" type="image/x-icon" />
+   <link rel="icon" href="//orf.at/favicon.ico?newfav=on" type="image/x-icon" />
+   <link rel="apple-touch-icon" href="https://wetter.orf.at/static/wetter/3_3//images/icons/apple-touch-icon-wetter.png" />
+   <link rel="apple-touch-icon-precomposed" href="https://wetter.orf.at/static/wetter/3_3//images/icons/apple-touch-icon-wetter.png" />
+   <meta property="og:image" content="//wetter.orf.at/static/wetter/3_3//images/og-image-fb.png" />
+
+   <meta name="description" content="Die aktuellen Wetterwerte und Prognosen f&uuml;r &Ouml;sterreich, Europa und die Welt, mit Bergwetterprognosen, Karten, Tabellen und Wettervideos." />
+
+   <!--[if lte IE 8]>
+      <link rel="stylesheet" type="text/css" href="/static/wetter/3_3//css/ie-fixes.css?v=2" />
+   <![endif]-->
+   <link rel="alternate" media="only screen and (max-width: 599px)" href="/m/wien/mariabrunn/" />
+   <link rel="alternate" media="handheld" href="/m/wien/mariabrunn/" />
+</head>
+<body class="ss wetter main" id="top">
+   <div id="ss-lightVersionMessage" class="lightVersionMessage" aria-hidden="true">
+      <a href="https://orf.at/light?redirect=https://wetter.orf.at/m/">M&ouml;chten Sie zur Mobilversion wechseln?</a>
+   </div>
+   <div id="skiplinks">
+      <a accesskey="1" href="#content">Zum Inhalt [AK+1]</a><span class="hidden offscreen"> / </span>
+      <span id="ss-dynamicSkiplink"></span>
+      <a href="#nnav" accesskey="3">Zur ORF.at-Navigation [AK+3]</a>
+   </div>
+   <div class="wrapper">
+      <div id="advert"></div>
+      <div class="header" role="banner">
+         <a href="https://wetter.ORF.at/" id="wetterLogo" class="hdpiLogo">
+            <img src="/static/wetter/3_3//images/wetter_v2.svg" width="82px" height="39px" alt="zur wetter.ORF.at-Startseite" title="wetter.ORF.at"/>
+         </a>
+         <a href="//orf.at" id="orfonTarget" class="hdpiLogo">
+            <img src="/static/wetter/3_3//images/target_news.svg" width="101px" height="39px" alt="zur ORF.at-Startseite" title="ORF.at"/>
+         </a>
+
+         <img id="ss-printLogo" alt="" title="" src="/static/wetter/3_3//images/logo.wetterorfat.print.png" width="0" height="0" />
+
+         <h2 class="offscreen" id="nnav">Navigation</h2>
+         <nav role="navigation">
+             <ul id="ss-networkNavigation" class="networkNavigation" role="navigation">
+                <li><a href="//tv.orf.at">Fernsehen</a></li>
+                <li><a href="//on.orf.at">ORF ON</a></li>
+                <li><a href="https://kids.orf.at/">KIDS</a></li>
+                <li><a href="//sound.orf.at">Sound</a></li>
+                <li><a href="//debatte.orf.at">Debatte</a></li>
+                <li><a href="//oesterreich.orf.at">&Ouml;sterreich</a></li>
+                <li><a href="//wetter.orf.at" class="current">Wetter</a></li>
+                <li><a href="//sport.orf.at">Sport</a></li>
+                <li><a href="//orf.at" lang="en">News</a></li>
+                <li id="ss-sitemapMenu" class="sitemapMenu">
+                   <a href="//orf.at/uebersicht" id="ss-showSitemap" role="button" aria-controls="ss-sitemap" aria-haspopup="true">ORF.at im &Uuml;berblick</a>
+                   <div id="ss-sitemap" class="sitemap" aria-labelledby="ss-showSitemap">
+                      <ul class="list"></ul>
+                      <div id="ss-sitemapBackground" class="background"></div>
+                   </div>
+                </li>
+             </ul>
+         </nav>
+      </div>
+      
+      <div class="content" id="content" role="main">
+         <div class="regionNavigation"><h2 class="offscreen" id="ss-regionLabel" tabindex="-1">Regionenauswahl</h2><div role="menubar"><ul id="ss-regionMenubar" role="presentation"><li role="presentation" class="toplevel level4 nodeExternalID9999999975   ">
+      <a href="https://wetter.ORF.at/welt/" id="ss-navnode-9999999975" role="menuitem" aria-haspopup="true"><h3>Welt<span class="topnavi_bckg_png"></span></h3></a>
+
+
+
+      <ul class="sublevelList" role="menu">
+            <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/afrika/" id="ss-subitem-9999999996">Afrika</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/asien/" id="ss-subitem-9999999995">Asien</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/australienozeanien/" id="ss-subitem-9999999969">Australien & Ozeanien</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/europa/" id="ss-subitem-9999999984">Europa</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/naherosten/" id="ss-subitem-9999999966">Naher Osten</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/nordamerika/" id="ss-subitem-9999999981">Nord- & Mittelamerika</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/suedamerika/" id="ss-subitem-9999999977">Südamerika</a></li>
+
+
+
+
+   </ul>
+
+
+
+</li> 
+
+
+<li role="presentation" class="toplevel level3 nodeExternalID9999999984   ">
+      <a href="https://wetter.ORF.at/europa/" id="ss-navnode-9999999984" role="menuitem" aria-haspopup="true"><h3>Europa<span class="topnavi_bckg_png"></span></h3></a>
+
+
+
+      <ul class="sublevelList" role="menu">
+            <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/deutschlandschweiz/" id="ss-subitem-9999999985">Deutschland, Schweiz</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/frankreichbenelux/" id="ss-subitem-9999999983">Frankreich, Benelux</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/britischeinseln/" id="ss-subitem-9999999993">Großbritannien, Irland</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/italien-adria/" id="ss-subitem-9999999997">Italien, Adria-Raum</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/nordeuropa/" id="ss-subitem-9999999978">Nordeuropa</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/oes/" id="ss-subitem-43">Österreich</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/osteuropa/" id="ss-subitem-9999999980">Osteuropa</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/polenbaltikum/" id="ss-subitem-9999999979">Polen, Baltikum</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/spanienportugal/" id="ss-subitem-9999999982">Spanien, Portugal</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/suedosteuropa/" id="ss-subitem-9999999965">Südosteuropa</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/ungarntschechienslo/" id="ss-subitem-9999999976">Ungarn, Tschechien, Slowakei </a></li>
+
+
+
+
+   </ul>
+
+
+
+</li> 
+
+
+<li role="presentation" class="toplevel level2 nodeExternalID43   ">
+      <a href="https://wetter.ORF.at/oes/" id="ss-navnode-43" role="menuitem" aria-haspopup="true"><h3>Österreich<span class="topnavi_bckg_png"></span></h3></a>
+
+
+
+      <ul class="sublevelList" role="menu">
+         
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/burgenland/" id="ss-subitem-43008">Burgenland</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/kaernten/" id="ss-subitem-43003">Kärnten</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/niederoesterreich/" id="ss-subitem-43006">Niederösterreich</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/oberoesterreich/" id="ss-subitem-43005">Oberösterreich</a></li>
+
+
+
+   
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/salzburg/" id="ss-subitem-43004">Salzburg</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/steiermark/" id="ss-subitem-43007">Steiermark</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/tirol/" id="ss-subitem-43002">Tirol</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/vorarlberg/" id="ss-subitem-43001">Vorarlberg</a></li>
+
+
+
+      <li role="presentation"><a role="menuitem" href="https://wetter.ORF.at/wien/" id="ss-subitem-43009">Wien</a></li>
+
+
+
+
+   </ul>
+
+
+
+</li> 
+
+
+<li role="presentation" class="toplevel level1 nodeExternalID43009 noSublevel  ">
+      <a href="https://wetter.ORF.at/wien/" id="ss-navnode-43009" role="menuitem" aria-haspopup="true"><h3>Wien<span class="topnavi_bckg_png"></span></h3></a>
+
+
+
+   
+</li> 
+
+
+<li class="toplevel">
+   <h3 id="ss-statnav-11080">Mariabrunn</h3>
+</li>
+</ul></div><div id="search"><input type="text" placeholder="Suche nach Ort oder Land" /></div></div>
+
+         <div class="stationDetail" data-externalID="11080">
+   <h1>
+      Wetterdaten im Detail:
+      <strong>
+         Mariabrunn
+         <span class="weatherIcon c100000" title="wolkenlos"></span>
+      </strong>
+   </h1>
+
+   
+
+      <div class="dataTable noSnow">
+      <div class="leftCol">
+         <p class="offscreen">Beobachtung: wolkenlos.</p>
+         <p>
+            <span>Seehöhe</span><span class="offscreen">:</span>
+            227 <abbr title="Meter">m</abbr>
+         </p>
+         <p>
+            <span>Temperatur</span><span class="offscreen">:</span>
+            18,4&thinsp;<abbr title="Grad Celsius">&deg;C</abbr>
+         </p>
+         <p>
+            <span>Taupunkt</span><span class="offscreen">:</span>
+            11,8&thinsp;<abbr title="Grad Celsius">&deg;C</abbr>
+         </p>
+         <p>
+            <span>Wind</span><span class="offscreen">:</span>
+            West, 11 <abbr title="Kilometer pro Stunde">km/h</abbr>
+         </p>
+         <p>
+            <span>Windspitzen</span><span class="offscreen">:</span>
+            West, 28 <abbr title="Kilometer pro Stunde">km/h</abbr>
+         </p>
+         <p class="snow">&nbsp;</p>
+      </div>
+      <div class="rightCol">
+            <p>
+      <span>Luftdruck</span><span class="offscreen">:</span></span>
+      1014,3 <abbr title="Hektopascal">hPa</abbr>
+   </p>
+
+
+
+         <p>
+            <span>Luftfeuchtigkeit</span><span class="offscreen">:</span>
+            65 <abbr title="Prozent">%</abbr>
+         </p>
+         <p>
+            <span>Sonnenschein</span><span class="offscreen">:</span>
+            47 <abbr title="Minuten pro Stunde">min/h</abbr>
+         </p>
+         <p>
+            <span>Niederschlag</span><span class="offscreen">:</span>
+            0,0 <abbr title="Millimeter pro Stunde">mm/h</abbr>
+         </p>
+         <p class="snow">
+            <span>Schneeh&ouml;he</span><span class="offscreen">:</span>
+            k. A.
+         </p>
+         <p class="lastUpdateMessage"><span>
+            Messwerte von 8.00 Uhr
+            
+         </span></p>
+      </div>
+   </div>
+
+
+
+
+   <div class="clearer"></div>
+
+      <div class="plotTable full" id="ss-dataPlots">
+      <div class="leftCol">
+         <h2>Temperaturverlauf:</h2>
+         <div class="raphaelCanvas" id="temperaturePlot"></div>
+      </div>
+      <div class="rightCol">
+         <h2>Niederschlagsverlauf:</h2>
+         <div class="raphaelCanvas" id="rainPlot"></div>
+      </div>
+      <div class="clearer"></div>
+   </div>
+   
+   <div class="sliderNavigation">
+      <span id="ss-tag">
+         <a href="#tag">24 Stunden</a>
+      </span>
+      <span class="spacer"></span>
+      <span id="ss-woche">
+         <a href="#woche">7 Tage</a>
+      </span>
+      <span class="spacer"></span>
+      <span id="ss-monat">
+         <a href="#monat">30 Tage</a>
+      </span>
+      <span id="ss-loading"></span>
+   </div>
+
+
+
+</div>
+
+      <div class="mapNavigation" role="navigation">
+      <h2 class="offscreen">Kartenauswahl</h2>
+      <ul>
+         <li class="active"><a href="https://wetter.ORF.at/wien/"><div><span class="arrow"></span>Aktuelles Wetter</div></a></li>
+         <li ><a href="https://wetter.ORF.at/wien/prognose"><div><span class="arrow"></span>5-Tage-Prognose</div></a></li>
+         
+         
+         
+         <li ><a href="https://wetter.ORF.at/oes/wetterverlauf"><div><span class="arrow"></span>Satellit/Blitzaktivit&auml;t</div></a></li>
+         <li ><a href="https://wetter.ORF.at/oes/wetterprognosen"><div><span class="arrow"></span>Prognosevideos</div></a></li>
+            <li >
+   <div class="submenue"><div><ul>
+          <li><a href="https://wetter.ORF.at/burgenland/webcam">Burgenland</a></li>
+
+
+          <li><a href="https://wetter.ORF.at/kaernten/webcam">Kärnten</a></li>
+
+
+          <li><a href="https://wetter.ORF.at/niederoesterreich/webcam">Niederösterreich</a></li>
+
+
+          <li><a href="https://wetter.ORF.at/oberoesterreich/webcam">Oberösterreich</a></li>
+
+
+          <li><a href="https://wetter.ORF.at/salzburg/webcam">Salzburg</a></li>
+
+
+          <li><a href="https://wetter.ORF.at/steiermark/webcam">Steiermark</a></li>
+
+
+          <li><a href="https://wetter.ORF.at/tirol/webcam">Tirol</a></li>
+
+
+          <li><a href="https://wetter.ORF.at/vorarlberg/webcam">Vorarlberg</a></li>
+
+
+          <li><a href="https://wetter.ORF.at/wien/webcam">Wien</a></li>
+
+
+   </ul></div></div>
+   <a href="https://wetter.ORF.at/wien/webcam"><div><span class="arrow"></span>Wetterkameras</div></a></li>
+
+
+            <li >
+   <div class="submenue"><div><ul>
+          <li><a href="https://wetter.ORF.at/burgenland/wassertemperaturen">Burgenland</a></li>
+
+
+          <li><a href="https://wetter.ORF.at/kaernten/wassertemperaturen">Kärnten</a></li>
+
+
+          <li><a href="https://wetter.ORF.at/niederoesterreich/wassertemperaturen">Niederösterreich</a></li>
+
+
+          <li><a href="https://wetter.ORF.at/oberoesterreich/wassertemperaturen">Oberösterreich</a></li>
+
+
+          <li><a href="https://wetter.ORF.at/salzburg/wassertemperaturen">Salzburg</a></li>
+
+
+          <li><a href="https://wetter.ORF.at/steiermark/wassertemperaturen">Steiermark</a></li>
+
+
+          <li><a href="https://wetter.ORF.at/tirol/wassertemperaturen">Tirol</a></li>
+
+
+          <li><a href="https://wetter.ORF.at/vorarlberg/wassertemperaturen">Vorarlberg</a></li>
+
+
+          <li><a href="https://wetter.ORF.at/wien/wassertemperaturen">Wien</a></li>
+
+
+   </ul></div></div>
+   <a href="https://wetter.ORF.at/wien/wassertemperaturen"><div><span class="arrow"></span>Wassertemperaturen</div></a></li>
+
+
+            <li ><a href="https://wetter.ORF.at/wien/umweltdaten"><div><span class="arrow"></span>UV-Index/Ozon</div></a></li>
+
+
+            <li ><a href="https://wetter.ORF.at/wien/pollen"><div><span class="arrow"></span>Polleninformation</div></a></li>
+
+
+         <li ><a href="https://wetter.ORF.at/oes/extremwerte"><div><span class="arrow"></span>Extremwerte</div></a></li>
+
+            <li class="sub"><a href="//wien.ORF.at/news/"><div><span class="oekaIcon wie">Nachrichten</span></div></a></li>
+
+
+
+         <li><a href="https://extra.orf.at/wetter/wetterfoto-einsenden102.html"><img src="/static/wetter/3_3//images/flags/wetterfoto_sonne_promo.png" alt="Mitmachen! Ihr Wetterfoto im Fernsehen" /></a></li>
+
+      </ul>
+      <div class="spacerDiv"></div>
+   </div>
+
+   <div class="clearer"></div>
+
+
+
+
+
+
+<div class="clearer stationFooter"></div>
+
+
+
+      </div>
+      
+      <div class="pageFooter">
+         <ul>
+            <li><a href="https://wetter.ORF.at/feedback">Kontakt zur Wetterredaktion</a></li>
+            <li><a href="//orf.at/stories/datenschutz/">Datenschutz</a></li>
+            <li><a href="#" id="show-didomi">Datenschutzeinstellungen</a></li>
+            <li><a href="//orf.at/stories/impressum/">Offenlegung</a></li>
+         </ul>
+      </div>
+
+   </div>
+
+   <script type="text/javascript">
+   var ivwPrefix = "RedCont/Wetter/Oesterreichwetter/v2wet/v2wie/v2lawe/station/";
+   var oewa_data = {
+           "cn": "at",
+           "st": "at_w_atorf",
+           "sv": "in",
+           "ps": "lin",
+           "cp": "RedCont/Wetter/Oesterreichwetter/v2wet/v2wie/v2lawe/station/",
+           "sc": "yes"
+         };
+</script>
+
+
+</body>
+</html>
+

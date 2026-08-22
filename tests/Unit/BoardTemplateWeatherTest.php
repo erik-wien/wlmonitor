@@ -96,29 +96,43 @@ class BoardTemplateWeatherTest extends TestCase
         $this->assertStringContainsString('Wetterdaten werden geladen', $svg);
     }
 
-    // --- Geraete-Sensorzeile + Statuszeile (2026-08-22) -----------------------
+    // --- Stations-Messwerte (Mariabrunn) + Statuszeile (2026-08-22) -----------
 
-    public function test_weather_svg_shows_device_sensor_line_when_provided(): void
+    /** @return array{available: bool, temp_c?: float, humidity_pct?: int, wind_kmh?: int, wind_direction?: string, precipitation_mm?: float} */
+    private function stationFixture(array $overrides = []): array
     {
-        $svg = board_render_weather_svg($this->weatherFixture(), 21.3, 47);
+        return array_merge([
+            'available' => true,
+            'temp_c' => 21.3,
+            'humidity_pct' => 47,
+            'wind_kmh' => 11,
+            'wind_direction' => 'West',
+            'precipitation_mm' => 0.0,
+        ], $overrides);
+    }
+
+    public function test_weather_svg_shows_station_measurements_when_available(): void
+    {
+        $svg = board_render_weather_svg($this->weatherFixture(['station' => $this->stationFixture()]));
 
         $this->assertStringContainsString('21.3°C • 47% Rel.LF', $svg);
+        $this->assertStringContainsString('Wind West 11 km/h • 0.0 mm/h Regen', $svg);
     }
 
-    public function test_weather_svg_omits_sensor_line_when_not_provided(): void
+    public function test_weather_svg_omits_station_lines_when_unavailable(): void
     {
-        $svg = board_render_weather_svg($this->weatherFixture());
+        $svg = board_render_weather_svg($this->weatherFixture(['station' => ['available' => false]]));
 
         $this->assertStringNotContainsString('Rel.LF', $svg);
+        $this->assertStringNotContainsString('Regen', $svg);
     }
 
-    public function test_weather_svg_omits_sensor_line_when_only_one_value_present(): void
+    public function test_weather_svg_omits_station_lines_when_key_missing_entirely(): void
     {
-        // Kaputter Sensor liefert nie nur einen der beiden Werte (SHT4x
-        // beantwortet eine Messung immer mit Temperatur+Feuchte zusammen,
-        // s. readAmbientConditions() in epaper-monitor/src/sensor.cpp) --
-        // trotzdem defensiv: nur mit BEIDEN Werten rendern.
-        $svg = board_render_weather_svg($this->weatherFixture(), 21.3, null);
+        // weather_select_display() liefert 'station' immer mit, aber die
+        // Funktion soll auch ohne den Schluessel nicht brechen (z.B. alte
+        // Cache-Fixture in einem anderen Test).
+        $svg = board_render_weather_svg($this->weatherFixture());
 
         $this->assertStringNotContainsString('Rel.LF', $svg);
     }

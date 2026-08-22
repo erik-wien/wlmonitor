@@ -101,6 +101,73 @@ function weather_parse_forecast(string $html): array
 }
 
 /**
+ * Parst wetter.orf.at/wien/mariabrunn/ (aktuelle Messwerte der Station
+ * Mariabrunn, nicht die Prognose) -- Temperatur, Wind, Luftfeuchtigkeit,
+ * Niederschlag (Nutzerwunsch 2026-08-22, ersetzt die interne SHT4x-
+ * Sensorzeile des Geraets durch echte Aussenwerte).
+ *
+ * Markup ist ein einfaches <p><span>Label</span>...Wert <abbr>Einheit</abbr></p>
+ * -- Werte werden ueber den Label-Text gefunden (sprachunabhaengig von
+ * Spalten-Reihenfolge/CSS-Klassen, die Seite hat keine data-Attribute).
+ *
+ * @return array{temp_c: float, wind_kmh: int, wind_direction: string, humidity_pct: int, precipitation_mm: float}
+ * @throws RuntimeException wenn ein erwarteter Messwert fehlt
+ */
+function weather_parse_station(string $html): array
+{
+    $dom = new DOMDocument();
+    $prevErrors = libxml_use_internal_errors(true);
+    $dom->loadHTML('<?xml encoding="utf-8" ?>' . $html);
+    libxml_use_internal_errors($prevErrors);
+    $xpath = new DOMXPath($dom);
+
+    $findValue = function (string $label) use ($xpath): string {
+        $p = $xpath->query("//p[span[normalize-space(text())='$label']]")->item(0);
+        if ($p === null) {
+            throw new RuntimeException("Messwert '$label' nicht gefunden");
+        }
+        return trim($p->textContent);
+    };
+
+    // "Temperatur: 18,4 °C" -> 18.4
+    $tempText = $findValue('Temperatur');
+    if (!preg_match('/(-?\d+),(\d+)/', $tempText, $m)) {
+        throw new RuntimeException('Temperatur nicht auswertbar: ' . $tempText);
+    }
+    $tempC = (float) ($m[1] . '.' . $m[2]);
+
+    // "Wind: West, 11 km/h" -> Richtung "West", Geschwindigkeit 11
+    $windText = $findValue('Wind');
+    if (!preg_match('/:\s*(\S+),\s*(\d+)\s*km\/h/u', $windText, $m)) {
+        throw new RuntimeException('Wind nicht auswertbar: ' . $windText);
+    }
+    $windDirection = $m[1];
+    $windKmh = (int) $m[2];
+
+    // "Luftfeuchtigkeit: 65 %" -> 65
+    $humidityText = $findValue('Luftfeuchtigkeit');
+    if (!preg_match('/(\d+)\s*%/', $humidityText, $m)) {
+        throw new RuntimeException('Luftfeuchtigkeit nicht auswertbar: ' . $humidityText);
+    }
+    $humidityPct = (int) $m[1];
+
+    // "Niederschlag: 0,0 mm/h" -> 0.0
+    $precipText = $findValue('Niederschlag');
+    if (!preg_match('/(\d+),(\d+)\s*mm/', $precipText, $m)) {
+        throw new RuntimeException('Niederschlag nicht auswertbar: ' . $precipText);
+    }
+    $precipitationMm = (float) ($m[1] . '.' . $m[2]);
+
+    return [
+        'temp_c' => $tempC,
+        'wind_kmh' => $windKmh,
+        'wind_direction' => $windDirection,
+        'humidity_pct' => $humidityPct,
+        'precipitation_mm' => $precipitationMm,
+    ];
+}
+
+/**
  * Sammelt aus .fulltextWrapper je das erste <p> nach jedem direkten <h2> in
  * Dokumentreihenfolge. Index 0 = heute, Index 1 = morgen (positional).
  *
@@ -164,13 +231,20 @@ function weather_map_icon_code(string $code): array
  * Cache aelter als 6h, wird NUR der Fliesstext durch eine Fehlermeldung
  * ersetzt -- Icon und Temperatur bleiben unveraendert stehen.
  *
- * @param ?array{fetched_at: string, today: array, tomorrow: array} $cache
- * @return array{available: bool, icon_category?: string, temp_min?: int, temp_max?: int, text?: ?string, text_error?: ?string}
+ * 'station' (Mariabrunn-Messwerte, 2026-08-22) hat eine EIGENE fetched_at --
+ * Prognose- und Stationsabruf koennen unabhaengig voneinander fehlschlagen
+ * (s. scripts/weather_fetch_cron.php), deshalb eigene Alters-/
+ * Verfuegbarkeitspruefung statt der Prognose-Frische mitzubenutzen.
+ *
+ * @param ?array{fetched_at: string, today: array, tomorrow: array, station?: array, station_fetched_at?: string} $cache
+ * @return array{available: bool, icon_category?: string, temp_min?: int, temp_max?: int, text?: ?string, text_error?: ?string, station: array{available: bool, temp_c?: float, humidity_pct?: int, wind_kmh?: int, wind_direction?: string, precipitation_mm?: float}}
  */
 function weather_select_display(?array $cache, DateTimeImmutable $now): array
 {
+    $station = weather_select_station_display($cache, $now);
+
     if ($cache === null) {
-        return ['available' => false];
+        return ['available' => false, 'station' => $station];
     }
 
     $vienna = new DateTimeZone('Europe/Vienna');
@@ -193,5 +267,25 @@ function weather_select_display(?array $cache, DateTimeImmutable $now): array
         'text_error' => $stale
             ? 'Wetterbericht veraltet seit ' . $fetchedAt->setTimezone($vienna)->format('H:i')
             : null,
+        'station' => $station,
     ];
+}
+
+/**
+ * @param ?array{station?: array, station_fetched_at?: string} $cache
+ * @return array{available: bool, temp_c?: float, humidity_pct?: int, wind_kmh?: int, wind_direction?: string, precipitation_mm?: float}
+ */
+function weather_select_station_display(?array $cache, DateTimeImmutable $now): array
+{
+    if ($cache === null || !isset($cache['station'], $cache['station_fetched_at'])) {
+        return ['available' => false];
+    }
+
+    $fetchedAt = new DateTimeImmutable($cache['station_fetched_at']);
+    $ageSeconds = $now->getTimestamp() - $fetchedAt->getTimestamp();
+    if ($ageSeconds > 6 * 3600) {
+        return ['available' => false];
+    }
+
+    return array_merge(['available' => true], $cache['station']);
 }
