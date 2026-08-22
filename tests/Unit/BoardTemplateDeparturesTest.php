@@ -103,10 +103,21 @@ class BoardTemplateDeparturesTest extends TestCase
 
     public function test_three_char_label_uses_smaller_font(): void
     {
-        $svg = board_render_departures_svg([$this->row(['badge_type' => 'metro', 'label' => 'WLB'])]);
+        // Nicht "WLB" -- das bekommt seit 2026-08-22 das eigene Logo-Badge
+        // statt Kreis+Text, s. test_wlb_label_uses_logo_badge_instead_of_text().
+        $svg = board_render_departures_svg([$this->row(['badge_type' => 'metro', 'label' => 'U6X'])]);
         $this->assertStringContainsString('<use href="#badgeMetro"', $svg);
         // 31 statt 24 (metro/tram 30% groesser, 2026-08-21).
-        $this->assertStringContainsString('font-size="31" fill="white" text-anchor="middle">WLB<', $svg);
+        $this->assertStringContainsString('font-size="31" fill="white" text-anchor="middle">U6X<', $svg);
+    }
+
+    public function test_wlb_label_uses_logo_badge_instead_of_text(): void
+    {
+        $svg = board_render_departures_svg([$this->row(['badge_type' => 'tram', 'label' => 'WLB'])]);
+        $this->assertStringContainsString('<use href="#badgeWLB"', $svg);
+        $this->assertStringNotContainsString('<use href="#badgeTram"', $svg);
+        // Logo ersetzt den Text komplett, kein "WLB"-Schriftzug im Badge.
+        $this->assertStringNotContainsString('text-anchor="middle">WLB<', $svg);
     }
 
     public function test_unknown_badge_type_falls_back_to_train_shape(): void

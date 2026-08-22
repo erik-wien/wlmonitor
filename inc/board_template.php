@@ -142,6 +142,9 @@ function board_svg_defs(): string
 <g id="badgeBus"><rect x="-34" y="-34" width="68" height="68" rx="14" fill="#404040"/></g>
 <g id="badgeMetro"><rect x="-34" y="-34" width="68" height="68" fill="black"/></g>
 <g id="badgeTrain"><rect x="-34" y="-34" width="68" height="68" rx="14" fill="white" stroke="black" stroke-width="5"/></g>
+<g id="badgeWLB"><rect x="-34" y="-34" width="68" height="68" rx="14" fill="white" stroke="black" stroke-width="3"/>
+  <path transform="scale(0.14) translate(-175,-150)" fill="black" d="m185,300c30,-52 60,-103 90,-155-58,-0-115,1-173,0 13,-22 25,-45 38,-67 56,-0 112,0 168,0 14,24 28,48 42,73-28,50-57,100-86,149-26,-0.2112-53,0-79,0zM167,0c-30,53-61,107-91,160 58,0 115,-0 173,0-13,22-26,45-39,67-56,0-112,0-167,0C28,203 14,179 0,154 29,102 58,51 88,0"/>
+</g>
 <g id="starNow" stroke-width="7" stroke-linecap="round">
   <line x1="0" y1="-15" x2="0" y2="15"/>
   <line x1="-13" y1="-7.5" x2="13" y2="7.5"/>
@@ -579,17 +582,25 @@ function board_render_departure_header(array $item): string
 function board_render_departure_row(array $item): string
 {
     $r = $item['r'];
-    $badgeShape = BOARD_BADGE_SHAPE_BY_TYPE[$item['badge_type']] ?? BOARD_BADGE_SHAPE_BY_TYPE['other'];
+    // Wiener Lokalbahn: eigenes Logo (schwarz statt Website-Blau, s.
+    // board_svg_defs() "badgeWLB") statt Kreis-Badge mit "WLB"-Text drin
+    // (Nutzerwunsch 2026-08-22, "wie im Web").
+    $isWlb = $item['label'] === 'WLB';
+    $badgeShape = $isWlb
+        ? 'badgeWLB'
+        : (BOARD_BADGE_SHAPE_BY_TYPE[$item['badge_type']] ?? BOARD_BADGE_SHAPE_BY_TYPE['other']);
     $labelSize = board_badge_label_font_size($item['label'], $item['badge_type']);
     $isGray = $item['style'] === 'gray';
     $isDelayed = $item['style'] === 'delayed';
     $fill = $isGray ? '#808080' : 'black';
 
     $out = sprintf('<use href="#%s" transform="translate(54,%d)"/>', $badgeShape, $r);
-    $out .= sprintf(
-        '<text x="54" y="%d" font-weight="bold" font-size="%d" fill="white" text-anchor="middle">%s</text>',
-        $r + 9, $labelSize, htmlspecialchars($item['label'], ENT_XML1)
-    );
+    if (!$isWlb) {
+        $out .= sprintf(
+            '<text x="54" y="%d" font-weight="bold" font-size="%d" fill="white" text-anchor="middle">%s</text>',
+            $r + 9, $labelSize, htmlspecialchars($item['label'], ENT_XML1)
+        );
+    }
     $out .= sprintf(
         '<text x="110" y="%d" font-weight="bold" font-size="22" fill="%s">%s</text>',
         $r + 8, $fill, htmlspecialchars($item['platform'], ENT_XML1)
