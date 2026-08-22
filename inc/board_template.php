@@ -431,16 +431,45 @@ function board_render_weather_svg(array $weather): string
 }
 
 /**
- * Statuszeile am unteren Rand der Wetterkarte -- server-seitig immer
- * "Warte auf Eingabe", weil ein ausgeliefertes Bild per Definition erst
- * angezeigt wird, WAEHREND das Geraet auf die naechste Eingabe wartet.
- * Die uebrigen Zustaende ("Hole Daten…", "Schlafe") kann der Server nicht
- * rendern -- sie gelten waehrend/vor einem Request, nicht als dessen
- * Ergebnis -- und werden deshalb vom Firmware lokal ueber dieselbe Flaeche
- * gezeichnet (showStatusOverlay() in display.cpp, s. docs/hardware/
- * reterminal-e1003.md).
+ * Statusleiste am unteren Rand der Wetterkarte, auf einer Grundlinie mit
+ * "Stand HH:MM" der linken Spalte: kleines Piktogramm + kurzes Wort, beides
+ * in derselben zurueckhaltenden Groesse wie "Stand" (Nutzerwunsch
+ * 2026-08-22: "kompakter und huebscher, Schrift wie Stand, diskretere
+ * Icons"). Vorher: 34px fett "Warte auf Eingabe" ohne Icon.
+ *
+ * Server-seitig ist der Zustand IMMER "Bereit" -- ein ausgeliefertes Bild
+ * wird per Definition erst angezeigt, WAEHREND das Geraet auf die naechste
+ * Eingabe wartet. Die uebrigen Zustaende ("Lade …", "Vollbild", "Schlaf")
+ * gelten waehrend/vor einem Request, nicht als dessen Ergebnis, und werden
+ * deshalb von der Firmware lokal ueber dieselbe Flaeche gezeichnet
+ * (showStatus() in display.cpp, s. docs/hardware/reterminal-e1003.md).
+ *
+ * Die Geometrie ist mit display.cpp abgestimmt -- wer hier etwas verschiebt,
+ * muss die Konstanten dort mitziehen.
  */
-const BOARD_STATUS_IDLE_TEXT = 'Warte auf Eingabe';
+const BOARD_STATUS_IDLE_TEXT   = 'Bereit';
+const BOARD_STATUS_ICON_CX     = 1164;
+const BOARD_STATUS_ICON_CY     = 1281;
+const BOARD_STATUS_TEXT_X      = 1194;
+const BOARD_STATUS_BASELINE    = 1290;
+const BOARD_STATUS_FONT_SIZE   = 24;
+
+/**
+ * "Bereit"-Piktogramm: Ring mit Punkt in der Mitte (Zielscheibe/Standby).
+ * Bewusst aus Grundformen statt aus einer Tabler-Datei gebaut -- die
+ * Firmware muss dieselben Symbole mit GFX-Primitiven nachzeichnen koennen
+ * (kein Bitmap-Asset im Flash), und identische Formen auf beiden Seiten sind
+ * die Voraussetzung dafuer, dass ein lokal uebermaltes Statusfeld nicht vom
+ * Server-Frame abweicht.
+ */
+function board_render_status_icon_svg(int $cx, int $cy): string
+{
+    return sprintf(
+        '<circle cx="%d" cy="%d" r="10" fill="none" stroke="black" stroke-width="2"/>'
+        . '<circle cx="%d" cy="%d" r="4" fill="black"/>',
+        $cx, $cy, $cx, $cy
+    );
+}
 
 /**
  * @param list<string> $bodyLines
@@ -521,10 +550,12 @@ function board_render_weather_card(
         );
     }
 
-    $statusSvg = sprintf(
-        '<text x="1150" y="1292" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="34" fill="black">%s</text>',
-        htmlspecialchars(BOARD_STATUS_IDLE_TEXT, ENT_XML1)
-    );
+    $statusSvg = board_render_status_icon_svg(BOARD_STATUS_ICON_CX, BOARD_STATUS_ICON_CY)
+        . sprintf(
+            '<text x="%d" y="%d" font-family="Atkinson Hyperlegible Next" font-size="%d" fill="black">%s</text>',
+            BOARD_STATUS_TEXT_X, BOARD_STATUS_BASELINE, BOARD_STATUS_FONT_SIZE,
+            htmlspecialchars(BOARD_STATUS_IDLE_TEXT, ENT_XML1)
+        );
 
     return <<<SVG
 {$iconSvg}

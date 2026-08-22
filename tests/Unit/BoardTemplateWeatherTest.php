@@ -165,20 +165,41 @@ class BoardTemplateWeatherTest extends TestCase
 
     public function test_weather_svg_always_shows_idle_status_text(): void
     {
-        // Statuszeile ist server-seitig IMMER "Warte auf Eingabe" -- ein
-        // ausgeliefertes Bild wird per Definition angezeigt, WAEHREND das
-        // Geraet auf die naechste Eingabe wartet. "Hole Daten…"/"Schlafe"
-        // zeichnet die Firmware lokal darueber (showStatusOverlay() in
+        // Statusleiste ist server-seitig IMMER "Bereit" -- ein ausgeliefertes
+        // Bild wird per Definition angezeigt, WAEHREND das Geraet auf die
+        // naechste Eingabe wartet. "Lade …"/"Vollbild"/"Schlaf" zeichnet die
+        // Firmware lokal darueber (showStatus() in
         // epaper-monitor/src/display.cpp), s. BOARD_STATUS_IDLE_TEXT.
         $svg = board_render_weather_svg($this->weatherFixture());
 
-        $this->assertStringContainsString('>Warte auf Eingabe<', $svg);
+        $this->assertStringContainsString('>Bereit<', $svg);
     }
 
     public function test_weather_svg_shows_idle_status_even_when_never_fetched(): void
     {
         $svg = board_render_weather_svg(['available' => false]);
 
-        $this->assertStringContainsString('>Warte auf Eingabe<', $svg);
+        $this->assertStringContainsString('>Bereit<', $svg);
+    }
+
+    public function test_idle_status_is_drawn_small_and_with_its_pictogram(): void
+    {
+        // Nutzerwunsch 2026-08-22: Schriftgroesse wie "Stand HH:MM" (24 statt
+        // 34 fett) und ein diskretes Piktogramm davor. Der Ring-mit-Punkt muss
+        // formgleich zu StatusIcon::Ready in display.cpp bleiben -- sonst
+        // springt das Symbol sichtbar, sobald die Firmware die Flaeche nach
+        // einem Patch lokal uebermalt.
+        $svg = board_render_weather_svg($this->weatherFixture());
+
+        $this->assertStringContainsString('font-size="24" fill="black">Bereit<', $svg);
+        $this->assertStringNotContainsString('font-size="34"', $svg);
+        $this->assertStringContainsString(
+            sprintf('<circle cx="%d" cy="%d" r="10"', BOARD_STATUS_ICON_CX, BOARD_STATUS_ICON_CY),
+            $svg
+        );
+        $this->assertStringContainsString(
+            sprintf('<circle cx="%d" cy="%d" r="4" fill="black"/>', BOARD_STATUS_ICON_CX, BOARD_STATUS_ICON_CY),
+            $svg
+        );
     }
 }

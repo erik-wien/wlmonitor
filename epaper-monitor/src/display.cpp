@@ -175,18 +175,16 @@ void showErrorBanner(ErrorBanner banner, const char* sinceTime) {
 }
 
 void markSleepIcon() {
-    // setTextSize(1) war bei dieser Panel-DPI unlesbar (Nutzerbefund
-    // 2026-08-22) -- Groesse 2 wie showBuildMarker()/showInputMarker(),
-    // Flaeche entsprechend vergroessert (Breite reicht bis x=1755, Panel
-    // endet bei 1872).
-    const int x = WIFI_ICON_X, y = WIFI_ICON_Y, w = 90, h = 50;
+    // Mondsichel statt des frueheren "zzz"-Textes (Nutzerwunsch 2026-08-22,
+    // "diskretere Icons") -- dasselbe Symbol wie StatusIcon::Sleep in der
+    // Statusleiste, nur groesser, damit es die WLAN-Balken sauber ersetzt.
+    // Der Text war in Groesse 1 unlesbar und in Groesse 2 unverhaeltnismaessig
+    // wuchtig; das Piktogramm braucht die Diskussion gar nicht erst.
+    const int x = WIFI_ICON_X, y = WIFI_ICON_Y - 8, w = WIFI_ICON_W, h = 44;
     clearAlignedForPartial(x, y, w, h);
-    epaper.setFreeFont(&FreeSansBold9pt7b);
-    epaper.setTextSize(2);
-    epaper.setTextColor(TFT_BLACK, TFT_WHITE);
-    epaper.setCursor(x, y + h - 14);
-    epaper.print("zzz");
-    epaper.setTextSize(1);
+    const int cx = x + 18, cy = y + h / 2;
+    epaper.fillCircle(cx, cy, 16, TFT_BLACK);
+    epaper.fillCircle(cx + 9, cy - 7, 14, TFT_WHITE);
     epaper.updataPartial(x, y, w, h);
 }
 
@@ -207,55 +205,88 @@ void drawTouchBlob(int x, int y) {
     epaper.updataPartial(bx, by, bw, bh);
 }
 
-void showBuildMarker(int build) {
+// --- Statusleiste am unteren Rand der Wetterspalte ---------------------------
+//
+// Gemeinsames Raster mit den BOARD_STATUS_*-Konstanten in
+// inc/board_template.php (Nutzerwunsch 2026-08-22: "kompakter und huebscher,
+// Schrift so klein wie 'Stand HH:MM', diskretere Icons"). Zwei getrennte
+// Rechtecke im selben 50px-Band, damit eine Statusaenderung nicht jedes Mal
+// den Firmware-Marker mit neu schreiben muss:
+//
+//   STATUS_*  x=1150..1600  Piktogramm + kurzes Wort  (wechselt oft)
+//   MARKER_*  x=1608..1864  "fw40" + Modus-Kaestchen  (wechselt fast nie)
+//
+// Schrift: FreeSans12pt7b bei setTextSize(1). Die frueheren Marker liefen mit
+// FreeSansBold9pt7b bei setTextSize(2) -- also ~24px Versalhoehe gegen die
+// 17px des 24px-Atkinson im Server-Frame; genau das wirkte am Geraet grob.
+// 12pt/Groesse 1 trifft die Server-Zeile.
+static const int STATUS_X = 1150, STATUS_Y = 1256, STATUS_W = 450, STATUS_H = 50;
+static const int STATUS_ICON_CX = 1164, STATUS_ICON_CY = 1281;
+static const int STATUS_TEXT_X = 1194, STATUS_BASELINE = 1290;
+static const int MARKER_X = 1608, MARKER_W = 256;
+
+static void drawStatusIcon(StatusIcon icon, int cx, int cy) {
+    switch (icon) {
+        case StatusIcon::Ready:
+            // Ring mit Punkt -- identisch zu board_render_status_icon_svg().
+            epaper.drawCircle(cx, cy, 10, TFT_BLACK);
+            epaper.drawCircle(cx, cy, 9, TFT_BLACK); // 2px Strichstaerke wie im SVG
+            epaper.fillCircle(cx, cy, 4, TFT_BLACK);
+            break;
+        case StatusIcon::Loading:
+            // Pfeil nach unten auf eine Grundlinie (Download).
+            epaper.fillRect(cx - 1, cy - 11, 3, 12, TFT_BLACK);
+            epaper.fillTriangle(cx - 7, cy - 2, cx + 7, cy - 2, cx, cy + 6, TFT_BLACK);
+            epaper.fillRect(cx - 9, cy + 9, 19, 3, TFT_BLACK);
+            break;
+        case StatusIcon::Full:
+            // Rahmen mit gefuelltem Kern -- "das ganze Bild wird neu gesetzt".
+            epaper.drawRect(cx - 11, cy - 11, 22, 22, TFT_BLACK);
+            epaper.drawRect(cx - 10, cy - 10, 20, 20, TFT_BLACK);
+            epaper.fillRect(cx - 5, cy - 5, 10, 10, TFT_BLACK);
+            break;
+        case StatusIcon::Sleep:
+            // Mondsichel: Vollkreis, dann versetzt weiss ausgestanzt.
+            epaper.fillCircle(cx, cy, 11, TFT_BLACK);
+            epaper.fillCircle(cx + 6, cy - 5, 10, TFT_WHITE);
+            break;
+    }
+}
+
+void showStatus(StatusIcon icon, const char* text) {
+    clearAlignedForPartial(STATUS_X, STATUS_Y, STATUS_W, STATUS_H);
+    drawStatusIcon(icon, STATUS_ICON_CX, STATUS_ICON_CY);
+    epaper.setFreeFont(&FreeSans12pt7b);
+    epaper.setTextColor(TFT_BLACK, TFT_WHITE);
+    epaper.setCursor(STATUS_TEXT_X, STATUS_BASELINE);
+    epaper.print(text);
+    epaper.updataPartial(STATUS_X, STATUS_Y, STATUS_W, STATUS_H);
+}
+
+void showBuildMarker(int build, bool lastFrameWasFull) {
     char text[16];
     snprintf(text, sizeof(text), "fw%d", build);
 
-    // Direkt rechts neben "Stand HH:MM" (server-gerendert bei x=16, y=1286,
-    // 24px -- endet bei ca. x=161), vor der Pagination-Pille (beginnt bei
-    // x=793), s. board_render_stand_and_pagination_svg(). setTextSize(2) --
-    // Nutzerwunsch 2026-08-21 ("Text doppelt so gross").
-    const int x = 190, y = 1256, w = 150, h = 50;
-    clearAlignedForPartial(x, y, w, h);
-    epaper.setFreeFont(&FreeSansBold9pt7b);
-    epaper.setTextSize(2);
+    clearAlignedForPartial(MARKER_X, STATUS_Y, MARKER_W, STATUS_H);
+    epaper.setFreeFont(&FreeSans9pt7b);
     epaper.setTextColor(TFT_BLACK, TFT_WHITE);
-    epaper.setCursor(x, y + h - 14);
-    epaper.print(text);
-    epaper.setTextSize(1);
-    epaper.updataPartial(x, y, w, h);
-}
 
-void showInputMarker(const char* label) {
-    char text[80];
-    snprintf(text, sizeof(text), "in:%s", label);
+    // Rechtsbuendig ans Spaltenende (x=1856 wie die Kopfzeilen-Prozentzahl),
+    // Kaestchen dahinter. textWidth() beruecksichtigt die gesetzte GFX-Schrift.
+    const int boxSize = 12;
+    const int boxRight = 1856;
+    const int textRight = boxRight - boxSize - 8;
+    const int textX = textRight - epaper.textWidth(text);
 
-    // Direkt rechts neben dem Build-Marker (x=190..340), gleiche Zeile.
-    // Breit genug fuer "K2 Update [-X-]" bei doppelter Schriftgroesse
-    // (Nutzerwunsch 2026-08-21), bleibt vor der Pagination-Pille (x=793,
-    // s. board_render_stand_and_pagination_svg()).
-    const int x = 350, y = 1256, w = 440, h = 50;
-    clearAlignedForPartial(x, y, w, h);
-    epaper.setFreeFont(&FreeSansBold9pt7b);
-    epaper.setTextSize(2);
-    epaper.setTextColor(TFT_BLACK, TFT_WHITE);
-    epaper.setCursor(x, y + h - 14);
+    epaper.setCursor(textX, STATUS_BASELINE);
     epaper.print(text);
-    epaper.setTextSize(1);
-    epaper.updataPartial(x, y, w, h);
-}
 
-void showStatusOverlay(const char* text) {
-    // Deckungsgleich mit BOARD_STATUS_IDLE_TEXT in board_template.php
-    // (x=1150, y=1292 Textgrundlinie, font-size 34 bold Atkinson Hyperlegible
-    // Next). Breite reicht fuer "Warte auf Eingabe" bei setTextSize(2).
-    const int x2 = 1150, y2 = 1256, w2 = 500, h2 = 50;
-    clearAlignedForPartial(x2, y2, w2, h2);
-    epaper.setFreeFont(&FreeSansBold9pt7b);
-    epaper.setTextSize(2);
-    epaper.setTextColor(TFT_BLACK, TFT_WHITE);
-    epaper.setCursor(x2, y2 + h2 - 14);
-    epaper.print(text);
-    epaper.setTextSize(1);
-    epaper.updataPartial(x2, y2, w2, h2);
+    const int boxX = boxRight - boxSize, boxY = STATUS_BASELINE - boxSize;
+    if (lastFrameWasFull) {
+        epaper.fillRect(boxX, boxY, boxSize, boxSize, TFT_BLACK);
+    } else {
+        epaper.drawRect(boxX, boxY, boxSize, boxSize, TFT_BLACK);
+    }
+
+    epaper.updataPartial(MARKER_X, STATUS_Y, MARKER_W, STATUS_H);
 }

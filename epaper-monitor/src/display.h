@@ -26,10 +26,12 @@ void markSleepIcon();
 // EPaper::sleep() (Seeed_GFX).
 void sleepPanel();
 
-// Zeichnet "fw<FIRMWARE_BUILD>" direkt neben "Stand HH:MM" (Debug-Hilfe,
-// s. FIRMWARE_BUILD in board_config.h) -- damit am Geraet sichtbar ist,
-// welcher Firmware-Stand gerade laeuft, unabhaengig vom Server-Frame-Inhalt.
-void showBuildMarker(int build);
+// Zeichnet "fw<FIRMWARE_BUILD>" plus ein Kaestchen fuer die Art des letzten
+// Panel-Schreibvorgangs (gefuellt = Vollbild, hohl = Patch) rechtsbuendig ans
+// Ende der Statusleiste (Debug-Hilfe, s. FIRMWARE_BUILD in board_config.h) --
+// damit am Geraet sichtbar ist, welcher Firmware-Stand laeuft und ob das
+// zuletzt gezeigte Bild ein Vollbild war, unabhaengig vom Server-Frame-Inhalt.
+void showBuildMarker(int build, bool lastFrameWasFull);
 
 // Setzt die Panel-Temperatur, die Seeed_GFX bei jedem wake() an den IT8951
 // schickt (Standard sonst fest 16 C). celsius = NAN laesst den bisherigen
@@ -41,20 +43,25 @@ void applyPanelTemperature(float celsius);
 // visuelles Feedback zur Kalibrierung (Nutzerwunsch 2026-08-21).
 void drawTouchBlob(int x, int y);
 
-// Zeichnet "in:<label>" neben dem Build-Marker -- sofortiges sichtbares
-// Feedback, ob/welche Touch-/Tasten-Interaktion diesen Weckzyklus erkannt
-// wurde (Debug-Hilfe, Nutzerwunsch 2026-08-21). label z. B. "fav0",
-// "page_next", "full", oder "none" bei reinem Timer-Wake.
-void showInputMarker(const char* label);
+// Piktogramme der Statusleiste. Aus GFX-Grundformen gezeichnet statt aus
+// Bitmap-Assets -- der Server muss dieselben Formen als SVG nachbauen
+// koennen (board_render_status_icon_svg() in inc/board_template.php), damit
+// ein lokal uebermaltes Statusfeld nicht vom Server-Frame abweicht.
+enum class StatusIcon {
+    Ready,    // Ring mit Punkt -- wartet auf Eingabe
+    Loading,  // Pfeil auf eine Grundlinie -- Daten werden geholt
+    Full,     // Rahmen mit gefuelltem Kern -- Vollbild wird geschrieben
+    Sleep,    // Mondsichel -- Geraet legt sich schlafen
+};
 
-// Ueberschreibt die Statuszeile am unteren Rand der Wetterkarte (x=1150,
-// y=1256..1306, deckungsgleich mit BOARD_STATUS_IDLE_TEXT in
-// board_template.php) mit einem lokal bekannten Zustand -- fuer "Hole
-// Daten…"/"Schlafe", die der Server nicht rendern kann (gelten waehrend/vor
-// einem Request, nicht als dessen Ergebnis). "Warte auf Eingabe" muss NICHT
-// lokal gezeichnet werden -- das ist bereits der Server-Standardtext in
-// jedem regulaer ausgelieferten Frame.
-void showStatusOverlay(const char* text);
+// Ueberschreibt die Statusleiste am unteren Rand der Wetterkarte
+// (x=1150..1600, y=1256..1306, deckungsgleich mit BOARD_STATUS_*-Konstanten
+// in board_template.php) mit einem lokal bekannten Zustand -- fuer
+// "Lade …"/"Vollbild"/"Schlaf", die der Server nicht rendern kann (sie
+// gelten waehrend/vor einem Request, nicht als dessen Ergebnis). "Bereit"
+// muss NICHT lokal gezeichnet werden, solange gerade ein Vollbild ankam --
+// das ist bereits der Server-Standardtext in jedem regulaeren Frame.
+void showStatus(StatusIcon icon, const char* text);
 
 // Rohzugriff auf den internen 1bpp-Panel-Puffer (Geraete-Screenshot-Upload,
 // s. board_snapshot.php). Gleiche Packung wie board.phps Vollbild-Antworten.

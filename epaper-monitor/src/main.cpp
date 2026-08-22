@@ -69,6 +69,9 @@ static const uint32_t INPUT_POLL_MS          = 30;               // wie Seeeds T
 // startet frisch mit true, der Marker wird also garantiert mindestens einmal
 // pro Session gezeichnet.
 static bool buildMarkerStale = true;
+// Welcher Modus (Vollbild/Patch) steht gerade im Kaestchen neben "fw40".
+// Startwert egal -- buildMarkerStale erzwingt den ersten Aufruf ohnehin.
+static bool markerShowsFullFrame = false;
 
 static Preferences prefs;
 
@@ -112,7 +115,7 @@ static void syncTimeForTls() {
 }
 
 static void goToSleep() {
-    showStatusOverlay("Schlafe");
+    showStatus(StatusIcon::Sleep, "Schlaf");
     markSleepIcon();
     sleepPanel();
     WiFi.disconnect(true);
@@ -134,6 +137,20 @@ static void goToSleep() {
     esp_deep_sleep_start();
 }
 
+// Protokollwert der erkannten Eingabe -> Klartext fuer die Statusleiste.
+// touchValue == nullptr heisst "kein Tipp, kein Tastendruck" (Zeit-Refresh
+// oder der erste Abruf einer Session).
+static const char* inputStatusText(const char* touchValue, bool forceFull) {
+    if (forceFull && touchValue == nullptr) return "Vollbild";
+    if (touchValue == nullptr)              return "Lade ...";
+    if (strcmp(touchValue, "fav0") == 0)      return "Favorit 1";
+    if (strcmp(touchValue, "fav1") == 0)      return "Favorit 2";
+    if (strcmp(touchValue, "fav2") == 0)      return "Favorit 3";
+    if (strcmp(touchValue, "page_next") == 0) return "Seite vor";
+    if (strcmp(touchValue, "page_prev") == 0) return "Seite zurueck";
+    return "Lade ...";
+}
+
 // Ein Abruf+Render-Zyklus. touchValue darf nullptr sein (reiner Zeit-Refresh).
 // forceFull leert rtcLastEtag, damit board.php ohne If-None-Match antwortet
 // und automatisch ein Vollbild statt eines Patches liefert.
@@ -146,14 +163,19 @@ static void fetchAndRender(const String& token, const char* touchValue, bool for
     }
     if (forceFull) rtcLastEtag[0] = '\0';
 
-    // "Hole Daten..." lokal VOR dem Request zeichnen -- der Server kann
-    // diesen Zustand nicht rendern (gilt waehrend/vor dem Request, nicht als
-    // dessen Ergebnis). Am Ende dieser Funktion IMMER zurueck auf "Warte auf
-    // Eingabe", unabhaengig davon, ob die Antwort ein Vollbild oder ein Patch
-    // war -- ein Patch deckt nur die Pixel ab, die sich serverseitig
-    // geaendert haben, und koennte die Statuszeile auslassen, wenn sich dort
-    // sonst nichts geaendert hat.
-    showStatusOverlay("Hole Daten...");
+    // Ladezustand lokal VOR dem Request zeichnen -- der Server kann ihn nicht
+    // rendern (er gilt waehrend/vor dem Request, nicht als dessen Ergebnis).
+    // Am Ende dieser Funktion zurueck auf "Bereit", ausser die Antwort war ein
+    // Vollbild (das bringt den Server-Standardtext schon mit) -- ein Patch
+    // deckt nur die serverseitig geaenderten Pixel ab und koennte die
+    // Statusleiste auslassen.
+    //
+    // Der Text nennt auch gleich die erkannte Eingabe. Das ersetzt den
+    // frueheren separaten "in:<label>"-Kasten in der Abfahrtenspalte
+    // (Nutzerwunsch 2026-08-22, "kompakter"): dieselbe Information, aber in
+    // der Zeile, die ohnehin schon da ist, und in Klartext statt Protokoll-ID.
+    showStatus(forceFull ? StatusIcon::Full : StatusIcon::Loading,
+               inputStatusText(touchValue, forceFull));
 
     int batteryMv = readBatteryMillivolts();
     int rssi = WiFi.RSSI();
@@ -193,8 +215,12 @@ static void fetchAndRender(const String& token, const char* touchValue, bool for
         rtcLastEtag[sizeof(rtcLastEtag) - 1] = '\0';
         rtcLastFavoriteCount = fetch.parsed.favoriteCount;
         rtcLastTotalPages = fetch.parsed.totalPages;
-        if (buildMarkerStale) {
-            showBuildMarker(FIRMWARE_BUILD);
+        // Auch neu zeichnen, wenn sich nur das Modus-Kaestchen aendert --
+        // sonst bliebe nach einem Vollbild dauerhaft das gefuellte Kaestchen
+        // stehen, obwohl inzwischen laengst Patches ankommen.
+        if (buildMarkerStale || wasFullFrame != markerShowsFullFrame) {
+            showBuildMarker(FIRMWARE_BUILD, wasFullFrame);
+            markerShowsFullFrame = wasFullFrame;
             buildMarkerStale = false;
         }
     } else if (st.banner != ErrorBanner::None) {
@@ -202,13 +228,13 @@ static void fetchAndRender(const String& token, const char* touchValue, bool for
         rtcBannerShown = true;
     }
 
-    // Bei einem Vollbild steht "Warte auf Eingabe" bereits serverseitig im
-    // Frame (BOARD_STATUS_IDLE_TEXT, s. board_template.php) -- lokales
+    // Bei einem Vollbild steht "Bereit" samt Piktogramm bereits serverseitig
+    // im Frame (BOARD_STATUS_IDLE_TEXT, s. board_template.php) -- lokales
     // Nachzeichnen waere ein doppelter Panel-Write ohne sichtbaren Effekt.
-    // Bei Patch oder Fehlerfall bleibt es noetig (Patch deckt die Statuszeile
+    // Bei Patch oder Fehlerfall bleibt es noetig (Patch deckt die Statusleiste
     // i. d. R. nicht ab, Fehlerfall zeichnet gar keinen neuen Frame).
     if (!wasFullFrame) {
-        showStatusOverlay("Warte auf Eingabe");
+        showStatus(StatusIcon::Ready, "Bereit");
     }
 
     // Erst NACH allen lokalen Zeichnungen dieses Zyklus hochladen -- der

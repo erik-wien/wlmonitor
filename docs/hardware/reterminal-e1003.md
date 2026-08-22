@@ -965,3 +965,33 @@ Flackern, real als vereinzelte `status=0x80` beobachtet) **keinen** Touch meldet
 Die Trefferzone der Favoritenleiste reicht bis **y=1404** (physischer
 Bildschirmrand), nicht nur bis zur sichtbaren Buttonkante bei y=1394 — echte
 Finger-Taps landen sonst knapp darunter im Leeren.
+
+### 20.7 Statusleiste: geteiltes Raster, Symbole zweimal gezeichnet
+
+Die Statusleiste am Fuß der Wetterspalte wird **von beiden Seiten** beschrieben:
+der Server rendert den Ruhezustand in jeden Frame, die Firmware übermalt sie
+lokal für Zustände, die der Server nicht kennen kann. Beide müssen deshalb
+dasselbe Raster benutzen — Konstanten `BOARD_STATUS_*` in
+`inc/board_template.php` gegen `STATUS_*` in `src/display.cpp`.
+
+| Band (y 1256–1306) | x | Inhalt | wer zeichnet |
+|---|---|---|---|
+| Status | 1150–1600 | Piktogramm + kurzes Wort (24px) | Server (`Bereit`), Firmware (`Lade …`, `Vollbild`, `Schlaf`) |
+| Marker | 1608–1864 | `fw<N>` + Modus-Kästchen | nur Firmware |
+
+Das Modus-Kästchen ist **gefüllt** nach einem Vollbild und **hohl** nach einem
+Patch — die schnellste Antwort auf „ist das gerade ein sauberes Bild?".
+
+> **Falle:** `clearAlignedForPartial()` rundet x **nach außen** auf 8-px-Grenzen
+> (s. §5.5, „8-px-Rundung"), aus x=1150 wird also 1144. Der Bereich muss frei bleiben —
+> die Spaltentrennlinie liegt bei x=1113, das geht sich aus, aber wer die
+> Statusleiste nach links schiebt, radiert sie mit.
+
+Die Symbole existieren **doppelt**: als SVG-Grundformen
+(`board_render_status_icon_svg()`) und als GFX-Primitiven (`drawStatusIcon()`).
+Bewusst keine Bitmap-Assets — aber wer eine Form ändert, muss beide ändern,
+sonst springt das Piktogramm sichtbar, sobald die Firmware nach einem Patch
+lokal übermalt. Aus demselben Grund liegt die Firmware-Schrift bei
+`FreeSans12pt7b`/`setTextSize(1)` (≈17px Versalhöhe ≈ Atkinson 24px) und nicht
+mehr bei `FreeSansBold9pt7b`/`setTextSize(2)` (≈24px — das war der „zu wuchtig"-
+Befund vom 2026-08-22).
