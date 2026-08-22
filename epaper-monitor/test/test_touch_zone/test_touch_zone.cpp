@@ -1,7 +1,7 @@
 #include <unity.h>
 #include "touch_zone.h"
 
-// --- Favoriten-Zonen (y in [1320,1394)) ------------------------------------
+// --- Favoriten-Zonen (y in [1320,1404)) ------------------------------------
 
 void test_three_favorites_split_evenly(void) {
     // buttonWidth = (1872-32-32)/3 = 602
@@ -13,10 +13,10 @@ void test_three_favorites_split_evenly(void) {
 
 void test_favorite_zone_boundaries_are_exact(void) {
     TEST_ASSERT_TRUE(mapTouchToZone(16, 1320, 3, 1) == TouchZone::Fav0);   // top-left corner, inclusive
-    TEST_ASSERT_TRUE(mapTouchToZone(617, 1393, 3, 1) == TouchZone::Fav0); // bottom-right, still inside
+    TEST_ASSERT_TRUE(mapTouchToZone(617, 1403, 3, 1) == TouchZone::Fav0); // bottom-right, still inside (Bildschirmrand)
     TEST_ASSERT_TRUE(mapTouchToZone(618, 1350, 3, 1) == TouchZone::None); // gap between fav0/fav1
     TEST_ASSERT_TRUE(mapTouchToZone(634, 1350, 3, 1) == TouchZone::Fav1); // fav1 starts here
-    TEST_ASSERT_TRUE(mapTouchToZone(300, 1394, 3, 1) == TouchZone::None); // one px below the row
+    TEST_ASSERT_TRUE(mapTouchToZone(300, 1404, 3, 1) == TouchZone::None); // one px below the row
     TEST_ASSERT_TRUE(mapTouchToZone(300, 1319, 3, 1) == TouchZone::None); // one px above the row
 }
 

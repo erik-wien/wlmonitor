@@ -149,34 +149,44 @@ static void fetchAndRender(const String& token, const char* touchValue, bool for
 // Eingaben (Touch/Tasten) loesen sofort einen Abruf aus; ohne Eingabe wird
 // trotzdem alle REFRESH_INTERVAL_MS nachgeladen.
 static void runActiveSession(const String& token, bool forceFullFirst) {
-    // "Bereit"-Piep GENAU HIER, nicht schon beim Booten: erst ab jetzt wird
-    // tatsaechlich auf Touch/Tasten gehoert. Ein frueherer Piep (z.B. beim
-    // Aufwachen) waere ein falsches "jetzt tippen"-Signal, waehrend Display/
-    // Touch/WLAN noch initialisieren (Nutzerbefund 2026-08-21: "muss kurz
-    // warten, sonst wird der touch nicht erkannt").
+    // Ersten Abruf VOR dem "bereit"-Piep, nicht mehr danach (2026-08-21):
+    // ein sofortiger erzwungener Refresh als allererste Schleifenaktion
+    // blockierte 2-3s, WAEHREND der Piep schon "jetzt tippen" signalisierte
+    // -- Touch wurde in dieser Zeit gar nicht gepollt (Nutzerbefund: "Piep,
+    // dann noch 2s bis wirklich empfangsbereit"). Jetzt: erst laden, dann
+    // piepen, dann WIRKLICH sofort pollen.
+    fetchAndRender(token, nullptr, forceFullFirst);
+
     beepConfirm();
     Serial.println("[active] bereit, Eingaben werden jetzt ausgewertet");
     uint32_t lastActivity = millis();
-    int lastHitX = -1000, lastHitY = -1000;
-    uint32_t lastHitMs = 0;
-    // Sofortiger erster Refresh: lastRefresh liegt schon "in der Vergangenheit".
-    uint32_t lastRefresh = millis() - REFRESH_INTERVAL_MS;
-    bool firstRefreshDone = false;
+    // Press/Release-Zustand statt Zeit-/Distanz-Heuristik (2026-08-22): der
+    // Fetch allein braucht schon 2-3s, dazu POST_HIT_COOLDOWN_MS -- ein
+    // 3000ms-Zeitfenster ab Touch-Erkennung ist da laengst abgelaufen,
+    // WAEHREND der Finger noch aufliegt (Nutzerbefund: zweiter Piep+Blob
+    // nach jedem Refresh trotz durchgehend gehaltenem Finger). Stattdessen:
+    // ein Touch zaehlt erst wieder als "neu", wenn der Sensor zwischenzeitlich
+    // mehrmals in Folge KEINEN Touch gemeldet hat (gegen Sensor-Flackern,
+    // im Log als vereinzelte status=0x80 innerhalb einer echten Beruehrung
+    // beobachtet).
+    bool touchDown = false;
+    int touchReleaseStreak = 0;
+    const int TOUCH_RELEASE_STREAK_NEEDED = 5;
+    uint32_t lastRefresh = millis(); // naechster automatischer Refresh erst in REFRESH_INTERVAL_MS
 
     while (millis() - lastActivity < ACTIVE_IDLE_TIMEOUT_MS) {
         const char* touchValue = nullptr;
-        bool forceFull = (!firstRefreshDone && forceFullFirst);
+        bool forceFull = false;
 
         int touchX = 0, touchY = 0;
         TouchZone zone = pollTouch(rtcLastFavoriteCount, rtcLastTotalPages, &touchX, &touchY);
         if (zone != TouchZone::None) {
-            bool sameAsLastHit = (millis() - lastHitMs < 3000)
-                && abs(touchX - lastHitX) < 24 && abs(touchY - lastHitY) < 24;
-            if (!sameAsLastHit) {
+            touchReleaseStreak = 0;
+            if (!touchDown) {
                 touchValue = touchZoneToHeaderValue(zone);
                 beepRecognized();
                 drawTouchBlob(touchX, touchY);
-                lastHitX = touchX; lastHitY = touchY; lastHitMs = millis();
+                touchDown = true;
             }
         } else if (const char* btn = readPageButtons()) {
             touchValue = btn;
@@ -184,13 +194,14 @@ static void runActiveSession(const String& token, bool forceFullFirst) {
         } else if (isFullUpdateButtonHeld()) {
             forceFull = true;
             beepRecognized();
+        } else {
+            if (++touchReleaseStreak >= TOUCH_RELEASE_STREAK_NEEDED) touchDown = false;
         }
 
         bool dueForRefresh = (millis() - lastRefresh >= REFRESH_INTERVAL_MS);
         if (touchValue != nullptr || forceFull || dueForRefresh) {
             fetchAndRender(token, touchValue, forceFull);
             lastRefresh = millis();
-            firstRefreshDone = true;
             if (touchValue != nullptr || forceFull) {
                 lastActivity = millis();
                 delay(POST_HIT_COOLDOWN_MS); // gehaltener Finger loest nicht mehrfach aus

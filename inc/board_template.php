@@ -435,7 +435,7 @@ function board_render_weather_card(string $iconId, ?int $tempMin, ?int $tempMax,
         : '';
 
     $headingSvg = $tempMin !== null
-        ? '<text x="1150" y="366" font-family="Atkinson Hyperlegible" font-weight="bold" font-size="30" fill="black">Heute</text>'
+        ? '<text x="1150" y="366" font-family="Atkinson Hyperlegible" font-weight="bold" font-size="46" fill="black">Heute</text>'
         : '';
 
     $bodySvg = '';

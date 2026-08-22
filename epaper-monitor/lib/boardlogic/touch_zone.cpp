@@ -3,7 +3,11 @@
 namespace {
 
 const int FAVORITE_ROW_TOP = 1320;
-const int FAVORITE_ROW_BOTTOM = 1394; // exklusiv
+// Sichtbarer Button endet bei y=1394, aber bis zum physischen Bildschirmrand
+// (Panelhoehe 1404) ist darunter nichts anderes -- Trefferzone bis dorthin
+// ausgedehnt, echte Finger-Taps landen sonst knapp unterhalb der Schaltflaeche
+// ins Leere (Nutzerbefund 2026-08-22: Tap bei y=1397-1399 loeste nichts aus).
+const int FAVORITE_ROW_BOTTOM = 1404; // exklusiv
 const int FAVORITE_MARGIN = 16;
 const int FAVORITE_GAP = 16;
 const int PANEL_WIDTH = 1872;
