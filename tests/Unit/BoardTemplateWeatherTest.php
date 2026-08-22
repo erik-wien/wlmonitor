@@ -68,7 +68,7 @@ class BoardTemplateWeatherTest extends TestCase
         $svg = board_render_weather_svg($this->weatherFixture());
 
         // Bei 37 Zeichen/Zeile braucht der Fixture-Text mehr als eine Zeile.
-        $this->assertGreaterThan(1, substr_count($svg, 'font-size="39"'));
+        $this->assertGreaterThan(1, substr_count($svg, 'font-size="46"'));
     }
 
     public function test_weather_svg_shows_stale_error_instead_of_text_but_keeps_icon_and_temp(): void
@@ -80,7 +80,10 @@ class BoardTemplateWeatherTest extends TestCase
 
         $this->assertStringContainsString('#icon_klar', $svg, 'Icon bleibt bei veraltetem Text unveraendert (Spec §8)');
         $this->assertStringContainsString('18° – 35°C', $svg, 'Temperatur bleibt bei veraltetem Text unveraendert (Spec §8)');
-        $this->assertStringContainsString('Wetterbericht veraltet seit 14:00', $svg);
+        // Bricht bei 31 Zeichen/Zeile (2026-08-22, groesserer Font) auf zwei
+        // Zeilen um statt in einer zu stehen.
+        $this->assertStringContainsString('Wetterbericht veraltet seit', $svg);
+        $this->assertStringContainsString('14:00', $svg);
         $this->assertStringNotContainsString('Von früh bis spät', $svg);
     }
 

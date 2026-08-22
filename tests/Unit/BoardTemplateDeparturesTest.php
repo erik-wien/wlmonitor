@@ -32,7 +32,7 @@ class BoardTemplateDeparturesTest extends TestCase
         $svg = board_render_departures_svg([$this->row()]);
 
         $this->assertStringContainsString('<use href="#badgeTram" transform="translate(54,259)"/>', $svg);
-        $this->assertStringContainsString('x="1000" y="275" font-weight="bold" font-size="46" fill="black" text-anchor="end">7<', $svg);
+        $this->assertStringContainsString('x="1000" y="278" font-weight="bold" font-size="58" fill="black" text-anchor="end">7<', $svg);
         $this->assertStringContainsString('x1="16" y1="307" x2="1083" y2="307"', $svg);
         $this->assertStringNotContainsString('fill="#808080"', $svg);
         $this->assertStringNotContainsString('rect x="950"', $svg);
@@ -86,9 +86,9 @@ class BoardTemplateDeparturesTest extends TestCase
         // Alles andere in der Zeile grau, NICHT kursiv:
         $this->assertStringContainsString('x="110" y="267" font-weight="bold" font-size="22" fill="#808080">1<', $svg, 'Steig-Nummer grau');
         $this->assertStringContainsString('x="145" y="278" font-size="55" fill="#808080">Schlachthausgasse U<', $svg, 'Fahrtrichtung grau');
-        $this->assertStringContainsString('x="1000" y="275" font-weight="bold" font-size="46" fill="#808080" text-anchor="end">7<', $svg, 'Live-Abfahrt grau, weiterhin fett');
+        $this->assertStringContainsString('x="1000" y="278" font-weight="bold" font-size="58" fill="#808080" text-anchor="end">7<', $svg, 'Live-Abfahrt grau, weiterhin fett');
         $this->assertStringContainsString('x="1015" y="266" font-size="20" fill="#808080">·<', $svg, 'Trennpunkt grau');
-        $this->assertStringContainsString('x="1083" y="270" font-size="32" fill="#808080" text-anchor="end">22<', $svg, 'Folgeabfahrt grau');
+        $this->assertStringContainsString('x="1083" y="273" font-size="40" fill="#808080" text-anchor="end">22<', $svg, 'Folgeabfahrt grau');
         $this->assertStringNotContainsString('font-style="italic"', $svg, 'kein Kursiv mehr, s. Spec Global Constraints');
     }
 
@@ -97,15 +97,16 @@ class BoardTemplateDeparturesTest extends TestCase
         $svg = board_render_departures_svg([$this->row(['style' => 'delayed'])]);
 
         $this->assertStringContainsString('<rect x="950" y="239" width="60" height="42" fill="black"/>', $svg);
-        $this->assertStringContainsString('x="1000" y="275" font-weight="bold" font-size="46" fill="white" text-anchor="end">7<', $svg);
-        $this->assertStringContainsString('x="1083" y="270" font-size="32" fill="black" text-anchor="end">22<', $svg, 'Folgeabfahrt bleibt normal schwarz, nicht grau, nicht invertiert');
+        $this->assertStringContainsString('x="1000" y="278" font-weight="bold" font-size="58" fill="white" text-anchor="end">7<', $svg);
+        $this->assertStringContainsString('x="1083" y="273" font-size="40" fill="black" text-anchor="end">22<', $svg, 'Folgeabfahrt bleibt normal schwarz, nicht grau, nicht invertiert');
     }
 
     public function test_three_char_label_uses_smaller_font(): void
     {
         $svg = board_render_departures_svg([$this->row(['badge_type' => 'metro', 'label' => 'WLB'])]);
         $this->assertStringContainsString('<use href="#badgeMetro"', $svg);
-        $this->assertStringContainsString('font-size="24" fill="white" text-anchor="middle">WLB<', $svg);
+        // 31 statt 24 (metro/tram 30% groesser, 2026-08-21).
+        $this->assertStringContainsString('font-size="31" fill="white" text-anchor="middle">WLB<', $svg);
     }
 
     public function test_unknown_badge_type_falls_back_to_train_shape(): void

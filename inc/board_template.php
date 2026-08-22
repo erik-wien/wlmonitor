@@ -361,11 +361,13 @@ SVG;
 
 /**
  * Verfuegbare Spaltenbreite der Wetterkarte (706px, x=1150 bis x=1856)
- * geteilt durch die gemessene mittlere Zeichenbreite bei 39px Atkinson
- * Hyperlegible (17,37px/Zeichen, s. Task 4 Step 3), 8% Sicherheitsabstand
- * gegen ueberdurchschnittlich breite Saetze: floor(706 / 17.37 * 0.92).
+ * geteilt durch die gemessene mittlere Zeichenbreite. Basiswert 17,37px/
+ * Zeichen war fuer 39px gemessen (Task 4 Step 3); Text auf 46px vergroessert
+ * (Nutzerwunsch 2026-08-22), Zeichenbreite linear mitskaliert:
+ * 17,37 * 46/39 = 20,48px/Zeichen. 8% Sicherheitsabstand:
+ * floor(706 / 20,48 * 0.92).
  */
-const BOARD_WEATHER_TEXT_MAX_CHARS_PER_LINE = 37;
+const BOARD_WEATHER_TEXT_MAX_CHARS_PER_LINE = 31;
 
 /**
  * Greedy Wortumbruch, mb-safe. SVG <text> bricht nicht von selbst um --
@@ -435,9 +437,10 @@ function board_render_weather_card(string $iconId, ?int $tempMin, ?int $tempMax,
 
     $bodySvg = '';
     foreach ($bodyLines as $i => $line) {
-        $y = 422 + $i * 46;
+        // 46px statt 39px, Zeilenabstand 54px statt 46px (Nutzerwunsch 2026-08-22).
+        $y = 422 + $i * 54;
         $bodySvg .= sprintf(
-            '<text x="1150" y="%d" font-family="Atkinson Hyperlegible" font-size="39" fill="black">%s</text>',
+            '<text x="1150" y="%d" font-family="Atkinson Hyperlegible" font-size="46" fill="black">%s</text>',
             $y, htmlspecialchars($line, ENT_XML1)
         );
     }
@@ -609,10 +612,11 @@ function board_render_departure_row(array $item): string
     if ($item['live_in'] === 0) {
         $out .= sprintf('<use href="#starNow" transform="translate(985,%d)" stroke="%s"/>', $r, $liveFill);
     } else {
+        // 58px statt 46px (Nutzerwunsch 2026-08-22, "Abfahrtszeiten groesser").
         $liveText = $item['live_in'] === null ? '–' : (string) $item['live_in'];
         $out .= sprintf(
-            '<text x="1000" y="%d" font-weight="bold" font-size="46" fill="%s" text-anchor="end">%s</text>',
-            $r + 16, $liveFill, $liveText
+            '<text x="1000" y="%d" font-weight="bold" font-size="58" fill="%s" text-anchor="end">%s</text>',
+            $r + 19, $liveFill, $liveText
         );
     }
 
@@ -622,9 +626,10 @@ function board_render_departure_row(array $item): string
         if ($item['secondary_in'] === 0) {
             $out .= sprintf('<use href="#starNow" transform="translate(1073,%d) scale(0.696)" stroke="%s"/>', $r, $fill);
         } else {
+            // 40px statt 32px.
             $out .= sprintf(
-                '<text x="1083" y="%d" font-size="32" fill="%s" text-anchor="end">%s</text>',
-                $r + 11, $fill, (string) $item['secondary_in']
+                '<text x="1083" y="%d" font-size="40" fill="%s" text-anchor="end">%s</text>',
+                $r + 14, $fill, (string) $item['secondary_in']
             );
         }
     }
