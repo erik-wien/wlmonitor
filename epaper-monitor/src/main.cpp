@@ -22,6 +22,23 @@ RTC_DATA_ATTR int rtcConsecutiveFailures = 0;
 RTC_DATA_ATTR char rtcLastEtag[80] = "";
 RTC_DATA_ATTR int rtcLastFavoriteCount = 0;
 RTC_DATA_ATTR int rtcLastTotalPages = 1;
+// Der Server berechnet Patches als Diff gegen SEIN eigenes letztes Bild --
+// weiss aber nichts von lokal aufs Panel gezeichnetem Inhalt (Fehler-Banner,
+// Touch-Blob, Status-/Build-/Input-Marker). Bleibt so eine lokale Flaeche
+// serverseitig "unveraendert", nimmt kein kuenftiger Patch sie je wieder mit
+// -- die lokale Zeichnung bleibt fuer immer stehen (Nutzerbefund 2026-08-22:
+// sichtbare Verschiebung/Reste genau im Logo-Bereich, wo der Fehler-Banner
+// sitzt). rtcBannerShown erzwingt ein Vollbild, sobald der Banner mal
+// gezeichnet wurde, bis der naechste Erfolg das ganze Panel neu synchronisiert.
+RTC_DATA_ATTR bool rtcBannerShown = false;
+// Unabhaengig davon: periodisches Vollbild raeumt jede sonstige lokale
+// Restflaeche auf (Blob, Marker), statt sich auf punktgenaues Nachverfolgen
+// jeder einzelnen Stelle zu verlassen.
+RTC_DATA_ATTR int rtcPatchesSinceFull = 0;
+// 6 Patches ~ 2,5 Minuten Dauerbetrieb (25s-Refresh-Intervall) -- sorgt
+// dafuer, dass eine typische 5-Minuten-Aktiv-Session mindestens einmal
+// resynchronisiert, bevor sie wieder schlafen geht.
+static const int FULL_REFRESH_EVERY_N_PATCHES = 6;
 
 static const uint32_t HTTP_TIMEOUT_MS = 8000;
 static const uint32_t WAKE_BUTTON_LONG_PRESS_MS = 3000;
@@ -106,6 +123,12 @@ static void goToSleep() {
 // forceFull leert rtcLastEtag, damit board.php ohne If-None-Match antwortet
 // und automatisch ein Vollbild statt eines Patches liefert.
 static void fetchAndRender(const String& token, const char* touchValue, bool forceFull) {
+    // Vollbild erzwingen, wenn ein Fehler-Banner lokal steht (der Server weiss
+    // nichts davon) oder das periodische Resync-Intervall erreicht ist --
+    // s. rtcBannerShown/rtcPatchesSinceFull weiter oben.
+    if (rtcBannerShown || rtcPatchesSinceFull >= FULL_REFRESH_EVERY_N_PATCHES) {
+        forceFull = true;
+    }
     if (forceFull) rtcLastEtag[0] = '\0';
 
     // "Hole Daten..." lokal VOR dem Request zeichnen -- der Server kann
@@ -144,9 +167,12 @@ static void fetchAndRender(const String& token, const char* touchValue, bool for
     if (outcome == FetchOutcome::Success) {
         if (fetch.parsed.isPatch) {
             applyPatch(fetch.body.data(), fetch.parsed.x, fetch.parsed.y, fetch.parsed.w, fetch.parsed.h);
+            rtcPatchesSinceFull++;
         } else {
             applyFullFrame(fetch.body.data(), fetch.parsed.w, fetch.parsed.h);
+            rtcPatchesSinceFull = 0;
         }
+        rtcBannerShown = false;
         strncpy(rtcLastEtag, fetch.parsed.etag.c_str(), sizeof(rtcLastEtag) - 1);
         rtcLastEtag[sizeof(rtcLastEtag) - 1] = '\0';
         rtcLastFavoriteCount = fetch.parsed.favoriteCount;
@@ -154,6 +180,7 @@ static void fetchAndRender(const String& token, const char* touchValue, bool for
         showBuildMarker(FIRMWARE_BUILD);
     } else if (st.banner != ErrorBanner::None) {
         showErrorBanner(st.banner, "??:??");
+        rtcBannerShown = true;
     }
 
     showStatusOverlay("Warte auf Eingabe");
