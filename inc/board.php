@@ -308,6 +308,19 @@ function board_battery_percent_from_mv(int $mv): int
 }
 
 /**
+ * Am USB-Ladekabel liegt die gemessene Spannung ueber dem, was ein
+ * entladener/ruhender LiPo bei "echten" 96-100% haette (Ladeschaltung
+ * treibt sie waehrend des Ladevorgangs hoeher) -- alles darueber ist in
+ * Wahrheit "laedt gerade", kein plausibler Ladestand (Nutzerkalibrierung
+ * 2026-08-22). Schwellwert fuer die Entladeseite (0%/fast leer) noch nicht
+ * kalibriert -- board_battery_percent_from_mv() bleibt dort unveraendert.
+ */
+function board_battery_is_charging(int $percent): bool
+{
+    return $percent > 96;
+}
+
+/**
  * WLAN-RSSI (dBm) -> Balkenzahl 0-3 fuer die Kopfzeile (Spec §9). Grobe,
  * uebliche Schwellwerte -- keine praezise Kalibrierung vorgesehen (Spec §13,
  * analog zur Akku-Prozentanzeige).

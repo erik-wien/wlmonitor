@@ -86,4 +86,35 @@ class BoardTemplateChromeTest extends TestCase
         $this->assertStringContainsString('translate(1665,46)', $svg, 'WLAN-Balken-Ursprung (rechter Rand bei 1665+32=1697)');
         $this->assertStringContainsString('translate(1713,42)', $svg, 'Akku-Icon-Ursprung (linker Rand 1713 > WLAN-rechter-Rand 1697)');
     }
+
+    // --- Lade-Erkennung (Nutzerkalibrierung 2026-08-22) -----------------------
+
+    public function test_battery_is_charging_above_96_percent(): void
+    {
+        $this->assertTrue(board_battery_is_charging(97));
+        $this->assertTrue(board_battery_is_charging(100));
+    }
+
+    public function test_battery_is_not_charging_at_or_below_96_percent(): void
+    {
+        $this->assertFalse(board_battery_is_charging(96));
+        $this->assertFalse(board_battery_is_charging(50));
+        $this->assertFalse(board_battery_is_charging(0));
+    }
+
+    public function test_chrome_shows_lightning_bolt_instead_of_percent_when_charging(): void
+    {
+        $svg = board_render_chrome_svg(new DateTimeImmutable(), 97, 3);
+
+        $this->assertStringNotContainsString('97 %', $svg);
+        $this->assertStringContainsString('<polygon', $svg, 'Blitz-Symbol');
+    }
+
+    public function test_chrome_shows_percent_when_not_charging(): void
+    {
+        $svg = board_render_chrome_svg(new DateTimeImmutable(), 96, 3);
+
+        $this->assertStringContainsString('>96 %<', $svg);
+        $this->assertStringNotContainsString('<polygon', $svg);
+    }
 }

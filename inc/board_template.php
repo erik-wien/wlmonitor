@@ -219,6 +219,13 @@ function board_render_chrome_svg(DateTimeImmutable $renderedAt, int $batteryPerc
     $wifiBars = max(0, min(3, $wifiBars));
     $fillWidth = board_battery_fill_width($batteryPercent);
     $percent = max(0, min(100, $batteryPercent));
+    // Ueber 96% ist am Ladekabel in Wahrheit "laedt gerade", kein
+    // plausibler Ladestand (Nutzerkalibrierung 2026-08-22) -- Blitz statt
+    // Prozentzahl, Balken bleibt unveraendert (zeigt den rohen Messwert).
+    $isCharging = board_battery_is_charging($percent);
+    $percentSvg = $isCharging
+        ? '<polygon points="1849,38 1839,52 1846,52 1843,64 1856,48 1848,48 1851,38" fill="black"/>'
+        : sprintf('<text x="1856" y="63" text-anchor="end" font-weight="bold" font-size="24">%d %%</text>', $percent);
 
     $wifiBarSpecs = [
         ['x' => 0,  'y' => 10, 'h' => 8],
@@ -251,7 +258,7 @@ function board_render_chrome_svg(DateTimeImmutable $renderedAt, int $batteryPerc
     <rect x="56" y="7" width="7" height="12" fill="black"/>
     <rect x="4" y="4" width="{$fillWidth}" height="18" fill="black"/>
   </g>
-  <text x="1856" y="63" text-anchor="end" font-weight="bold" font-size="24">{$percent} %</text>
+  {$percentSvg}
 </g>
 
 <line x1="1113" y1="90" x2="1113" y2="1310" stroke="black" stroke-width="2"/>
