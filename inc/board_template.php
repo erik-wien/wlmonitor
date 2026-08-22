@@ -451,16 +451,27 @@ function board_render_weather_card(
     ?float $deviceTempC = null,
     ?int $deviceHumidityPct = null
 ): string {
+    // Beide Zeilen 40px (Nutzerwunsch 2026-08-22: interne Sensorwerte waren
+    // bei 28px kaum lesbar) und gemeinsam mit dem Icon vertikal zentriert.
+    // Icon-Mitte liegt bei y=200 (translate weiter unten), Textmitte einer
+    // Zeile liegt ca. 14px unter ihrer Baseline (~0,35 * 40px):
+    // - mit Sensorzeile: zwei Zeilen im Block, 56px Abstand, Y1=186/Y2=242
+    //   fuer eine gemeinsame Blockmitte um y=214.
+    // - ohne Sensorzeile (kein Geraet/Lesefehler): nur die eine Zeile,
+    //   direkt an der Icon-Mitte zentriert, Y=214.
+    $hasSensorLine = $deviceTempC !== null && $deviceHumidityPct !== null;
+    $tempY = $hasSensorLine ? 186 : 214;
+
     $tempSvg = $tempMin !== null && $tempMax !== null
         ? sprintf(
-            '<text x="1330" y="215" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="40" fill="black">%d° – %d°C</text>',
-            $tempMin, $tempMax
+            '<text x="1330" y="%d" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="40" fill="black">%d° – %d°C</text>',
+            $tempY, $tempMin, $tempMax
         )
         : '';
 
-    $sensorSvg = $deviceTempC !== null && $deviceHumidityPct !== null
+    $sensorSvg = $hasSensorLine
         ? sprintf(
-            '<text x="1330" y="266" font-family="Atkinson Hyperlegible Next" font-weight="500" font-size="28" fill="black">%s°C • %d%% Rel.LF</text>',
+            '<text x="1330" y="242" font-family="Atkinson Hyperlegible Next" font-weight="500" font-size="40" fill="black">%s°C • %d%% Rel.LF</text>',
             number_format($deviceTempC, 1), $deviceHumidityPct
         )
         : '';
