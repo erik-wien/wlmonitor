@@ -840,21 +840,128 @@ nicht offiziell dokumentiert, funktioniert aber.
 
 ---
 
-## 19. Offene Punkte unserer Firmware
+## 19. Ehemals offene Punkte — alle erledigt (Stand 2026-08-22)
 
-Aus dieser Referenz abgeleitet, Stand 2026-08-21 — noch nicht umgesetzt:
+Die am 2026-08-21 aus dieser Referenz abgeleitete Mängelliste ist vollständig
+abgearbeitet; hier nur noch als Kurzprotokoll, weil die Ursachen lehrreich waren:
 
-1. **GT911-Reset zu kurz** — 10 ms/50 ms statt vorgegebener **20 ms/120 ms**
-   (§7). Heißester Kandidat dafür, dass Touch nicht antwortet.
-2. **GT911-Probe über Statusregister** statt **Produkt-ID `0x8140`** (§7).
-3. **Touch-INT als `INPUT`** statt `INPUT_PULLUP` (§7).
-4. **Touch-Max-X/Y werden nicht gelesen**, Umrechnung ist fest verdrahtet (§7).
-5. **`rtc_gpio_pullup_en()` fehlt** für alle vier Weckpins (§15).
-6. **Panel-Temperatur wird nicht gesetzt** — `EPaper::setTemp()` bleibt beim
-   Standard 16 °C, obwohl ein SHT4x verbaut ist (§11). Kandidat für die
-   Ghosting-/Artefaktprobleme.
-7. **Artefakte an Partial-Update-Rändern** bestehen trotz
-   `clearAlignedForPartial()` weiter. Verbleibende Verdachtsmomente:
-   DU-Modus-Ghosting (§5.5) und die fehlende Temperaturangabe (Punkt 6).
-   Gegenprobe über einen erzwungenen Vollbild-Refresh (linke Taste) steht
-   noch aus.
+1. **GT911-Reset zu kurz** (10/50 ms statt 20/120 ms) — behoben. Der eigentliche
+   Fehler saß aber woanders, s. Punkt 2.
+2. **Touch antwortete gar nicht** → zwei unabhängige Ursachen: (a) die
+   Reset-Sequenz setzte INT auf `INPUT_PULLUP` *vor* dem Reset statt ihn
+   *während* des Resets LOW zu treiben — dadurch wählte der Controller die
+   falsche I²C-Adresse; (b) der Punktdatensatz wurde ab `0x814F` mit **4 Bytes**
+   gelesen, wodurch das Track-ID-Byte als X-Low interpretiert wurde. Korrekt
+   sind **8 Bytes** mit `rawX = b[1]|b[2]<<8`, `rawY = b[3]|b[4]<<8`.
+3. Probe über Produkt-ID `0x8140` — umgesetzt.
+4. Touch-Max-X/Y werden gelesen — umgesetzt (liefert 1872×1404).
+5. `rtc_gpio_pullup_en()` für die Weckpins — umgesetzt.
+6. Panel-Temperatur aus dem SHT4x — umgesetzt (`applyPanelTemperature()`).
+7. **Partial-Update-Artefakte** — behoben durch `clearAlignedForPartial()`
+   (§5.5). Ein *späterer*, davon unabhängiger Artefakt-Fall ist in §20.3
+   beschrieben und war **kein** Ghosting.
+
+---
+
+## 20. Fallen in Seeed_GFX / ESP32-Core (am Gerät verifiziert)
+
+Alles hier wurde gegen den Bibliotheks-/Core-Quellcode geprüft **und** am echten
+Board gemessen. Diese Punkte sind nicht dokumentiert und kosten sonst Stunden.
+
+### 20.1 `~HTTPClient()` ruft **bedingungslos** `_client->stop()`
+
+`HTTPClient.cpp` (arduino-esp32), Destruktor:
+
+```c
+HTTPClient::~HTTPClient() {
+    if(_client) { _client->stop(); }   // ignoriert _reuse / _canReuse komplett
+```
+
+**Folge:** `http.setReuse(true)` ist wirkungslos, solange der `HTTPClient`
+eine **lokale** Variable ist — sein Destruktor reißt den Socket bei jeder
+Rückkehr ab. Für Keep-Alive müssen **beide** Objekte die Funktion überleben,
+`WiFiClientSecure` *und* `HTTPClient`.
+
+Am Gerät gemessen (wlmonitor, 1872×1404-Vollbild über Cloudflare):
+
+| | ohne Reuse | mit Reuse (beide persistent) |
+|---|---|---|
+| TCP+TLS connect | 1590 ms | 0 ms (wiederverwendet) |
+| GET | 2338 ms | 580–920 ms |
+| **gesamt** | **~3930 ms** | **~700 ms** |
+
+Mehrfaches `begin()`/`collectHeaders()` auf demselben Objekt ist unkritisch:
+`begin()` setzt nur `_client`+URL neu, `_canReuse` wird pro Antwort neu gesetzt,
+`collectHeaders()` gibt das alte Array vorher frei.
+
+### 20.2 `WiFiClient::flush()` leert **nur den lokalen RX-Puffer**
+
+```c
+void WiFiClient::flush() { if (_rxBuffer) _rxBuffer->flush(); }
+```
+
+`HTTPClient::disconnect()` ruft das zwar auf, wenn noch Daten anliegen — Bytes,
+die **noch unterwegs** sind, treffen danach aber weiter ein. Wird ein Body nicht
+vollständig gelesen (Timeout, Abbruch, ungelesener Fehler-Body), bleibt der
+Socket schmutzig und der **nächste** Request liest die Reste als seine eigenen
+HTTP-Header → Müll. Ohne Keep-Alive harmlos (Socket wurde verworfen), mit
+Keep-Alive verwurstet es die ganze Session. Gegenmittel: bei unvollständig
+gelesenem Body einen Neuaufbau erzwingen (`connectionDirty` in `board_client.cpp`).
+
+### 20.3 Der Server-Diff weiß nichts von lokal gezeichneten Overlays
+
+Kein Ghosting, sondern **State-Drift**: Der Server berechnet Patches als Diff
+gegen *sein eigenes* letztes Bild. Alles, was die Firmware lokal aufs Panel malt
+(Fehler-Banner, Touch-Blob, Status-/Build-Marker), kennt er nicht. Bleibt so eine
+Fläche serverseitig unverändert, nimmt sie **kein künftiger Patch je wieder mit**
+— die lokale Zeichnung steht dann dauerhaft, auch wenn ihr Anlass längst weg ist.
+
+Symptome am Gerät: Reste im Logo-Bereich (dort sitzt der Fehler-Banner), halb
+verdeckte Stationsnamen, zerschnittene Pagination. Ein Vollbild räumt immer auf.
+Gegenmittel in unserer Firmware: `rtcBannerShown` erzwingt ein Vollbild nach
+einem Banner, `rtcPatchesSinceFull` alle 6 Patches, plus ein Vollbild vor dem
+Einschlafen.
+
+### 20.4 `getPointer()` == `_img8`, Vollbild ist `memcpy`-fähig
+
+`TFT_eSprite::getPointer()` liefert `_img8_1`; bei `createSprite(w,h,1)` gilt
+`_img8_1 = _img8` (Frame-Umschaltung gibt es nur mit 2 Frames). `EPaper::
+drawBufferPixel(x,y,c,1)` macht exakt `_img8[y*(_width/8) + (x/8)] = c`.
+
+Für ein Vollbild sind Quell- und Ziel-Layout damit **byteweise identisch** →
+ein einziges `memcpy` statt 328.536 Einzelaufrufen. Für Patches: ein `memcpy`
+pro Zeile (Ziel gestrided mit `_width/8`, Quelle fortlaufend). Voraussetzung ist
+`x % 8 == 0`.
+
+> **Grenzprüfung nicht vergessen:** `x/y/w/h` kommen aus Server-Headern und
+> werden von `validateBoardResponse()` bewusst nur gegen `≤ 100000` geprüft,
+> **nicht** gegen die Panelgröße. Als Einzelbyte-Schleife schon schlecht, als
+> `memcpy` ein zusammenhängender Überschreiber hinter dem Puffer → Heap-Korruption,
+> Gerät braucht einen Power-Cycle.
+
+### 20.5 Tastenbelegung unserer Firmware (Stand 2026-08-22)
+
+| Taste | GPIO | schlafend | wach |
+|---|---|---|---|
+| **grün**, rechts | 3 | weckt auf | kurz: Vollbild-Update erzwingen |
+| weiß, Mitte | 4 | — | Seite weiter |
+| weiß, links | 5 | — | Seite zurück |
+
+Langer Druck (≥3 s) auf grün **beim Boot** → WLAN/Token-Reset (WiFiManager-Portal).
+
+> **Falle:** Weil Wecken und Vollbild-Update auf demselben Pin liegen, darf
+> `isFullUpdateButtonHeld()` **nicht** beim Boot geprüft werden — jeder normale
+> Weck-Druck würde sonst die Session mit einem erzwungenen Vollbild starten.
+> Die Taste zählt erst innerhalb der Aktiv-Session als „Vollupdate".
+
+### 20.6 Touch-Entprellung: Press/Release statt Zeit/Distanz
+
+Ein Zeitfenster (z. B. 3 s ab Erkennung) funktioniert **nicht**: allein der Fetch
+dauert 0,7–4 s, das Fenster läuft ab, während der Finger noch aufliegt → zweiter
+Piep + Blob bei jedem Refresh. Richtig ist ein echter Press/Release-Zustand: eine
+Berührung zählt erst wieder als neu, wenn der Sensor mehrmals in Folge (gegen
+Flackern, real als vereinzelte `status=0x80` beobachtet) **keinen** Touch meldete.
+
+Die Trefferzone der Favoritenleiste reicht bis **y=1404** (physischer
+Bildschirmrand), nicht nur bis zur sichtbaren Buttonkante bei y=1394 — echte
+Finger-Taps landen sonst knapp darunter im Leeren.
