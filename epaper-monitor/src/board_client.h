@@ -18,8 +18,11 @@ struct BoardFetchResult {
 
 // Fuehrt GET https://BOARD_HOST:BOARD_PORT/board.php aus (board_config.h),
 // mit Authorization: Bearer <token>, X-Device-Battery-mV, X-Device-RSSI,
-// optional X-Device-Touch (touchValue == nullptr -> Header weggelassen)
-// und optional If-None-Match (lastEtag == nullptr oder leer -> weggelassen,
-// Spec §5). timeoutMs begrenzt Verbindungsaufbau UND Antwortwartezeit.
+// optional X-Device-Touch (touchValue == nullptr -> Header weggelassen),
+// optional X-Device-Temp-C/X-Device-Humidity-Pct (tempC != tempC, d.h. NAN
+// -> beide Header weggelassen) und optional If-None-Match (lastEtag ==
+// nullptr oder leer -> weggelassen, Spec §5). timeoutMs begrenzt
+// Verbindungsaufbau UND Antwortwartezeit.
 void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
-                 int batteryMv, int rssi, uint32_t timeoutMs, BoardFetchResult& out);
+                 int batteryMv, int rssi, float tempC, float humidityPct,
+                 uint32_t timeoutMs, BoardFetchResult& out);

@@ -134,7 +134,7 @@ function board_svg_defs(): string
 </g>
 <g id="icon_unbekannt">
   <circle r="26" fill="white" stroke="black" stroke-width="5"/>
-  <text x="0" y="11" font-family="Atkinson Hyperlegible" font-weight="bold" font-size="34"
+  <text x="0" y="11" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="34"
         fill="black" text-anchor="middle">?</text>
 </g>
 
@@ -242,9 +242,9 @@ function board_render_chrome_svg(DateTimeImmutable $renderedAt, int $batteryPerc
 <g transform="translate(24,12) scale(0.5025)">
 {$logo}
 </g>
-<text x="936" y="55" font-family="Atkinson Hyperlegible" font-weight="bold" font-size="34" fill="black" text-anchor="middle">{$renderedAt->format('H:i')}</text>
+<text x="936" y="55" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="34" fill="black" text-anchor="middle">{$renderedAt->format('H:i')}</text>
 
-<g font-family="Atkinson Hyperlegible" fill="black">
+<g font-family="Atkinson Hyperlegible Next" fill="black">
   <g transform="translate(1665,46)">{$wifiBarsSvg}</g>
   <g transform="translate(1713,42)">
     <rect x="0" y="0" width="56" height="26" rx="3" fill="white" stroke="black" stroke-width="3"/>
@@ -279,7 +279,7 @@ function board_render_touch_bar_svg(array $favoriteTitles, int $activeIndex): st
     $gap = 16;
     $buttonWidth = intdiv(1872 - 2 * $margin - ($count - 1) * $gap, $count);
 
-    $out = '<g font-family="Atkinson Hyperlegible" font-weight="bold" font-size="34">';
+    $out = '<g font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="34">';
     foreach ($favoriteTitles as $i => $title) {
         $x = $margin + $i * ($buttonWidth + $gap);
         $active = $i === $activeIndex;
@@ -324,12 +324,14 @@ function board_render_svg(
     DateTimeImmutable $dataStand,
     DateTimeImmutable $renderedAt,
     int $batteryPercent,
-    int $wifiBars
+    int $wifiBars,
+    ?float $deviceTempC = null,
+    ?int $deviceHumidityPct = null
 ): string {
     $defs = board_svg_defs();
     $chrome = board_render_chrome_svg($renderedAt, $batteryPercent, $wifiBars);
     $touchBar = board_render_touch_bar_svg($touchBarFavoriteTitles, $activeFavoriteIndex);
-    $weatherSvg = board_render_weather_svg($weather);
+    $weatherSvg = board_render_weather_svg($weather, $deviceTempC, $deviceHumidityPct);
 
     $departurePages = board_paginate_departures($activeFavorite, 1);
     $totalDeparturePages = $departurePages['totalPages'];
@@ -404,57 +406,93 @@ function board_wrap_text(string $text, int $maxCharsPerLine): array
 }
 
 /**
- * Wetterkarte aus Spec §9: Icon, Temperatur "von-bis", Ueberschrift "Heute",
- * Fliesstext mit manuellem Zeilenumbruch. $weather ist die Rueckgabe von
- * weather_select_display() (inc/weather.php) -- 'available' => false heisst
- * "noch nie erfolgreich abgerufen" (z.B. vor dem ersten Cron-Lauf), nicht
- * dasselbe wie der ">6h veraltet"-Fall (dort bleiben Icon/Temp erhalten,
- * nur der Text wird ersetzt, s. Spec §8).
+ * Wetterkarte aus Spec §9: Icon, Temperatur "von-bis", Geraete-Sensorwerte,
+ * Ueberschrift "Heute", Fliesstext mit manuellem Zeilenumbruch, Statuszeile.
+ * $weather ist die Rueckgabe von weather_select_display() (inc/weather.php)
+ * -- 'available' => false heisst "noch nie erfolgreich abgerufen" (z.B. vor
+ * dem ersten Cron-Lauf), nicht dasselbe wie der ">6h veraltet"-Fall (dort
+ * bleiben Icon/Temp erhalten, nur der Text wird ersetzt, s. Spec §8).
+ *
+ * $deviceTempC/$deviceHumidityPct kommen vom SHT4x im Geraet (X-Device-Temp-C/
+ * X-Device-Humidity-Pct, s. web/board.php) -- unabhaengig von der Wetter-
+ * vorhersage, zeigt die tatsaechliche Umgebung des Displays.
  */
-function board_render_weather_svg(array $weather): string
+function board_render_weather_svg(array $weather, ?float $deviceTempC = null, ?int $deviceHumidityPct = null): string
 {
     if ($weather['available'] === false) {
-        return board_render_weather_card('icon_unbekannt', null, null, ['Wetterdaten werden geladen …']);
+        return board_render_weather_card('icon_unbekannt', null, null, ['Wetterdaten werden geladen …'], $deviceTempC, $deviceHumidityPct);
     }
 
     $iconId = BOARD_ICON_ID_BY_CATEGORY[$weather['icon_category']] ?? BOARD_ICON_ID_BY_CATEGORY['unbekannt'];
     $bodyText = $weather['text'] ?? $weather['text_error'] ?? '';
     $lines = board_wrap_text($bodyText, BOARD_WEATHER_TEXT_MAX_CHARS_PER_LINE);
 
-    return board_render_weather_card($iconId, $weather['temp_min'], $weather['temp_max'], $lines);
+    return board_render_weather_card($iconId, $weather['temp_min'], $weather['temp_max'], $lines, $deviceTempC, $deviceHumidityPct);
 }
 
+/**
+ * Statuszeile am unteren Rand der Wetterkarte -- server-seitig immer
+ * "Warte auf Eingabe", weil ein ausgeliefertes Bild per Definition erst
+ * angezeigt wird, WAEHREND das Geraet auf die naechste Eingabe wartet.
+ * Die uebrigen Zustaende ("Hole Daten…", "Schlafe") kann der Server nicht
+ * rendern -- sie gelten waehrend/vor einem Request, nicht als dessen
+ * Ergebnis -- und werden deshalb vom Firmware lokal ueber dieselbe Flaeche
+ * gezeichnet (showStatusOverlay() in display.cpp, s. docs/hardware/
+ * reterminal-e1003.md).
+ */
+const BOARD_STATUS_IDLE_TEXT = 'Warte auf Eingabe';
+
 /** @param list<string> $bodyLines */
-function board_render_weather_card(string $iconId, ?int $tempMin, ?int $tempMax, array $bodyLines): string
-{
+function board_render_weather_card(
+    string $iconId,
+    ?int $tempMin,
+    ?int $tempMax,
+    array $bodyLines,
+    ?float $deviceTempC = null,
+    ?int $deviceHumidityPct = null
+): string {
     $tempSvg = $tempMin !== null && $tempMax !== null
         ? sprintf(
-            '<text x="1492" y="290" font-family="Atkinson Hyperlegible" font-weight="bold" font-size="40" fill="black" text-anchor="middle">%d° – %d°C</text>',
+            '<text x="1330" y="215" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="40" fill="black">%d° – %d°C</text>',
             $tempMin, $tempMax
         )
         : '';
 
+    $sensorSvg = $deviceTempC !== null && $deviceHumidityPct !== null
+        ? sprintf(
+            '<text x="1330" y="266" font-family="Atkinson Hyperlegible Next" font-weight="500" font-size="28" fill="black">%s°C • %d%% Rel.LF</text>',
+            number_format($deviceTempC, 1), $deviceHumidityPct
+        )
+        : '';
+
     $headingSvg = $tempMin !== null
-        ? '<text x="1150" y="366" font-family="Atkinson Hyperlegible" font-weight="bold" font-size="46" fill="black">Heute</text>'
+        ? '<text x="1150" y="380" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="46" fill="black">Heute</text>'
         : '';
 
     $bodySvg = '';
     foreach ($bodyLines as $i => $line) {
         // 46px statt 39px, Zeilenabstand 54px statt 46px (Nutzerwunsch 2026-08-22).
-        $y = 422 + $i * 54;
+        $y = 436 + $i * 54;
         $bodySvg .= sprintf(
-            '<text x="1150" y="%d" font-family="Atkinson Hyperlegible" font-size="46" fill="black">%s</text>',
+            '<text x="1150" y="%d" font-family="Atkinson Hyperlegible Next" font-weight="500" font-size="46" fill="black">%s</text>',
             $y, htmlspecialchars($line, ENT_XML1)
         );
     }
 
+    $statusSvg = sprintf(
+        '<text x="1150" y="1292" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="34" fill="black">%s</text>',
+        htmlspecialchars(BOARD_STATUS_IDLE_TEXT, ENT_XML1)
+    );
+
     return <<<SVG
-<g transform="translate(1492,180) scale(1.8)">
+<g transform="translate(1210,200) scale(1.8)">
   <use href="#{$iconId}"/>
 </g>
 {$tempSvg}
+{$sensorSvg}
 {$headingSvg}
 {$bodySvg}
+{$statusSvg}
 SVG;
 }
 
@@ -559,7 +597,7 @@ function board_paginate_departures(array $favorite, int $page): array
  */
 function board_render_departures_svg(array $layoutItems): string
 {
-    $out = '<g font-family="Atkinson Hyperlegible">';
+    $out = '<g font-family="Atkinson Hyperlegible Next">';
 
     foreach ($layoutItems as $item) {
         $out .= $item['type'] === 'header'
@@ -659,7 +697,7 @@ function board_render_departure_row(array $item): string
 function board_render_stand_and_pagination_svg(DateTimeImmutable $dataStand, int $currentPage, int $totalPages): string
 {
     $standSvg = sprintf(
-        '<text x="16" y="1286" font-family="Atkinson Hyperlegible" font-size="24" fill="black">Stand %s</text>',
+        '<text x="16" y="1286" font-family="Atkinson Hyperlegible Next" font-size="24" fill="black">Stand %s</text>',
         $dataStand->format('H:i')
     );
 
@@ -692,7 +730,7 @@ function board_render_stand_and_pagination_svg(DateTimeImmutable $dataStand, int
     $pillWidth = max(290, $arrowX - 822 + 58);
 
     return $standSvg . sprintf(
-        '<g font-family="Atkinson Hyperlegible"><rect x="793" y="1256" width="%d" height="48" rx="24" fill="white" stroke="black" stroke-width="2"/>%s</g>',
+        '<g font-family="Atkinson Hyperlegible Next"><rect x="793" y="1256" width="%d" height="48" rx="24" fill="white" stroke="black" stroke-width="2"/>%s</g>',
         $pillWidth, $pagesSvg
     );
 }
@@ -785,7 +823,7 @@ function board_render_disruptions_svg(array $items): string
         return '';
     }
 
-    $out = '<g font-family="Atkinson Hyperlegible">';
+    $out = '<g font-family="Atkinson Hyperlegible Next">';
     foreach ($items as $item) {
         $out .= match ($item['type']) {
             'disruption_title' => sprintf(

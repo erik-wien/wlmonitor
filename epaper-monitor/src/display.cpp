@@ -185,3 +185,18 @@ void showInputMarker(const char* label) {
     epaper.setTextSize(1);
     epaper.updataPartial(x, y, w, h);
 }
+
+void showStatusOverlay(const char* text) {
+    // Deckungsgleich mit BOARD_STATUS_IDLE_TEXT in board_template.php
+    // (x=1150, y=1292 Textgrundlinie, font-size 34 bold Atkinson Hyperlegible
+    // Next). Breite reicht fuer "Warte auf Eingabe" bei setTextSize(2).
+    const int x2 = 1150, y2 = 1256, w2 = 500, h2 = 50;
+    clearAlignedForPartial(x2, y2, w2, h2);
+    epaper.setFreeFont(&FreeSansBold9pt7b);
+    epaper.setTextSize(2);
+    epaper.setTextColor(TFT_BLACK, TFT_WHITE);
+    epaper.setCursor(x2, y2 + h2 - 14);
+    epaper.print(text);
+    epaper.setTextSize(1);
+    epaper.updataPartial(x2, y2, w2, h2);
+}

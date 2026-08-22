@@ -45,3 +45,12 @@ void drawTouchBlob(int x, int y);
 // wurde (Debug-Hilfe, Nutzerwunsch 2026-08-21). label z. B. "fav0",
 // "page_next", "full", oder "none" bei reinem Timer-Wake.
 void showInputMarker(const char* label);
+
+// Ueberschreibt die Statuszeile am unteren Rand der Wetterkarte (x=1150,
+// y=1256..1306, deckungsgleich mit BOARD_STATUS_IDLE_TEXT in
+// board_template.php) mit einem lokal bekannten Zustand -- fuer "Hole
+// Daten…"/"Schlafe", die der Server nicht rendern kann (gelten waehrend/vor
+// einem Request, nicht als dessen Ergebnis). "Warte auf Eingabe" muss NICHT
+// lokal gezeichnet werden -- das ist bereits der Server-Standardtext in
+// jedem regulaer ausgelieferten Frame.
+void showStatusOverlay(const char* text);

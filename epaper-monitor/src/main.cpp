@@ -80,6 +80,7 @@ static void syncTimeForTls() {
 }
 
 static void goToSleep() {
+    showStatusOverlay("Schlafe");
     markSleepIcon();
     sleepPanel();
     WiFi.disconnect(true);
@@ -107,11 +108,22 @@ static void goToSleep() {
 static void fetchAndRender(const String& token, const char* touchValue, bool forceFull) {
     if (forceFull) rtcLastEtag[0] = '\0';
 
+    // "Hole Daten..." lokal VOR dem Request zeichnen -- der Server kann
+    // diesen Zustand nicht rendern (gilt waehrend/vor dem Request, nicht als
+    // dessen Ergebnis). Am Ende dieser Funktion IMMER zurueck auf "Warte auf
+    // Eingabe", unabhaengig davon, ob die Antwort ein Vollbild oder ein Patch
+    // war -- ein Patch deckt nur die Pixel ab, die sich serverseitig
+    // geaendert haben, und koennte die Statuszeile auslassen, wenn sich dort
+    // sonst nichts geaendert hat.
+    showStatusOverlay("Hole Daten...");
+
     int batteryMv = readBatteryMillivolts();
     int rssi = WiFi.RSSI();
+    float tempC = NAN, humidityPct = NAN;
+    readAmbientConditions(tempC, humidityPct); // bleibt NAN bei Lesefehler -- fetchBoard laesst die Header dann weg
 
     BoardFetchResult fetch;
-    fetchBoard(token.c_str(), touchValue, rtcLastEtag, batteryMv, rssi, HTTP_TIMEOUT_MS, fetch);
+    fetchBoard(token.c_str(), touchValue, rtcLastEtag, batteryMv, rssi, tempC, humidityPct, HTTP_TIMEOUT_MS, fetch);
 
     FetchOutcome outcome;
     switch (fetch.outcome) {
@@ -143,6 +155,8 @@ static void fetchAndRender(const String& token, const char* touchValue, bool for
     } else if (st.banner != ErrorBanner::None) {
         showErrorBanner(st.banner, "??:??");
     }
+
+    showStatusOverlay("Warte auf Eingabe");
 }
 
 // Bleibt wach, bis ACTIVE_IDLE_TIMEOUT_MS lang keine Eingabe mehr kam.

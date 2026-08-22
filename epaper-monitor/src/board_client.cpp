@@ -16,7 +16,8 @@ const size_t HEADER_COUNT = sizeof(HEADER_NAMES) / sizeof(HEADER_NAMES[0]);
 } // namespace
 
 void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
-                 int batteryMv, int rssi, uint32_t timeoutMs, BoardFetchResult& out) {
+                 int batteryMv, int rssi, float tempC, float humidityPct,
+                 uint32_t timeoutMs, BoardFetchResult& out) {
     out = BoardFetchResult{};
 
     WiFiClientSecure client;
@@ -62,6 +63,10 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
     http.addHeader("X-Device-RSSI", String(rssi));
     if (touchValue != nullptr) {
         http.addHeader("X-Device-Touch", touchValue);
+    }
+    if (!isnan(tempC) && !isnan(humidityPct)) {
+        http.addHeader("X-Device-Temp-C", String(tempC, 1));
+        http.addHeader("X-Device-Humidity-Pct", String((int) roundf(humidityPct)));
     }
     if (lastEtag != nullptr && lastEtag[0] != '\0') {
         http.addHeader("If-None-Match", lastEtag);

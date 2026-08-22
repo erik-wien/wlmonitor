@@ -13,3 +13,11 @@
 // antwortet oder ein unplausibler Wert herauskommt -- der Aufrufer laesst
 // die Panel-Temperatur dann unveraendert.
 float readAmbientTemperature();
+
+// Temperatur + relative Luftfeuchte in einer I2C-Transaktion (SHT4x liefert
+// beides pro Messung). Fuer die Statuskarte im Board (X-Device-Temp-C/
+// X-Device-Humidity-Pct, s. web/board.php), unabhaengig vom oben genannten
+// Panel-VCOM-Zweck. Gibt false zurueck, wenn der Sensor nicht antwortet
+// oder ein unplausibler Wert herauskommt -- Ausgabeparameter dann
+// unveraendert.
+bool readAmbientConditions(float& outTempC, float& outHumidityPct);

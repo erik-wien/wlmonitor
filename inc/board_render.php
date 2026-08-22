@@ -11,7 +11,7 @@ declare(strict_types=1);
  * Erzeugt (bzw. aktualisiert) eine Fontconfig-XML, die ausschliesslich auf
  * assets/fonts/board/ zeigt, und gibt ihren Pfad zurueck. rsvg-convert
  * findet Schriften ueber Fontconfig, nicht ueber @font-face -- ohne dieses
- * Env-Var faellt "Atkinson Hyperlegible" still auf eine Systemschrift
+ * Env-Var faellt "Atkinson Hyperlegible Next" still auf eine Systemschrift
  * zurueck (kein Fehler, nur falsche Optik). Pfad relativ zu __DIR__, damit
  * Dev und Prod ohne Konfigurationsaenderung funktionieren.
  *

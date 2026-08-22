@@ -95,4 +95,50 @@ class BoardTemplateWeatherTest extends TestCase
         $this->assertStringNotContainsString('°C', $svg, 'ohne Daten keine erfundene Temperatur');
         $this->assertStringContainsString('Wetterdaten werden geladen', $svg);
     }
+
+    // --- Geraete-Sensorzeile + Statuszeile (2026-08-22) -----------------------
+
+    public function test_weather_svg_shows_device_sensor_line_when_provided(): void
+    {
+        $svg = board_render_weather_svg($this->weatherFixture(), 21.3, 47);
+
+        $this->assertStringContainsString('21.3°C • 47% Rel.LF', $svg);
+    }
+
+    public function test_weather_svg_omits_sensor_line_when_not_provided(): void
+    {
+        $svg = board_render_weather_svg($this->weatherFixture());
+
+        $this->assertStringNotContainsString('Rel.LF', $svg);
+    }
+
+    public function test_weather_svg_omits_sensor_line_when_only_one_value_present(): void
+    {
+        // Kaputter Sensor liefert nie nur einen der beiden Werte (SHT4x
+        // beantwortet eine Messung immer mit Temperatur+Feuchte zusammen,
+        // s. readAmbientConditions() in epaper-monitor/src/sensor.cpp) --
+        // trotzdem defensiv: nur mit BEIDEN Werten rendern.
+        $svg = board_render_weather_svg($this->weatherFixture(), 21.3, null);
+
+        $this->assertStringNotContainsString('Rel.LF', $svg);
+    }
+
+    public function test_weather_svg_always_shows_idle_status_text(): void
+    {
+        // Statuszeile ist server-seitig IMMER "Warte auf Eingabe" -- ein
+        // ausgeliefertes Bild wird per Definition angezeigt, WAEHREND das
+        // Geraet auf die naechste Eingabe wartet. "Hole Daten…"/"Schlafe"
+        // zeichnet die Firmware lokal darueber (showStatusOverlay() in
+        // epaper-monitor/src/display.cpp), s. BOARD_STATUS_IDLE_TEXT.
+        $svg = board_render_weather_svg($this->weatherFixture());
+
+        $this->assertStringContainsString('>Warte auf Eingabe<', $svg);
+    }
+
+    public function test_weather_svg_shows_idle_status_even_when_never_fetched(): void
+    {
+        $svg = board_render_weather_svg(['available' => false]);
+
+        $this->assertStringContainsString('>Warte auf Eingabe<', $svg);
+    }
 }

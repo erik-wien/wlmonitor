@@ -14,7 +14,7 @@ class BoardTemplateStandPaginationTest extends TestCase
     public function test_stand_always_renders(): void
     {
         $svg = board_render_stand_and_pagination_svg(new DateTimeImmutable('19:13'), 1, 1);
-        $this->assertStringContainsString('x="16" y="1286" font-family="Atkinson Hyperlegible" font-size="24" fill="black">Stand 19:13<', $svg);
+        $this->assertStringContainsString('x="16" y="1286" font-family="Atkinson Hyperlegible Next" font-size="24" fill="black">Stand 19:13<', $svg);
     }
 
     public function test_no_pagination_pill_when_only_one_page(): void

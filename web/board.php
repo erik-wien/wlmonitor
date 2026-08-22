@@ -22,6 +22,8 @@
  * Der Token-Wert selbst wird nie ins auth_log geschrieben.
  * X-Device-Battery-mV: <n>           (optional)
  * X-Device-RSSI: <n>                 (optional)
+ * X-Device-Temp-C: <float>           (optional, SHT4x im Geraet)
+ * X-Device-Humidity-Pct: <n>         (optional, SHT4x im Geraet)
  * X-Device-Touch: fav0|fav1|fav2|page_prev|page_next   (optional)
  * If-None-Match: "<letzter ETag>"    (optional)
  *
@@ -148,6 +150,11 @@ try {
     $rssi = $_SERVER['HTTP_X_DEVICE_RSSI'] ?? null;
     $wifiBars = is_numeric($rssi) ? board_wifi_bars_from_rssi((int) $rssi) : 0;
 
+    $deviceTempRaw = $_SERVER['HTTP_X_DEVICE_TEMP_C'] ?? null;
+    $deviceTempC = is_numeric($deviceTempRaw) ? (float) $deviceTempRaw : null;
+    $deviceHumidityRaw = $_SERVER['HTTP_X_DEVICE_HUMIDITY_PCT'] ?? null;
+    $deviceHumidityPct = is_numeric($deviceHumidityRaw) ? (int) $deviceHumidityRaw : null;
+
     $debug = (string) ($_GET['debug'] ?? '');
     $part = (string) ($_GET['part'] ?? '');
 
@@ -187,7 +194,9 @@ SVG;
             $dataStand,
             $renderedAt,
             $batteryPercent,
-            $wifiBars
+            $wifiBars,
+            $deviceTempC,
+            $deviceHumidityPct
         );
     }
 
