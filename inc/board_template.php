@@ -810,6 +810,13 @@ function board_render_stand_and_pagination_svg(DateTimeImmutable $dataStand, int
 const BOARD_DISRUPTIONS_MAX_CHARS_PER_LINE = 67;
 
 /**
+ * Abstand von der Titel-Grundlinie bis zur ersten Beschreibungszeile.
+ * 32px (2x16) waren bei 32px Schrift optisch fast auf Stoss -- plus eine
+ * halbe Beschreibungszeile (42/2 = 21px) Luft, Nutzerwunsch 2026-08-22.
+ */
+const BOARD_DISRUPTIONS_TITLE_GAP = 53;
+
+/**
  * Wie board_wrap_text() (Task 4), aber mit hartem Zeilenlimit: ORF-
  * Stoerungstexte koennen mehrere hundert Zeichen lang sein (Spec §8) -- bei
  * mehr als $maxLines Zeilen wird die letzte Zeile so weit gekuerzt, dass
@@ -837,12 +844,15 @@ function board_wrap_disruption_text(string $text, int $maxLines): array
 }
 
 /**
- * Cursor-Layout der Stoerungsseite: Titel fett (40px) + gekuerzte
- * Beschreibung (32px, max. 3 Zeilen), 50px Abstand vor jedem Titel, 16px
- * zwischen Titel und Beschreibung, 42px Zeilenabstand innerhalb der
- * Beschreibung, 40px nach dem letzten Beschreibungszeile bis zum
- * Trennstrich. $alerts ist bereits auf die Linien des aktiven Favoriten
- * gefiltert (Aufgabe des Aufrufers, s. Interfaces).
+ * Cursor-Layout der Stoerungsseite: Titel fett (40px) + Beschreibung (32px),
+ * 50px Abstand vor jedem Titel, BOARD_DISRUPTIONS_TITLE_GAP zwischen Titel
+ * und Beschreibung, 42px Zeilenabstand innerhalb der Beschreibung, 40px nach
+ * der letzten Beschreibungszeile bis zum Trennstrich. $alerts ist bereits auf
+ * die Linien des aktiven Favoriten gefiltert (Aufgabe des Aufrufers, s.
+ * Interfaces).
+ *
+ * Die Beschreibung wird nur so weit gekuerzt, wie der verbleibende Platz bis
+ * BOARD_DEPARTURES_MAX_Y es erzwingt (frueher pauschal 3 Zeilen).
  *
  * KEIN Ueberlauf-Schutz: anders als board_paginate_departures() bricht diese
  * Funktion nicht auf eine neue Seite um, wenn der Inhalt zu lang wird --
@@ -862,10 +872,22 @@ function board_layout_disruptions(array $alerts): array
     foreach ($alerts as $alert) {
         $titleTop = $cursor + 50;
         $titleBaseline = $titleTop + 20;
+
+        // Wieviele Beschreibungszeilen passen ab hier noch auf die Seite?
+        // Frueher pauschal 3 -- der Text wurde damit fast immer gekuerzt,
+        // obwohl die ganze Spalte frei ist (Nutzerbefund 2026-08-22: "den
+        // eigentlichen Text nicht kuerzen, es ist genug Platz"). Jetzt nur
+        // noch so weit kuerzen, wie der Platz bis BOARD_DEPARTURES_MAX_Y es
+        // wirklich erzwingt -- die Stoerungsseite bricht bewusst weiterhin
+        // nicht auf eine Folgeseite um (s. Funktionskopf).
+        $firstLineY = $titleBaseline + BOARD_DISRUPTIONS_TITLE_GAP;
+        $available = BOARD_DEPARTURES_MAX_Y - $firstLineY;
+        $maxLines = max(1, (int) floor($available / 42) + 1);
+
         $items[] = ['type' => 'disruption_title', 'y' => $titleBaseline, 'text' => $alert['title']];
 
-        $descLines = board_wrap_disruption_text($alert['description'], 3);
-        $y = $titleBaseline + 16 + 16;
+        $descLines = board_wrap_disruption_text($alert['description'], $maxLines);
+        $y = $firstLineY;
         foreach ($descLines as $line) {
             $items[] = ['type' => 'disruption_line', 'y' => $y, 'text' => $line];
             $y += 42;

@@ -60,11 +60,34 @@ class BoardTemplateDisruptionsTest extends TestCase
         $this->assertSame(160, $headers[0]['y']);
         $this->assertStringContainsString('Gleisbauarbeiten', $headers[0]['text']);
 
+        // Halbe Beschreibungszeile Luft zwischen Titel und Text
+        // (BOARD_DISRUPTIONS_TITLE_GAP, Nutzerwunsch 2026-08-22).
+        $lines = array_values(array_filter($items, fn ($i) => $i['type'] === 'disruption_line'));
+        $this->assertSame(160 + BOARD_DISRUPTIONS_TITLE_GAP, $lines[0]['y']);
+
         $svg = board_render_disruptions_svg($items);
         $this->assertStringContainsString('font-weight="bold" font-size="40"', $svg);
         $this->assertStringContainsString('Gleisbauarbeiten', $svg);
         $this->assertStringContainsString('U3: Bauarbeiten', $svg);
-        $this->assertStringContainsString('…', $svg, 'lange Meldung muss gekuerzt sein');
+        // Nicht mehr auf 3 Zeilen gekuerzt: bei einer ganzen freien Spalte
+        // wird der ORF-Text vollstaendig gezeigt (Nutzerwunsch 2026-08-22).
+        $this->assertStringNotContainsString('…', $svg);
+        $this->assertStringContainsString('Weiterfahrt bis Augasse.', $svg, 'letzter Satz der langen Meldung muss noch da sein');
+    }
+
+    public function test_description_is_truncated_only_when_the_column_really_runs_out(): void
+    {
+        // Kuenstlich ueberlanger Text: die Stoerungsseite bricht bewusst nicht
+        // auf eine Folgeseite um, also muss sie am Spaltenende doch kuerzen --
+        // aber eben erst dort und nicht schon nach 3 Zeilen.
+        $alerts = [$this->alert('Titel', str_repeat('Sehr lange Stoerungsmeldung. ', 200), ['5'])];
+
+        $items = board_layout_disruptions($alerts);
+        $lines = array_values(array_filter($items, fn ($i) => $i['type'] === 'disruption_line'));
+
+        $this->assertGreaterThan(3, count($lines), 'deutlich mehr als die frueheren 3 Zeilen');
+        $this->assertLessThanOrEqual(BOARD_DEPARTURES_MAX_Y, end($lines)['y'], 'darf nicht in die Stand-/Pagination-Leiste ragen');
+        $this->assertStringEndsWith('…', end($lines)['text']);
     }
 
     public function test_empty_alerts_render_nothing(): void
