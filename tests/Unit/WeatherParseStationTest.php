@@ -23,6 +23,7 @@ class WeatherParseStationTest extends TestCase
 
         $this->assertSame(18.4, $result['temp_c']);
         $this->assertSame(11, $result['wind_kmh']);
+        $this->assertSame(28, $result['wind_gusts_kmh']);
         $this->assertSame('West', $result['wind_direction']);
         $this->assertSame(65, $result['humidity_pct']);
         $this->assertSame(0.0, $result['precipitation_mm']);
@@ -39,6 +40,14 @@ class WeatherParseStationTest extends TestCase
     public function test_throws_when_wind_format_is_unrecognized(): void
     {
         $html = str_replace('West, 11 <abbr', 'komisch <abbr', $this->fixtureHtml());
+
+        $this->expectException(RuntimeException::class);
+        weather_parse_station($html);
+    }
+
+    public function test_throws_when_gusts_format_is_unrecognized(): void
+    {
+        $html = str_replace('West, 28 <abbr', 'komisch <abbr', $this->fixtureHtml());
 
         $this->expectException(RuntimeException::class);
         weather_parse_station($html);

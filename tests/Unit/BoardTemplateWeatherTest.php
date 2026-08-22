@@ -59,7 +59,8 @@ class BoardTemplateWeatherTest extends TestCase
         $svg = board_render_weather_svg($this->weatherFixture());
 
         $this->assertStringContainsString('#icon_klar', $svg);
-        $this->assertStringContainsString('18° – 35°C', $svg);
+        // Ohne Stationsdaten nur der Prognosebereich, kein fetter Praefix.
+        $this->assertStringContainsString('>18–35°C</text>', $svg);
         $this->assertStringContainsString('>Heute<', $svg);
     }
 
@@ -79,7 +80,7 @@ class BoardTemplateWeatherTest extends TestCase
         ]));
 
         $this->assertStringContainsString('#icon_klar', $svg, 'Icon bleibt bei veraltetem Text unveraendert (Spec §8)');
-        $this->assertStringContainsString('18° – 35°C', $svg, 'Temperatur bleibt bei veraltetem Text unveraendert (Spec §8)');
+        $this->assertStringContainsString('>18–35°C</text>', $svg, 'Temperatur bleibt bei veraltetem Text unveraendert (Spec §8)');
         // Bricht bei 31 Zeichen/Zeile (2026-08-22, groesserer Font) auf zwei
         // Zeilen um statt in einer zu stehen.
         $this->assertStringContainsString('Wetterbericht veraltet seit', $svg);
@@ -98,7 +99,7 @@ class BoardTemplateWeatherTest extends TestCase
 
     // --- Stations-Messwerte (Mariabrunn) + Statuszeile (2026-08-22) -----------
 
-    /** @return array{available: bool, temp_c?: float, humidity_pct?: int, wind_kmh?: int, wind_direction?: string, precipitation_mm?: float} */
+    /** @return array{available: bool, temp_c?: float, humidity_pct?: int, wind_kmh?: int, wind_gusts_kmh?: int, wind_direction?: string, precipitation_mm?: float} */
     private function stationFixture(array $overrides = []): array
     {
         return array_merge([
@@ -106,6 +107,7 @@ class BoardTemplateWeatherTest extends TestCase
             'temp_c' => 21.3,
             'humidity_pct' => 47,
             'wind_kmh' => 11,
+            'wind_gusts_kmh' => 28,
             'wind_direction' => 'West',
             'precipitation_mm' => 0.0,
         ], $overrides);
@@ -115,26 +117,50 @@ class BoardTemplateWeatherTest extends TestCase
     {
         $svg = board_render_weather_svg($this->weatherFixture(['station' => $this->stationFixture()]));
 
-        $this->assertStringContainsString('21.3°C • 47% Rel.LF', $svg);
-        $this->assertStringContainsString('Wind West 11 km/h • 0.0 mm/h Regen', $svg);
+        $this->assertStringContainsString('<tspan font-weight="bold">21.3°</tspan> 18–35°C', $svg, 'Mariabrunn-Temp fett, Prognosebereich normal');
+        $this->assertStringContainsString('>47%</text>', $svg);
+        $this->assertStringContainsString('>11–28 km/h</text>', $svg);
+        $this->assertStringContainsString('#iconTemp', $svg);
+        $this->assertStringContainsString('#iconDroplet', $svg);
+        $this->assertStringContainsString('#iconWind', $svg);
     }
 
-    public function test_weather_svg_omits_station_lines_when_unavailable(): void
+    public function test_weather_svg_omits_precipitation_row_when_zero(): void
+    {
+        $svg = board_render_weather_svg($this->weatherFixture(['station' => $this->stationFixture(['precipitation_mm' => 0.0])]));
+
+        $this->assertStringNotContainsString('#iconDroplets', $svg);
+        $this->assertStringNotContainsString('mm/h', $svg);
+    }
+
+    public function test_weather_svg_shows_precipitation_row_when_present(): void
+    {
+        $svg = board_render_weather_svg($this->weatherFixture(['station' => $this->stationFixture(['precipitation_mm' => 1.5])]));
+
+        $this->assertStringContainsString('#iconDroplets', $svg);
+        $this->assertStringContainsString('>1.5 mm/h</text>', $svg);
+    }
+
+    public function test_weather_svg_omits_station_rows_when_unavailable(): void
     {
         $svg = board_render_weather_svg($this->weatherFixture(['station' => ['available' => false]]));
 
-        $this->assertStringNotContainsString('Rel.LF', $svg);
-        $this->assertStringNotContainsString('Regen', $svg);
+        $this->assertStringNotContainsString('#iconDroplet', $svg);
+        $this->assertStringNotContainsString('#iconWind', $svg);
+        $this->assertStringNotContainsString('#iconDroplets', $svg);
+        // Prognose-Temp-Zeile mit iconTemp bleibt, nur ohne fetten Praefix.
+        $this->assertStringContainsString('#iconTemp', $svg);
+        $this->assertStringNotContainsString('<tspan', $svg);
     }
 
-    public function test_weather_svg_omits_station_lines_when_key_missing_entirely(): void
+    public function test_weather_svg_omits_station_rows_when_key_missing_entirely(): void
     {
         // weather_select_display() liefert 'station' immer mit, aber die
         // Funktion soll auch ohne den Schluessel nicht brechen (z.B. alte
         // Cache-Fixture in einem anderen Test).
         $svg = board_render_weather_svg($this->weatherFixture());
 
-        $this->assertStringNotContainsString('Rel.LF', $svg);
+        $this->assertStringNotContainsString('<tspan', $svg);
     }
 
     public function test_weather_svg_always_shows_idle_status_text(): void

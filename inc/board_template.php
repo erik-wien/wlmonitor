@@ -52,86 +52,41 @@ function board_badge_label_font_size(string $label, string $badgeType = ''): int
  * abgenommen (docs/superpowers/specs/2026-08-15-epaper-monitor-v2-design.md
  * §9 "Icon-Set" + "Badges").
  */
+/**
+ * Wetter-Icons kommen als Tabler-Outline-Dateien aus assets/img/wetter/
+ * (Nutzerwunsch 2026-08-22, ersetzt die handgezeichneten Formen). Mapping
+ * 1:1 wo eine passende Datei existiert; "bewoelkt"/"bedeckt" teilen sich
+ * cloud.svg (keine zwei Bewoelkungsgrad-Varianten verfuegbar), "regen_leicht"/
+ * "regen_stark" teilen sich cloud-rain.svg (keine Intensitaets-Variante).
+ * icon_unbekannt bleibt handgezeichnet -- kein Wetterzustand, sondern ein
+ * UI-Fallback ("Icon-Code nicht erkannt").
+ */
+const BOARD_WEATHER_ICON_FILES = [
+    'icon_klar'            => 'sun.svg',
+    'icon_leicht_bewoelkt' => 'cloud-sun.svg',
+    'icon_bewoelkt'        => 'cloud.svg',
+    'icon_bedeckt'         => 'cloud.svg',
+    'icon_regen_leicht'    => 'cloud-rain.svg',
+    'icon_regen_stark'     => 'cloud-rain.svg',
+    'icon_schnee'          => 'cloud-snow.svg',
+    'icon_gewitter'        => 'cloud-bolt.svg',
+    'icon_nebel'           => 'cloud-fog.svg',
+];
+
 function board_svg_defs(): string
 {
-    return <<<'SVG'
-<g id="sun">
-  <circle cx="0" cy="0" r="16" fill="black"/>
-  <g stroke="black" stroke-width="4">
-    <line x1="0" y1="-26" x2="0" y2="-34"/><line x1="0" y1="26" x2="0" y2="34"/>
-    <line x1="-26" y1="0" x2="-34" y2="0"/><line x1="26" y1="0" x2="34" y2="0"/>
-    <line x1="-18" y1="-18" x2="-24" y2="-24"/><line x1="18" y1="-18" x2="24" y2="-24"/>
-    <line x1="-18" y1="18" x2="-24" y2="24"/><line x1="18" y1="18" x2="24" y2="24"/>
-  </g>
-</g>
-<path id="cloudOutline" d="M -32,14 A 14,14 0 0 1 -20,-6 A 18,18 0 0 1 14,-14 A 16,16 0 0 1 32,4
-         A 11,11 0 0 1 30,26 L -26,26 A 11,11 0 0 1 -32,14 Z"
-      fill="white" stroke="black" stroke-width="5" stroke-linejoin="round"/>
-<path id="cloudFilled" d="M -32,14 A 14,14 0 0 1 -20,-6 A 18,18 0 0 1 14,-14 A 16,16 0 0 1 32,4
-         A 11,11 0 0 1 30,26 L -26,26 A 11,11 0 0 1 -32,14 Z"
-      fill="black"/>
+    $weatherIcons = '';
+    foreach (BOARD_WEATHER_ICON_FILES as $id => $file) {
+        $weatherIcons .= sprintf("<g id=\"%s\">%s</g>\n", $id, board_read_weather_icon($file));
+    }
+    // Kleine Praefix-Icons fuer die Stationsmesswert-Zeilen (Nutzerwunsch
+    // 2026-08-22): Temperatur, Luftfeuchtigkeit, Wind, Niederschlag.
+    $rowIcons = sprintf('<g id="iconTemp">%s</g>' . "\n", board_read_weather_icon('temperature.svg'))
+        . sprintf('<g id="iconDroplet">%s</g>' . "\n", board_read_weather_icon('droplet.svg'))
+        . sprintf('<g id="iconWind">%s</g>' . "\n", board_read_weather_icon('wind.svg'))
+        . sprintf('<g id="iconDroplets">%s</g>' . "\n", board_read_weather_icon('droplets.svg'));
 
-<g id="icon_klar">
-  <use href="#sun"/>
-</g>
-<g id="icon_leicht_bewoelkt">
-  <use href="#sun" transform="translate(-7,-17) scale(0.55)"/>
-  <use href="#cloudOutline" transform="translate(5,7)"/>
-</g>
-<g id="icon_bewoelkt">
-  <use href="#cloudOutline" transform="translate(-7,-5) scale(0.8)"/>
-  <use href="#cloudOutline" transform="translate(6,9)"/>
-</g>
-<g id="icon_bedeckt">
-  <use href="#cloudOutline" transform="scale(1.12)"/>
-</g>
-<g id="icon_regen_leicht">
-  <use href="#cloudOutline" transform="translate(0,-8)"/>
-  <g stroke="black" stroke-width="4" stroke-linecap="round">
-    <line x1="-14" y1="22" x2="-19" y2="34"/>
-    <line x1="0"   y1="22" x2="-5"  y2="34"/>
-    <line x1="14"  y1="22" x2="9"   y2="34"/>
-  </g>
-</g>
-<g id="icon_regen_stark">
-  <use href="#cloudFilled" transform="translate(0,-10) scale(1.05)"/>
-  <g stroke="black" stroke-width="4" stroke-linecap="round">
-    <line x1="-20" y1="20" x2="-26" y2="35"/>
-    <line x1="-9"  y1="20" x2="-15" y2="35"/>
-    <line x1="2"   y1="20" x2="-4"  y2="35"/>
-    <line x1="13"  y1="20" x2="7"   y2="35"/>
-    <line x1="24"  y1="20" x2="18"  y2="35"/>
-  </g>
-</g>
-<g id="icon_schnee">
-  <use href="#cloudOutline" transform="translate(0,-8)"/>
-  <g stroke="black" stroke-width="3" stroke-linecap="round">
-    <g transform="translate(-16,27)">
-      <line x1="-6" y1="0" x2="6" y2="0"/><line x1="0" y1="-6" x2="0" y2="6"/>
-      <line x1="-4.2" y1="-4.2" x2="4.2" y2="4.2"/><line x1="-4.2" y1="4.2" x2="4.2" y2="-4.2"/>
-    </g>
-    <g transform="translate(0,33)">
-      <line x1="-6" y1="0" x2="6" y2="0"/><line x1="0" y1="-6" x2="0" y2="6"/>
-      <line x1="-4.2" y1="-4.2" x2="4.2" y2="4.2"/><line x1="-4.2" y1="4.2" x2="4.2" y2="-4.2"/>
-    </g>
-    <g transform="translate(16,27)">
-      <line x1="-6" y1="0" x2="6" y2="0"/><line x1="0" y1="-6" x2="0" y2="6"/>
-      <line x1="-4.2" y1="-4.2" x2="4.2" y2="4.2"/><line x1="-4.2" y1="4.2" x2="4.2" y2="-4.2"/>
-    </g>
-  </g>
-</g>
-<g id="icon_gewitter">
-  <use href="#cloudFilled" transform="translate(0,-12) scale(1.05)"/>
-  <polygon points="2,10 -10,26 -1,26 -6,42 10,22 0,22 6,10" fill="black"/>
-</g>
-<g id="icon_nebel">
-  <g stroke="black" stroke-width="5" stroke-linecap="round">
-    <line x1="-30" y1="-18" x2="30" y2="-18"/>
-    <line x1="-22" y1="-6"  x2="30" y2="-6"/>
-    <line x1="-30" y1="6"   x2="22" y2="6"/>
-    <line x1="-18" y1="18"  x2="30" y2="18"/>
-  </g>
-</g>
+    return $weatherIcons . $rowIcons . <<<'SVG'
 <g id="icon_unbekannt">
   <circle r="26" fill="white" stroke="black" stroke-width="5"/>
   <text x="0" y="11" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="34"
@@ -193,6 +148,41 @@ function board_wl_logo_paths(): string
 }
 
 /**
+ * Liest ein Tabler-Outline-Icon aus assets/img/wetter/ (24x24 Viewbox,
+ * Strichzeichnung, fill/stroke auf dem AEUSSEREN <svg>-Tag statt pro Pfad --
+ * ohne das explizit auf die uebernommene Gruppe zu setzen, waeren die Pfade
+ * unsichtbar, sobald der <svg>-Rahmen abgeschnitten ist). cloud-sun.svg ist
+ * die einzige Ausnahme (eigenstaendig mit fill/stroke gefaerbt, kein
+ * currentColor) -- die Umwicklung bleibt dort leer.
+ *
+ * Auf den lokalen Mittelpunkt zentriert (translate(-12,-12)), damit
+ * <use href="#..." transform="translate(x,y) scale(s)"/> dieselbe Konvention
+ * wie die uebrigen Board-Symbole nutzt (Icon-Mitte = lokaler Ursprung).
+ *
+ * @throws RuntimeException wenn die Datei fehlt oder nicht das erwartete
+ *         <svg>...</svg>-Format hat
+ */
+function board_read_weather_icon(string $filename): string
+{
+    $file = realpath(__DIR__ . '/../assets/img/wetter/' . $filename);
+    if ($file === false) {
+        throw new RuntimeException("assets/img/wetter/$filename nicht gefunden");
+    }
+
+    $raw = file_get_contents($file);
+    if (!preg_match('/<svg[^>]*>(.*)<\/svg>/s', $raw, $m)) {
+        throw new RuntimeException("assets/img/wetter/$filename hat nicht das erwartete <svg>...</svg>-Format");
+    }
+
+    $needsStrokeWrapper = str_contains($raw, 'stroke="currentColor"');
+    $attrs = $needsStrokeWrapper
+        ? ' fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"'
+        : '';
+
+    return sprintf('<g transform="translate(-12,-12)"%s>%s</g>', $attrs, trim($m[1]));
+}
+
+/**
  * Fuellbreite des Akku-Balkens in Pixeln (0-48, proportional zu Prozent).
  * Das Akku-Icon sitzt im Kopfbereich bei transform="translate(1713,42)":
  * Umriss-Rechteck lokal x=0 width=56 (absolut x=1713-1769), Polklemme bei
@@ -217,15 +207,18 @@ function board_battery_fill_width(int $percent): int
 function board_render_chrome_svg(DateTimeImmutable $renderedAt, int $batteryPercent, int $wifiBars): string
 {
     $wifiBars = max(0, min(3, $wifiBars));
-    $fillWidth = board_battery_fill_width($batteryPercent);
     $percent = max(0, min(100, $batteryPercent));
-    // Ueber 96% ist am Ladekabel in Wahrheit "laedt gerade", kein
-    // plausibler Ladestand (Nutzerkalibrierung 2026-08-22) -- Blitz statt
-    // Prozentzahl, Balken bleibt unveraendert (zeigt den rohen Messwert).
+    // Ab 95% ist am Ladekabel in Wahrheit "laedt gerade" -- Blitz statt
+    // Prozentzahl. 92-94% sind laut Nutzerkalibrierung schon echte 100%
+    // (lineares Mapping unterschaetzt nahe der Vollladung), zeigen also
+    // "100 %" UND vollen Balken statt des rohen Werts (Nutzerkalibrierung
+    // 2026-08-22, board_battery_display_percent()).
     $isCharging = board_battery_is_charging($percent);
+    $displayPercent = board_battery_display_percent($percent);
+    $fillWidth = board_battery_fill_width($displayPercent);
     $percentSvg = $isCharging
         ? '<polygon points="1849,38 1839,52 1846,52 1843,64 1856,48 1848,48 1851,38" fill="black"/>'
-        : sprintf('<text x="1856" y="63" text-anchor="end" font-weight="bold" font-size="24">%d %%</text>', $percent);
+        : sprintf('<text x="1856" y="63" text-anchor="end" font-weight="bold" font-size="24">%d %%</text>', $displayPercent);
 
     $wifiBarSpecs = [
         ['x' => 0,  'y' => 10, 'h' => 8],
@@ -451,7 +444,7 @@ const BOARD_STATUS_IDLE_TEXT = 'Warte auf Eingabe';
 
 /**
  * @param list<string> $bodyLines
- * @param array{available: bool, temp_c?: float, humidity_pct?: int, wind_kmh?: int, wind_direction?: string, precipitation_mm?: float} $station
+ * @param array{available: bool, temp_c?: float, humidity_pct?: int, wind_kmh?: int, wind_gusts_kmh?: int, wind_direction?: string, precipitation_mm?: float} $station
  */
 function board_render_weather_card(
     string $iconId,
@@ -460,31 +453,60 @@ function board_render_weather_card(
     array $bodyLines,
     array $station = ['available' => false]
 ): string {
-    // Icon+Vorhersage-Temperatur bleiben wie urspruenglich als Einzeiler am
-    // Icon zentriert (Icon-Mitte y=200, Textmitte ~14px unter der Baseline
-    // bei 40px -> Y=214). Die Stationsmesswerte stehen als eigener,
-    // volle-Spaltenbreite-Block DARUNTER, nicht mehr an das Icon gekoppelt --
-    // vier Werte (Temp/Feuchte/Wind/Niederschlag) passen neben dem Icon
-    // (x=1330 bis 1856, nur 526px) sonst nicht verzerrungsfrei.
-    $tempSvg = $tempMin !== null && $tempMax !== null
-        ? sprintf(
-            '<text x="1330" y="214" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="40" fill="black">%d° – %d°C</text>',
-            $tempMin, $tempMax
-        )
-        : '';
+    // Haupt-Icon 25% groesser (Nutzerwunsch 2026-08-22): die Tabler-Dateien
+    // sind 24x24 (Radius 12), das alte handgezeichnete Format kam auf ca.
+    // 64-68 Einheiten Durchmesser bei scale(1.8) -> ~115-122px. scale(6) auf
+    // 24 Einheiten ergibt 144px, ~1,25x die alte Groesse.
+    $iconSvg = sprintf('<g transform="translate(1210,210) scale(6)"><use href="#%s"/></g>', $iconId);
 
-    $stationSvg = '';
-    if ($station['available']) {
-        $stationSvg .= sprintf(
-            '<text x="1150" y="300" font-family="Atkinson Hyperlegible Next" font-weight="500" font-size="40" fill="black">%s°C • %d%% Rel.LF</text>',
-            number_format($station['temp_c'], 1), $station['humidity_pct']
+    // Vier Icon-Zeilen NEBEN dem Icon (Nutzerwunsch 2026-08-22): Temperatur
+    // (Mariabrunn fett + Prognosebereich), Luftfeuchtigkeit, Wind
+    // (Geschwindigkeit-Boeen), Niederschlag (nur wenn > 0). Icon-Mitte einer
+    // Zeile liegt ~14px ueber ihrer Textbaseline (0,35 * 40px), 56px Abstand
+    // zwischen den Zeilen.
+    $rowsSvg = '';
+    $rowIconX = 1330;
+    $rowTextX = 1380;
+    $rowY = 190;
+
+    if ($tempMin !== null && $tempMax !== null) {
+        $tempValueSvg = $station['available']
+            ? sprintf('<tspan font-weight="bold">%s°</tspan> %d–%d°C', number_format($station['temp_c'], 1), $tempMin, $tempMax)
+            : sprintf('%d–%d°C', $tempMin, $tempMax);
+        $rowsSvg .= sprintf('<use href="#iconTemp" transform="translate(%d,%d) scale(1.7)"/>', $rowIconX, $rowY - 14);
+        $rowsSvg .= sprintf(
+            '<text x="%d" y="%d" font-family="Atkinson Hyperlegible Next" font-weight="500" font-size="40" fill="black">%s</text>',
+            $rowTextX, $rowY, $tempValueSvg
         );
-        $stationSvg .= sprintf(
-            '<text x="1150" y="356" font-family="Atkinson Hyperlegible Next" font-weight="500" font-size="40" fill="black">Wind %s %d km/h • %s mm/h Regen</text>',
-            htmlspecialchars($station['wind_direction'], ENT_XML1), $station['wind_kmh'], number_format($station['precipitation_mm'], 1)
-        );
+        $rowY += 56;
     }
 
+    if ($station['available']) {
+        $rowsSvg .= sprintf('<use href="#iconDroplet" transform="translate(%d,%d) scale(1.7)"/>', $rowIconX, $rowY - 14);
+        $rowsSvg .= sprintf(
+            '<text x="%d" y="%d" font-family="Atkinson Hyperlegible Next" font-weight="500" font-size="40" fill="black">%d%%</text>',
+            $rowTextX, $rowY, $station['humidity_pct']
+        );
+        $rowY += 56;
+
+        $rowsSvg .= sprintf('<use href="#iconWind" transform="translate(%d,%d) scale(1.7)"/>', $rowIconX, $rowY - 14);
+        $rowsSvg .= sprintf(
+            '<text x="%d" y="%d" font-family="Atkinson Hyperlegible Next" font-weight="500" font-size="40" fill="black">%d–%d km/h</text>',
+            $rowTextX, $rowY, $station['wind_kmh'], $station['wind_gusts_kmh']
+        );
+        $rowY += 56;
+
+        if ($station['precipitation_mm'] > 0) {
+            $rowsSvg .= sprintf('<use href="#iconDroplets" transform="translate(%d,%d) scale(1.7)"/>', $rowIconX, $rowY - 14);
+            $rowsSvg .= sprintf(
+                '<text x="%d" y="%d" font-family="Atkinson Hyperlegible Next" font-weight="500" font-size="40" fill="black">%s mm/h</text>',
+                $rowTextX, $rowY, number_format($station['precipitation_mm'], 1)
+            );
+        }
+    }
+
+    // Feste Position unabhaengig davon, ob die (bedingte) Niederschlagszeile
+    // gerade steht -- sonst spraenge "Heute" je nach Wetterlage auf und ab.
     $headingSvg = $tempMin !== null
         ? '<text x="1150" y="430" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="46" fill="black">Heute</text>'
         : '';
@@ -505,11 +527,8 @@ function board_render_weather_card(
     );
 
     return <<<SVG
-<g transform="translate(1210,200) scale(1.8)">
-  <use href="#{$iconId}"/>
-</g>
-{$tempSvg}
-{$stationSvg}
+{$iconSvg}
+{$rowsSvg}
 {$headingSvg}
 {$bodySvg}
 {$statusSvg}

@@ -309,15 +309,29 @@ function board_battery_percent_from_mv(int $mv): int
 
 /**
  * Am USB-Ladekabel liegt die gemessene Spannung ueber dem, was ein
- * entladener/ruhender LiPo bei "echten" 96-100% haette (Ladeschaltung
- * treibt sie waehrend des Ladevorgangs hoeher) -- alles darueber ist in
- * Wahrheit "laedt gerade", kein plausibler Ladestand (Nutzerkalibrierung
- * 2026-08-22). Schwellwert fuer die Entladeseite (0%/fast leer) noch nicht
- * kalibriert -- board_battery_percent_from_mv() bleibt dort unveraendert.
+ * entladener/ruhender LiPo bei "echten" 100% haette (Ladeschaltung treibt
+ * sie waehrend des Ladevorgangs hoeher) -- ab 95% (Nutzerkalibrierung
+ * 2026-08-22, verschaerft von urspruenglich >96%) ist das in Wahrheit
+ * "laedt gerade", kein plausibler Ladestand. Schwellwert fuer die
+ * Entladeseite (0%/fast leer) noch nicht kalibriert --
+ * board_battery_percent_from_mv() bleibt dort unveraendert.
  */
 function board_battery_is_charging(int $percent): bool
 {
-    return $percent > 96;
+    return $percent >= 95;
+}
+
+/**
+ * Das lineare mV->%-Mapping unterschaetzt nahe der Vollladung (die LiPo-
+ * Spannungskurve flacht dort ab) -- 92-94% roh sind laut Nutzerkalibrierung
+ * 2026-08-22 in Wahrheit schon 100% voll (nur noch nicht am Ladekabel, das
+ * waere >=95%, s. board_battery_is_charging()). Nur fuer die ANZEIGE
+ * (Text + Balkenfuellung); board_battery_percent_from_mv() selbst bleibt
+ * der rohe Messwert.
+ */
+function board_battery_display_percent(int $percent): int
+{
+    return ($percent >= 92 && $percent < 95) ? 100 : $percent;
 }
 
 /**

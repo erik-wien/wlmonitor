@@ -110,7 +110,7 @@ function weather_parse_forecast(string $html): array
  * -- Werte werden ueber den Label-Text gefunden (sprachunabhaengig von
  * Spalten-Reihenfolge/CSS-Klassen, die Seite hat keine data-Attribute).
  *
- * @return array{temp_c: float, wind_kmh: int, wind_direction: string, humidity_pct: int, precipitation_mm: float}
+ * @return array{temp_c: float, wind_kmh: int, wind_gusts_kmh: int, wind_direction: string, humidity_pct: int, precipitation_mm: float}
  * @throws RuntimeException wenn ein erwarteter Messwert fehlt
  */
 function weather_parse_station(string $html): array
@@ -144,6 +144,13 @@ function weather_parse_station(string $html): array
     $windDirection = $m[1];
     $windKmh = (int) $m[2];
 
+    // "Windspitzen: West, 28 km/h" -> 28
+    $gustsText = $findValue('Windspitzen');
+    if (!preg_match('/:\s*\S+,\s*(\d+)\s*km\/h/u', $gustsText, $m)) {
+        throw new RuntimeException('Windspitzen nicht auswertbar: ' . $gustsText);
+    }
+    $windGustsKmh = (int) $m[1];
+
     // "Luftfeuchtigkeit: 65 %" -> 65
     $humidityText = $findValue('Luftfeuchtigkeit');
     if (!preg_match('/(\d+)\s*%/', $humidityText, $m)) {
@@ -161,6 +168,7 @@ function weather_parse_station(string $html): array
     return [
         'temp_c' => $tempC,
         'wind_kmh' => $windKmh,
+        'wind_gusts_kmh' => $windGustsKmh,
         'wind_direction' => $windDirection,
         'humidity_pct' => $humidityPct,
         'precipitation_mm' => $precipitationMm,
@@ -237,7 +245,7 @@ function weather_map_icon_code(string $code): array
  * Verfuegbarkeitspruefung statt der Prognose-Frische mitzubenutzen.
  *
  * @param ?array{fetched_at: string, today: array, tomorrow: array, station?: array, station_fetched_at?: string} $cache
- * @return array{available: bool, icon_category?: string, temp_min?: int, temp_max?: int, text?: ?string, text_error?: ?string, station: array{available: bool, temp_c?: float, humidity_pct?: int, wind_kmh?: int, wind_direction?: string, precipitation_mm?: float}}
+ * @return array{available: bool, icon_category?: string, temp_min?: int, temp_max?: int, text?: ?string, text_error?: ?string, station: array{available: bool, temp_c?: float, humidity_pct?: int, wind_kmh?: int, wind_gusts_kmh?: int, wind_direction?: string, precipitation_mm?: float}}
  */
 function weather_select_display(?array $cache, DateTimeImmutable $now): array
 {
@@ -273,11 +281,17 @@ function weather_select_display(?array $cache, DateTimeImmutable $now): array
 
 /**
  * @param ?array{station?: array, station_fetched_at?: string} $cache
- * @return array{available: bool, temp_c?: float, humidity_pct?: int, wind_kmh?: int, wind_direction?: string, precipitation_mm?: float}
+ * @return array{available: bool, temp_c?: float, humidity_pct?: int, wind_kmh?: int, wind_gusts_kmh?: int, wind_direction?: string, precipitation_mm?: float}
  */
 function weather_select_station_display(?array $cache, DateTimeImmutable $now): array
 {
-    if ($cache === null || !isset($cache['station'], $cache['station_fetched_at'])) {
+    $requiredFields = ['temp_c', 'humidity_pct', 'wind_kmh', 'wind_gusts_kmh', 'wind_direction', 'precipitation_mm'];
+    if ($cache === null || !isset($cache['station'], $cache['station_fetched_at'])
+        || array_diff($requiredFields, array_keys($cache['station'])) !== []) {
+        // Fehlt ein Feld (z.B. Cache-Datei von vor der wind_gusts_kmh-
+        // Erweiterung 2026-08-22, direkt nach einem Deploy und vor dem
+        // naechsten Cron-Lauf), lieber "nicht verfuegbar" als eine kaputte
+        // Kartenzeile/PHP-Warning in der Bild-Antwort.
         return ['available' => false];
     }
 

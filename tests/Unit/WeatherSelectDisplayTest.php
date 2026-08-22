@@ -88,7 +88,7 @@ class WeatherSelectDisplayTest extends TestCase
     {
         return array_merge($this->cache($fetchedAt), [
             'station_fetched_at' => $stationFetchedAt,
-            'station' => ['temp_c' => 21.3, 'humidity_pct' => 47, 'wind_kmh' => 11, 'wind_direction' => 'West', 'precipitation_mm' => 0.0],
+            'station' => ['temp_c' => 21.3, 'humidity_pct' => 47, 'wind_kmh' => 11, 'wind_gusts_kmh' => 28, 'wind_direction' => 'West', 'precipitation_mm' => 0.0],
         ]);
     }
 
@@ -105,6 +105,19 @@ class WeatherSelectDisplayTest extends TestCase
         $this->assertFalse($result['station']['available']);
     }
 
+    public function test_cache_with_incomplete_station_fields_is_unavailable(): void
+    {
+        // Cache-Datei von direkt vor der wind_gusts_kmh-Erweiterung 2026-08-22
+        // (Deploy vor dem naechsten Cron-Lauf) -- lieber "nicht verfuegbar"
+        // als eine PHP-Warning/kaputte Kartenzeile in der Bild-Antwort.
+        $cache = array_merge($this->cache('2026-08-15T15:00:00+02:00'), [
+            'station_fetched_at' => '2026-08-15T15:00:00+02:00',
+            'station' => ['temp_c' => 21.3, 'humidity_pct' => 47, 'wind_kmh' => 11, 'wind_direction' => 'West', 'precipitation_mm' => 0.0],
+        ]);
+        $result = weather_select_display($cache, new DateTimeImmutable('2026-08-15T15:01:00+02:00'));
+        $this->assertFalse($result['station']['available']);
+    }
+
     public function test_fresh_station_data_is_available(): void
     {
         $result = weather_select_display(
@@ -115,6 +128,7 @@ class WeatherSelectDisplayTest extends TestCase
         $this->assertSame(21.3, $result['station']['temp_c']);
         $this->assertSame(47, $result['station']['humidity_pct']);
         $this->assertSame(11, $result['station']['wind_kmh']);
+        $this->assertSame(28, $result['station']['wind_gusts_kmh']);
         $this->assertSame('West', $result['station']['wind_direction']);
         $this->assertSame(0.0, $result['station']['precipitation_mm']);
     }

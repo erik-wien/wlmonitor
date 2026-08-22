@@ -87,17 +87,18 @@ class BoardTemplateChromeTest extends TestCase
         $this->assertStringContainsString('translate(1713,42)', $svg, 'Akku-Icon-Ursprung (linker Rand 1713 > WLAN-rechter-Rand 1697)');
     }
 
-    // --- Lade-Erkennung (Nutzerkalibrierung 2026-08-22) -----------------------
+    // --- Lade-Erkennung (Nutzerkalibrierung 2026-08-22, verschaerft auf >=95%) --
 
-    public function test_battery_is_charging_above_96_percent(): void
+    public function test_battery_is_charging_from_95_percent(): void
     {
+        $this->assertTrue(board_battery_is_charging(95));
         $this->assertTrue(board_battery_is_charging(97));
         $this->assertTrue(board_battery_is_charging(100));
     }
 
-    public function test_battery_is_not_charging_at_or_below_96_percent(): void
+    public function test_battery_is_not_charging_below_95_percent(): void
     {
-        $this->assertFalse(board_battery_is_charging(96));
+        $this->assertFalse(board_battery_is_charging(94));
         $this->assertFalse(board_battery_is_charging(50));
         $this->assertFalse(board_battery_is_charging(0));
     }
@@ -112,9 +113,35 @@ class BoardTemplateChromeTest extends TestCase
 
     public function test_chrome_shows_percent_when_not_charging(): void
     {
-        $svg = board_render_chrome_svg(new DateTimeImmutable(), 96, 3);
+        $svg = board_render_chrome_svg(new DateTimeImmutable(), 80, 3);
 
-        $this->assertStringContainsString('>96 %<', $svg);
+        $this->assertStringContainsString('>80 %<', $svg);
         $this->assertStringNotContainsString('<polygon', $svg);
+    }
+
+    // --- Anzeige-Korrektur 92-94% -> 100% (Nutzerkalibrierung 2026-08-22) -----
+
+    public function test_battery_display_percent_rounds_92_to_94_up_to_100(): void
+    {
+        $this->assertSame(100, board_battery_display_percent(92));
+        $this->assertSame(100, board_battery_display_percent(93));
+        $this->assertSame(100, board_battery_display_percent(94));
+    }
+
+    public function test_battery_display_percent_leaves_other_values_unchanged(): void
+    {
+        $this->assertSame(91, board_battery_display_percent(91));
+        $this->assertSame(95, board_battery_display_percent(95));
+        $this->assertSame(50, board_battery_display_percent(50));
+        $this->assertSame(0, board_battery_display_percent(0));
+    }
+
+    public function test_chrome_shows_100_percent_and_full_bar_for_92_to_94_raw(): void
+    {
+        $svg = board_render_chrome_svg(new DateTimeImmutable(), 93, 3);
+
+        $this->assertStringContainsString('>100 %<', $svg);
+        $this->assertStringContainsString('width="48"', $svg, 'voller Balken bei angezeigten 100%');
+        $this->assertStringNotContainsString('<polygon', $svg, '92-94% ist noch kein Laden, s. board_battery_is_charging()');
     }
 }

@@ -12,10 +12,10 @@ use PHPUnit\Framework\TestCase;
 class BoardTemplateDefsTest extends TestCase
 {
     private const EXPECTED_IDS = [
-        'sun', 'cloudOutline', 'cloudFilled',
         'icon_klar', 'icon_leicht_bewoelkt', 'icon_bewoelkt', 'icon_bedeckt',
         'icon_regen_leicht', 'icon_regen_stark', 'icon_schnee', 'icon_gewitter',
         'icon_nebel', 'icon_unbekannt',
+        'iconTemp', 'iconDroplet', 'iconWind', 'iconDroplets',
         'badgeMetro', 'badgeTram', 'badgeBus', 'badgeTrain',
         'starNow',
     ];
@@ -78,5 +78,43 @@ class BoardTemplateDefsTest extends TestCase
         $this->assertSame(34, board_badge_label_font_size('18', 'tram'));
         $this->assertSame(31, board_badge_label_font_size('WLB', 'metro'));
         $this->assertSame(26, board_badge_label_font_size('U6', 'bus'));
+    }
+
+    // --- board_read_weather_icon() (2026-08-22, Tabler-Icons statt handgezeichnet) --
+
+    public function test_read_weather_icon_replaces_currentcolor_with_explicit_stroke(): void
+    {
+        $icon = board_read_weather_icon('sun.svg');
+
+        $this->assertStringNotContainsString('currentColor', $icon);
+        $this->assertStringContainsString('stroke="black"', $icon);
+        $this->assertStringContainsString('translate(-12,-12)', $icon, 'auf lokalen Mittelpunkt zentriert');
+    }
+
+    public function test_read_weather_icon_leaves_self_colored_icon_unwrapped(): void
+    {
+        // cloud-sun.svg faerbt sich selbst (kein currentColor) -- keine
+        // zusaetzliche fill/stroke-Umwicklung noetig.
+        $icon = board_read_weather_icon('cloud-sun.svg');
+
+        $this->assertStringNotContainsString('fill="none" stroke="black"', $icon);
+    }
+
+    public function test_read_weather_icon_throws_on_missing_file(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        board_read_weather_icon('does-not-exist.svg');
+    }
+
+    public function test_defs_embeds_all_weather_icon_files_without_error(): void
+    {
+        // Rauchtest: jede in BOARD_WEATHER_ICON_FILES referenzierte Datei
+        // muss tatsaechlich existieren und lesbar sein.
+        foreach (BOARD_WEATHER_ICON_FILES as $file) {
+            $this->assertNotFalse(
+                realpath(__DIR__ . '/../../assets/img/wetter/' . $file),
+                "assets/img/wetter/$file nicht gefunden"
+            );
+        }
     }
 }
