@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <cstddef>
 #include <vector>
 #include "board_response.h"
 
@@ -14,6 +15,11 @@ struct BoardFetchResult {
     BoardFetchOutcome outcome = BoardFetchOutcome::NetworkUnavailable;
     ParsedBoardResponse parsed;   // only meaningful when outcome == Success
     std::vector<uint8_t> body;    // raw packed pixel bytes, only when outcome == Success
+    // X-Board-Snapshot-Requested response header, s. web/board_snapshot.php --
+    // ausserhalb von ParsedBoardResponse, weil es kein Teil des strikt
+    // getesteten Kern-Protokolls (board_response.cpp) ist, nur ein optionaler
+    // Seitenkanal fuer den Debug-Screenshot-Upload.
+    bool snapshotRequested = false;
 };
 
 // Fuehrt GET https://BOARD_HOST:BOARD_PORT/board.php aus (board_config.h),
@@ -26,3 +32,10 @@ struct BoardFetchResult {
 void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
                  int batteryMv, int rssi, float tempC, float humidityPct,
                  uint32_t timeoutMs, BoardFetchResult& out);
+
+// Laedt den aktuellen Panel-Puffer (s. getPanelBuffer()/getPanelBufferSize()
+// in display.h) per POST zu web/board_snapshot.php hoch -- Antwort auf
+// X-Board-Snapshot-Requested. Gibt true bei HTTP 200 zurueck, sonst false
+// (Fehler wird nur geloggt, kein eigener Retry -- der Server haelt das
+// Anfrage-Flag bis zum naechsten erfolgreichen Upload).
+bool uploadSnapshot(const char* token, const uint8_t* buffer, size_t bufferSize, uint32_t timeoutMs);

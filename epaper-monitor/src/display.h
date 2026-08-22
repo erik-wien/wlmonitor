@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <cstddef>
 #include "error_state.h"
 
 void initDisplay();
@@ -54,3 +55,8 @@ void showInputMarker(const char* label);
 // lokal gezeichnet werden -- das ist bereits der Server-Standardtext in
 // jedem regulaer ausgelieferten Frame.
 void showStatusOverlay(const char* text);
+
+// Rohzugriff auf den internen 1bpp-Panel-Puffer (Geraete-Screenshot-Upload,
+// s. board_snapshot.php). Gleiche Packung wie board.phps Vollbild-Antworten.
+const uint8_t* getPanelBuffer();
+size_t getPanelBufferSize();

@@ -139,4 +139,57 @@ class BoardStateTest extends TestCase
             board_resolve_touch($meta, 'garbage', 3)
         );
     }
+
+    // --- Geraete-Screenshot-Debug-Feature (2026-08-22, web/board_snapshot.php) ---
+
+    public function test_snapshot_not_requested_by_default(): void
+    {
+        $hash = 'test-snap-' . uniqid();
+        $this->assertFalse(board_state_snapshot_requested($hash));
+    }
+
+    public function test_request_snapshot_sets_the_flag(): void
+    {
+        $hash = 'test-snap-' . uniqid();
+        $this->cleanupPaths[] = board_state_snapshot_request_path($hash);
+
+        board_state_request_snapshot($hash);
+
+        $this->assertTrue(board_state_snapshot_requested($hash));
+    }
+
+    public function test_clear_snapshot_request_unsets_the_flag(): void
+    {
+        $hash = 'test-snap-' . uniqid();
+        $this->cleanupPaths[] = board_state_snapshot_request_path($hash);
+
+        board_state_request_snapshot($hash);
+        board_state_clear_snapshot_request($hash);
+
+        $this->assertFalse(board_state_snapshot_requested($hash));
+    }
+
+    public function test_clear_snapshot_request_is_a_no_op_when_nothing_was_requested(): void
+    {
+        $hash = 'test-snap-' . uniqid();
+        board_state_clear_snapshot_request($hash); // darf nicht werfen
+        $this->assertFalse(board_state_snapshot_requested($hash));
+    }
+
+    public function test_load_snapshot_returns_null_when_nothing_was_uploaded(): void
+    {
+        $hash = 'test-snap-' . uniqid();
+        $this->assertNull(board_state_load_snapshot($hash));
+    }
+
+    public function test_save_then_load_snapshot_roundtrips_binary_data(): void
+    {
+        $hash = 'test-snap-' . uniqid();
+        $this->cleanupPaths[] = board_state_snapshot_path($hash);
+
+        $packed = "\x00\xFF\x0F" . str_repeat("\xAA", 100);
+        board_state_save_snapshot($hash, $packed);
+
+        $this->assertSame($packed, board_state_load_snapshot($hash));
+    }
 }

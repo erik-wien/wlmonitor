@@ -33,6 +33,64 @@ function board_state_frame_path(string $hash): string
     return board_state_dir() . '/' . $hash . '.frame';
 }
 
+// Geraete-Screenshot-Debug-Feature (2026-08-22, s. web/board_snapshot.php):
+// .snapshot_requested ist eine leere Marker-Datei ("Flag gesetzt" =
+// existiert), .snapshot haelt den zuletzt hochgeladenen 1bpp-Rohpuffer.
+function board_state_snapshot_request_path(string $hash): string
+{
+    return board_state_dir() . '/' . $hash . '.snapshot_requested';
+}
+
+function board_state_snapshot_path(string $hash): string
+{
+    return board_state_dir() . '/' . $hash . '.snapshot';
+}
+
+function board_state_snapshot_requested(string $hash): bool
+{
+    return file_exists(board_state_snapshot_request_path($hash));
+}
+
+function board_state_request_snapshot(string $hash): void
+{
+    $dir = board_state_dir();
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+    touch(board_state_snapshot_request_path($hash));
+}
+
+// Wird erst NACH erfolgreichem Empfang eines Uploads geloescht (nicht schon
+// beim Ausliefern des Anfrage-Headers) -- schlaegt der Upload fehl (Netz weg,
+// Geraet schlaeft vorher ein), bleibt die Anfrage fuer den naechsten Poll
+// bestehen statt verloren zu gehen.
+function board_state_clear_snapshot_request(string $hash): void
+{
+    $path = board_state_snapshot_request_path($hash);
+    if (file_exists($path)) {
+        unlink($path);
+    }
+}
+
+function board_state_save_snapshot(string $hash, string $packed): void
+{
+    $dir = board_state_dir();
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+    file_put_contents(board_state_snapshot_path($hash), $packed);
+}
+
+function board_state_load_snapshot(string $hash): ?string
+{
+    $path = board_state_snapshot_path($hash);
+    if (!file_exists($path)) {
+        return null;
+    }
+    $raw = file_get_contents($path);
+    return $raw === false || $raw === '' ? null : $raw;
+}
+
 /** @return array{activeFavoriteIndex:int, activePage:int, etag:?string, fullRefreshAt:?int} */
 function board_state_default_meta(): array
 {

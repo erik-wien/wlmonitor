@@ -184,6 +184,13 @@ static void fetchAndRender(const String& token, const char* touchValue, bool for
     }
 
     showStatusOverlay("Warte auf Eingabe");
+
+    // Erst NACH allen lokalen Zeichnungen dieses Zyklus hochladen -- der
+    // Schnappschuss soll den tatsaechlich fertig eingestellten Panel-Inhalt
+    // zeigen, nicht einen Zwischenstand (Debug-Feature, s. web/board_snapshot.php).
+    if (fetch.snapshotRequested) {
+        uploadSnapshot(token.c_str(), getPanelBuffer(), getPanelBufferSize(), HTTP_TIMEOUT_MS);
+    }
 }
 
 // Bleibt wach, bis ACTIVE_IDLE_TIMEOUT_MS lang keine Eingabe mehr kam.

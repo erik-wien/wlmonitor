@@ -143,6 +143,49 @@ const BOARD_WIDTH = 1872;
 const BOARD_HEIGHT = 1404;
 
 /**
+ * Umkehrung von png_to_1bpp_packed() -- fuer den Geraete-Screenshot-Viewer
+ * (web/board_snapshot.php?view=1). Gleiche Konvention: Bit gesetzt = weiss.
+ *
+ * @throws RuntimeException wenn $packed nicht zu $width x $height passt
+ */
+function board_1bpp_packed_to_png(string $packed, int $width, int $height): string
+{
+    $rowBytes = (int) ceil($width / 8);
+    if (strlen($packed) !== $rowBytes * $height) {
+        throw new RuntimeException(sprintf(
+            'Puffergroesse (%d Bytes) passt nicht zu %dx%d (erwartet %d Bytes)',
+            strlen($packed), $width, $height, $rowBytes * $height
+        ));
+    }
+
+    $image = imagecreatetruecolor($width, $height);
+    $black = imagecolorallocate($image, 0, 0, 0);
+    $white = imagecolorallocate($image, 255, 255, 255);
+    imagefilledrectangle($image, 0, 0, $width - 1, $height - 1, $white);
+
+    for ($y = 0; $y < $height; $y++) {
+        $rowStart = $y * $rowBytes;
+        for ($byteIndex = 0; $byteIndex < $rowBytes; $byteIndex++) {
+            $byte = ord($packed[$rowStart + $byteIndex]);
+            for ($bit = 0; $bit < 8; $bit++) {
+                $x = $byteIndex * 8 + $bit;
+                if ($x >= $width) {
+                    break;
+                }
+                $isWhite = ($byte & (1 << (7 - $bit))) !== 0;
+                if (!$isWhite) {
+                    imagesetpixel($image, $x, $y, $black);
+                }
+            }
+        }
+    }
+
+    ob_start();
+    imagepng($image);
+    return (string) ob_get_clean();
+}
+
+/**
  * Bounding-Box aller unterschiedlichen Bytes zwischen zwei gepackten
  * 1bpp-Frames (Spec §4 Schritt 6). x/w liegen immer auf Byte-Grenzen (8px) --
  * bitgenaues Cropping waere fuer den Firmware-Schreibvorgang unnoetig

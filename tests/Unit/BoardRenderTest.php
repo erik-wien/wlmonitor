@@ -269,4 +269,33 @@ class BoardRenderTest extends TestCase
 
         $this->assertSame($expectedPacked, $cropped);
     }
+
+    // --- board_1bpp_packed_to_png (Geraete-Screenshot-Viewer, 2026-08-22) -----
+
+    public function test_packed_to_png_roundtrips_through_packing_again(): void
+    {
+        $png = $this->makeTestPng(16, 8, fn($x, $y) => $x < 8 ? [0, 0, 0] : [255, 255, 255]);
+        $packed = png_to_1bpp_packed($png, 16, 8);
+
+        $rendered = board_1bpp_packed_to_png($packed, 16, 8);
+        $repacked = png_to_1bpp_packed($rendered, 16, 8);
+
+        $this->assertSame($packed, $repacked);
+    }
+
+    public function test_packed_to_png_produces_correct_dimensions(): void
+    {
+        $packed = str_repeat("\xFF", 2 * 8); // 16x8, alles weiss
+        $png = board_1bpp_packed_to_png($packed, 16, 8);
+
+        $im = imagecreatefromstring($png);
+        $this->assertSame(16, imagesx($im));
+        $this->assertSame(8, imagesy($im));
+    }
+
+    public function test_packed_to_png_throws_on_size_mismatch(): void
+    {
+        $this->expectException(RuntimeException::class);
+        board_1bpp_packed_to_png("\x00\xFF", 16, 8); // 2 Byte statt erwarteter 16
+    }
 }

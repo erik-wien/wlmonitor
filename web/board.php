@@ -286,6 +286,13 @@ SVG;
     // totalPages ab -- die Firmware braucht das, um die Touch-Zonen fuer
     // die Pfeile korrekt nachzurechnen.
     header('X-Board-Total-Pages: ' . $totalPages);
+    // Debug-Feature (s. web/board_snapshot.php): ein per ?request=1 gesetztes
+    // Flag laesst die Firmware ihren tatsaechlichen Panel-Inhalt hochladen --
+    // zeigt auch lokale Overlay-Reste (Fehler-Banner, Marker), die dieser
+    // Server-Render selbst nicht kennt.
+    if (board_state_snapshot_requested($hash)) {
+        header('X-Board-Snapshot-Requested: 1');
+    }
     header('Content-Type: application/octet-stream');
     header('Content-Length: ' . strlen($body));
     echo $body;

@@ -32,6 +32,20 @@ void initDisplay() {
     epaper.begin();
 }
 
+// Rohzugriff auf den internen 1bpp-Sprite-Puffer -- fuer den Geraete-
+// Screenshot-Upload (board_snapshot.php). Gleiche Packung wie board.phps
+// Vollbild-Antworten (MSB-first, Zeilenbreite auf 8px aufgerundet,
+// verifiziert: EPD_COLOR_DEPTH=1 fuer den ED103TC2-Treiber, s.
+// Extensions/EPaper.cpp::begin() -> createSprite(_width,_height,1)).
+const uint8_t* getPanelBuffer() {
+    return (const uint8_t*) epaper.getPointer();
+}
+
+size_t getPanelBufferSize() {
+    const int rowBytes = (epaper.width() + 7) / 8;
+    return (size_t) rowBytes * epaper.height();
+}
+
 // EPaper::setTemp() nimmt einen parameterlosen Funktionszeiger, ruft ihn
 // genau einmal auf und merkt sich das Ergebnis in _temp -- deshalb der
 // Umweg ueber eine Dateistatische statt einer Lambda-Capture.

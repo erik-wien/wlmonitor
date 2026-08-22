@@ -10,6 +10,7 @@ const char* HEADER_NAMES[] = {
     "X-Board-Mode", "X-Board-ETag", "X-Board-Generated",
     "X-Board-X", "X-Board-Y", "X-Board-W", "X-Board-H",
     "X-Board-Favorite-Count", "X-Board-Total-Pages", "Content-Length",
+    "X-Board-Snapshot-Requested",
 };
 const size_t HEADER_COUNT = sizeof(HEADER_NAMES) / sizeof(HEADER_NAMES[0]);
 
@@ -99,6 +100,8 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
         return;
     }
 
+    out.snapshotRequested = http.header("X-Board-Snapshot-Requested") == "1";
+
     BoardHeaders headers;
     headers.mode           = http.header("X-Board-Mode").c_str();
     headers.etag            = http.header("X-Board-ETag").c_str();
@@ -149,4 +152,30 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
     } else {
         out.outcome = BoardFetchOutcome::UnreadableResponse;
     }
+}
+
+bool uploadSnapshot(const char* token, const uint8_t* buffer, size_t bufferSize, uint32_t timeoutMs) {
+    WiFiClientSecure client;
+    extern const uint8_t rootca_crt_bundle_start[] asm("_binary_x509_crt_bundle_start");
+    client.setCACertBundle(rootca_crt_bundle_start);
+    HTTPClient http;
+    http.setConnectTimeout(timeoutMs);
+    http.setTimeout(timeoutMs);
+
+    String url = String("https://") + BOARD_HOST + ":" + BOARD_PORT + "/board_snapshot.php";
+    if (!http.begin(client, url)) {
+        Serial.println("[snapshot] http.begin() fehlgeschlagen");
+        return false;
+    }
+
+    http.addHeader("Authorization", String("Bearer ") + token);
+    http.addHeader("Content-Type", "application/octet-stream");
+
+    uint32_t t0 = millis();
+    int status = http.POST((uint8_t*) buffer, bufferSize);
+    Serial.printf("[snapshot] POST -> %d nach %lums, %u Bytes\n",
+                  status, (unsigned long) (millis() - t0), (unsigned) bufferSize);
+    http.end();
+
+    return status == 200;
 }
