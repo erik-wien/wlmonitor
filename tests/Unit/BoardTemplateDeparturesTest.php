@@ -131,4 +131,22 @@ class BoardTemplateDeparturesTest extends TestCase
         $svg = board_render_departures_svg([$this->row(['destination' => 'A & B'])]);
         $this->assertStringContainsString('A &amp; B', $svg);
     }
+
+    public function test_long_destination_is_truncated_with_ellipsis(): void
+    {
+        // Nutzerbefund 2026-08-22: "Nattmanngasse, Betriebsbhf. Speising"
+        // lief ungekuerzt in die Live-Abfahrtszeit hinein.
+        $svg = board_render_departures_svg([$this->row(['destination' => 'Nattmanngasse, Betriebsbhf. Speising'])]);
+
+        $this->assertStringContainsString('Nattmanngasse, Betriebsbhf.…', $svg);
+        $this->assertStringNotContainsString('Speising', $svg);
+    }
+
+    public function test_short_destination_is_not_truncated(): void
+    {
+        $svg = board_render_departures_svg([$this->row(['destination' => 'Schlachthausgasse U'])]);
+
+        $this->assertStringContainsString('>Schlachthausgasse U<', $svg);
+        $this->assertStringNotContainsString('…', $svg);
+    }
 }

@@ -628,6 +628,29 @@ function board_render_departure_header(array $item): string
     );
 }
 
+/**
+ * Verfuegbare Breite fuer die Fahrtrichtung: x=145 bis x=900 (755px), lasst
+ * Platz vor der Live-Abfahrtszeit (text-anchor="end" bei x=1000, plus dem
+ * "delayed"-Rechteck ab x=950) -- ohne diese Grenze laeuft ein langer
+ * Zielname wie "Nattmanngasse, Betriebsbhf. Speising" direkt in die Minuten-
+ * anzeige hinein (Nutzerbefund 2026-08-22, "Overflow control funktioniert
+ * nicht"). Zeichenbreite wie bei BOARD_WEATHER_TEXT_MAX_CHARS_PER_LINE
+ * hergeleitet: 17,37px/Zeichen bei 39px linear auf 55px skaliert
+ * (17,37 * 55/39 = 24,5px/Zeichen), 8% Sicherheitsabstand:
+ * floor(755 / 24,5 * 0.92).
+ */
+const BOARD_DEPARTURE_DESTINATION_MAX_CHARS = 28;
+
+function board_truncate_destination(string $text): string
+{
+    if (mb_strlen($text, 'UTF-8') <= BOARD_DEPARTURE_DESTINATION_MAX_CHARS) {
+        return $text;
+    }
+
+    $budget = BOARD_DEPARTURE_DESTINATION_MAX_CHARS - 1; // Platz fuer "…"
+    return rtrim(mb_substr($text, 0, $budget, 'UTF-8')) . '…';
+}
+
 function board_render_departure_row(array $item): string
 {
     $r = $item['r'];
@@ -656,7 +679,7 @@ function board_render_departure_row(array $item): string
     );
     $out .= sprintf(
         '<text x="145" y="%d" font-size="55" fill="%s">%s</text>',
-        $r + 19, $fill, htmlspecialchars($item['destination'], ENT_XML1)
+        $r + 19, $fill, htmlspecialchars(board_truncate_destination($item['destination']), ENT_XML1)
     );
 
     if ($isDelayed) {
