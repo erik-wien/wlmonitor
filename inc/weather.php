@@ -303,3 +303,46 @@ function weather_select_station_display(?array $cache, DateTimeImmutable $now): 
 
     return array_merge(['available' => true], $cache['station']);
 }
+
+/**
+ * Wien, fuer die Sonnenstandsberechnung. Stadtmitte statt Messstation --
+ * ueber das Stadtgebiet unterscheiden sich die Zeiten um weniger als eine
+ * Minute, und die Anzeige rundet ohnehin auf Minuten.
+ */
+const WEATHER_VIENNA_LAT = 48.2082;
+const WEATHER_VIENNA_LON = 16.3738;
+
+/**
+ * Sonnenauf- und -untergang fuer einen Tag.
+ *
+ * BEWUSST GERECHNET statt gescrapt: date_sun_info() ist exakt, braucht kein
+ * Netz, keinen Cache und keinen Cron-Lauf -- also auch keinen weiteren
+ * Ausfallpfad im Bildrender. Die ORF-Seiten fuehren die Zeiten zwar auch,
+ * aber dafuer eine dritte Scraping-Quelle samt Veralterungslogik zu bauen,
+ * waere fuer eine Groesse, die sich aus Datum und Koordinaten ergibt,
+ * unverhaeltnismaessig.
+ *
+ * Rein: haengt nur an $day, ruft selbst kein date()/time() (vgl. Kopf von
+ * inc/board_template.php).
+ *
+ * @return array{available: bool, sunrise?: DateTimeImmutable, sunset?: DateTimeImmutable}
+ */
+function weather_sun_times(DateTimeImmutable $day): array
+{
+    $info = date_sun_info($day->getTimestamp(), WEATHER_VIENNA_LAT, WEATHER_VIENNA_LON);
+
+    // In Polarnaehe liefert date_sun_info() bool statt Zeitstempel (Sonne geht
+    // gar nicht auf bzw. gar nicht unter). Fuer Wien kann das nicht eintreten,
+    // aber ein bool wuerde hier sonst still zu "01:00" werden.
+    if (!is_int($info['sunrise'] ?? null) || !is_int($info['sunset'] ?? null)) {
+        return ['available' => false];
+    }
+
+    $tz = $day->getTimezone();
+
+    return [
+        'available' => true,
+        'sunrise'   => (new DateTimeImmutable('@' . $info['sunrise']))->setTimezone($tz),
+        'sunset'    => (new DateTimeImmutable('@' . $info['sunset']))->setTimezone($tz),
+    ];
+}

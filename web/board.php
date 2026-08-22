@@ -194,7 +194,8 @@ SVG;
             $renderedAt,
             $batteryPercent,
             $wifiBars,
-            $firmwareBuild
+            $firmwareBuild,
+            weather_sun_times($renderedAt)
         );
     }
 

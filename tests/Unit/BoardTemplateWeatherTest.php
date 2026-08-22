@@ -225,4 +225,55 @@ class BoardTemplateWeatherTest extends TestCase
             $svg
         );
     }
+
+    // --- Sonnenzeile (Nutzerwunsch 2026-08-22) --------------------------------
+
+    private function sunFixture(): array
+    {
+        $tz = new \DateTimeZone('Europe/Vienna');
+
+        return [
+            'available' => true,
+            'sunrise'   => new \DateTimeImmutable('2026-08-22 05:58', $tz),
+            'sunset'    => new \DateTimeImmutable('2026-08-22 19:56', $tz),
+        ];
+    }
+
+    public function test_sun_row_shows_both_times_with_their_own_pictograms(): void
+    {
+        $svg = board_render_weather_svg($this->weatherFixture(), null, $this->sunFixture());
+
+        $this->assertStringContainsString('>05:58<', $svg);
+        $this->assertStringContainsString('>19:56<', $svg);
+        $this->assertStringContainsString('#iconSunrise', $svg);
+        $this->assertStringContainsString('#iconSunset', $svg);
+    }
+
+    public function test_sun_row_is_omitted_when_unavailable(): void
+    {
+        $this->assertStringNotContainsString('#iconSunrise', board_render_weather_svg($this->weatherFixture()));
+        $this->assertStringNotContainsString(
+            '#iconSunrise',
+            board_render_weather_svg($this->weatherFixture(), null, ['available' => false])
+        );
+    }
+
+    public function test_sun_row_does_not_move_when_precipitation_appears(): void
+    {
+        // Der eigentliche Grund fuer das feste Zeilenraster: die
+        // Niederschlagszeile erscheint nur bei Niederschlag > 0. Mit
+        // fortlaufender Zaehlung wuerde die Sonnenzeile darunter je nach
+        // Wetterlage um 56px springen.
+        $dry = $this->weatherFixture();
+        $dry['station'] = ['available' => true, 'temp_c' => 23.4, 'humidity_pct' => 61,
+            'wind_kmh' => 12, 'wind_gusts_kmh' => 28, 'wind_direction' => 'W', 'precipitation_mm' => 0.0];
+        $wet = $dry;
+        $wet['station']['precipitation_mm'] = 1.4;
+
+        $sunY = sprintf('y="%d"', BOARD_WEATHER_ROW_SUN_Y);
+
+        $this->assertStringContainsString($sunY, board_render_weather_svg($dry, null, $this->sunFixture()));
+        $this->assertStringContainsString($sunY, board_render_weather_svg($wet, null, $this->sunFixture()));
+        $this->assertStringNotContainsString('mm/h', board_render_weather_svg($dry, null, $this->sunFixture()));
+    }
 }
