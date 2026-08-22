@@ -1,5 +1,6 @@
 #include "display.h"
 #include <Arduino.h>
+#include <cstring>
 #include "TFT_eSPI.h"
 // FreeSansBold9pt7b kommt bereits ueber TFT_eSPI.h -> Fonts/GFXFF/gfxfont.h
 // (LOAD_GFXFF in Setup522 bindet alle Standard-Free-Fonts automatisch ein,
@@ -72,12 +73,56 @@ void applyPanelTemperature(float celsius) {
 // TFT_BLACK=0 -> bit=0 -- exakt board.phps Konvention, kein Ratewert,
 // gegen den Bibliotheks-Quellcode verifiziert). Direkter Byte-Pass-Through,
 // keine Pixel-fuer-Pixel-GFX-Zwischenschicht.
+//
+// Ueber drawBufferPixel() macht EPaper::drawBufferPixel(x,y,c,1) exakt
+// _img8[y*(_width/8) + (x/8)] = c -- Ziel- und Quelladressierung sind bei
+// x%8==0 bytweise identisch (gegen Extensions/EPaper.cpp verifiziert, s.
+// display.h). Bei einem Vollbild (1872x1404, 234 B/Zeile) macht das aus
+// 328536 drawBufferPixel()-Einzelaufrufen einen einzigen memcpy; bei einem
+// Patch (Ziel gestrided, Quelle fortlaufend) einen memcpy pro Zeile.
+// Fallback auf den alten Einzelaufruf-Pfad, falls x nicht byte-ausgerichtet
+// ist -- der Server liefert laut inc/board_render.php zwar immer
+// byte-ausgerichtete x/w, aber der Client soll sich darauf nicht blind
+// verlassen (Ratschlag 2026-08-22).
 static void pushPackedBytes(const uint8_t* packed, int x, int y, int w, int h) {
     const int rowBytes = (w + 7) / 8;
-    for (int row = 0; row < h; row++) {
-        for (int col = 0; col < rowBytes; col++) {
-            epaper.drawBufferPixel(x + col * 8, y + row, packed[row * rowBytes + col], 1);
+
+    if ((x % 8) != 0) {
+        for (int row = 0; row < h; row++) {
+            for (int col = 0; col < rowBytes; col++) {
+                epaper.drawBufferPixel(x + col * 8, y + row, packed[row * rowBytes + col], 1);
+            }
         }
+        return;
+    }
+
+    uint8_t* buf = (uint8_t*) epaper.getPointer();
+    const int destStride = (epaper.width() + 7) / 8; // = 234 fuer dieses Panel
+    const int destColStart = x / 8;
+
+    // x/y/w/h stammen aus SERVER-Headern und werden von validateBoardResponse()
+    // bewusst nur auf "plausible Zahl <= 100000" geprueft, NICHT gegen die
+    // Panelgroesse (s. lib/boardlogic/board_response.cpp). Ein verstuemmelter
+    // Header wuerde hier also ueber das Pufferende hinaus schreiben -- als
+    // Einzelbyte-Schleife frueher schon schlimm, als memcpy ein zusammen-
+    // haengender Ueberschreiber. Lieber gar nicht zeichnen als den Heap
+    // zerlegen: das Geraet steht sonst mit korruptem RAM da und braucht einen
+    // Power-Cycle (Review-Befund 2026-08-22).
+    if (buf == nullptr || x < 0 || y < 0 || w <= 0 || h <= 0
+        || destColStart + rowBytes > destStride
+        || y + h > epaper.height()) {
+        Serial.printf("[display] Rechteck ausserhalb des Panels verworfen: %dx%d @%d,%d\n", w, h, x, y);
+        return;
+    }
+
+    if (x == 0 && w == epaper.width() && rowBytes == destStride) {
+        // Vollbild: Quelle und Ziel sind komplett deckungsgleich -> EIN memcpy.
+        memcpy(buf, packed, (size_t) rowBytes * h);
+        return;
+    }
+    for (int row = 0; row < h; row++) {
+        memcpy(buf + (size_t) (y + row) * destStride + destColStart,
+               packed + (size_t) row * rowBytes, rowBytes);
     }
 }
 

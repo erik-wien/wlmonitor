@@ -14,13 +14,70 @@ const char* HEADER_NAMES[] = {
 };
 const size_t HEADER_COUNT = sizeof(HEADER_NAMES) / sizeof(HEADER_NAMES[0]);
 
+// Dateistatischer TLS-Client, ueberlebt mehrere fetchBoard()-Aufrufe (Nutzerbefund
+// 2026-08-22): am echten Geraet gemessen kostet ein kompletter TCP+TLS-Handshake
+// 1583-1590ms von insgesamt ~3900ms Fetchzeit -- bei 25s-Refresh in einer
+// 5-Minuten-Aktiv-Session sind das ~12 unnoetige volle Handshakes. Deep Sleep
+// startet den Chip ohnehin komplett neu (RAM inkl. dieser Variable weg), daher
+// muss hier NICHT im RTC-Speicher gehalten werden -- reiner Prozesslaufzeit-Cache.
+WiFiClientSecure persistentClient;
+
+// MUSS ebenfalls die Funktion ueberleben: ~HTTPClient() ruft BEDINGUNGSLOS
+// _client->stop() -- ohne Ruecksicht auf _reuse/_canReuse (gegen den
+// Core-Quellcode geprueft, HTTPClient.cpp ~Z.107). Als lokale Variable haette
+// der Destruktor also bei jeder Rueckkehr aus fetchBoard() den Socket von
+// persistentClient abgerissen und setReuse(true) damit komplett wirkungslos
+// gemacht -- am Geraet als konstante 1590ms Handshake-Zeit pro Fetch gemessen,
+// obwohl der Server sauber "Connection: keep-alive" liefert (Review-Befund
+// 2026-08-22). Als Dateistatische laeuft der Destruktor nie.
+// Mehrfaches begin()/collectHeaders() auf demselben Objekt ist unkritisch:
+// begin() setzt nur _client+URL neu, _canReuse wird pro Antwort neu gesetzt,
+// collectHeaders() gibt das alte Array vorher frei (alles ebenda geprueft).
+HTTPClient persistentHttp;
+
+// Wird gesetzt, wenn ein Antwortkoerper NICHT vollstaendig gelesen wurde
+// (Timeout, Abbruch mitten im Body). Kritisch erst seit der Wiederverwendung
+// oben: HTTPClient::disconnect() ruft zwar flush(), das leert aber NUR den
+// lokalen RX-Puffer (WiFiClient::flush -> _rxBuffer->flush(), gegen den
+// Core-Quellcode geprueft) -- Bytes, die noch unterwegs sind, treffen danach
+// weiter ein. Der naechste Abruf wuerde sie als HTTP-Header seiner eigenen
+// Antwort lesen und Muell bekommen. Frueher war das harmlos (Socket wurde
+// ohnehin verworfen), jetzt wuerde es die ganze Session verwursten. Also:
+// nach unvollstaendigem Body IMMER frisch verbinden (Review-Befund 2026-08-22).
+bool connectionDirty = false;
+
+// Stellt sicher, dass persistentClient verbunden ist. Baut bei Bedarf frisch auf
+// (mit Zeitmessung) oder erkennt eine noch offene Verbindung und meldet das
+// ehrlich als "wiederverwendet" statt eine erfundene 0ms-Verbindungszeit zu
+// loggen. force=true erzwingt einen Neuaufbau, unabhaengig vom aktuellen
+// connected()-Status (Retry-Pfad, falls die Gegenstelle die wiederverwendete
+// Verbindung inzwischen zugemacht hat -- Robustheit vor Geschwindigkeitsgewinn,
+// Nutzervorgabe 2026-08-22).
+bool ensureConnected(bool force) {
+    if (connectionDirty) {
+        force = true;
+        connectionDirty = false;
+    }
+    if (!force && persistentClient.connected()) {
+        Serial.println("[fetch] TCP+TLS connect: wiederverwendet (bestehende Verbindung)");
+        return true;
+    }
+    if (force) {
+        persistentClient.stop();
+    }
+    uint32_t tConnect = millis();
+    bool connected = persistentClient.connect(BOARD_HOST, BOARD_PORT);
+    Serial.printf("[fetch] TCP+TLS connect: %s nach %lums\n",
+                  connected ? "ok" : "FEHLGESCHLAGEN", (unsigned long) (millis() - tConnect));
+    return connected;
+}
+
 } // namespace
 
 void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
                  int batteryMv, int rssi, uint32_t timeoutMs, BoardFetchResult& out) {
     out = BoardFetchResult{};
 
-    WiFiClientSecure client;
     // arduino-esp32 buendelt seit Core 2.x ein Mozilla-Root-CA-Bundle
     // (CONFIG_MBEDTLS_CERTIFICATE_BUNDLE, standardmaessig aktiv) --
     // WiFiClientSecure::setCACertBundle() bindet es ein. UNVERIFIZIERT ohne
@@ -32,57 +89,74 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
     // ungeprueft ueber eine potenziell falsche Gegenstelle -- Grund, warum
     // dieser Plan ueberhaupt HTTPS statt Klartext-HTTP gewaehlt hat).
     extern const uint8_t rootca_crt_bundle_start[] asm("_binary_x509_crt_bundle_start");
-    client.setCACertBundle(rootca_crt_bundle_start);
-    HTTPClient http;
-    http.setConnectTimeout(timeoutMs);
-    http.setTimeout(timeoutMs);
-    http.collectHeaders(HEADER_NAMES, HEADER_COUNT);
-
-    // Getrennte Zeitmessung (Nutzerwunsch 2026-08-21): TCP-Connect+TLS-Handshake
-    // manuell VOR http.begin() ausfuehren. HTTPClient::GET() erkennt einen
-    // schon verbundenen Client und ueberspringt seinen eigenen Connect-Schritt
-    // -- damit misst die bestehende Zeitmessung um http.GET() danach nur noch
-    // Request+Response, nicht mehr Connect+TLS+Request+Response in einem Topf.
-    uint32_t tConnect = millis();
-    bool connected = client.connect(BOARD_HOST, BOARD_PORT);
-    Serial.printf("[fetch] TCP+TLS connect: %s nach %lums\n",
-                  connected ? "ok" : "FEHLGESCHLAGEN", (unsigned long) (millis() - tConnect));
-    if (!connected) {
-        out.outcome = BoardFetchOutcome::NetworkUnavailable;
-        return;
-    }
+    persistentClient.setCACertBundle(rootca_crt_bundle_start);
 
     String url = String("https://") + BOARD_HOST + ":" + BOARD_PORT + "/board.php";
-    if (!http.begin(client, url)) {
-        out.outcome = BoardFetchOutcome::NetworkUnavailable;
-        return;
-    }
 
-    http.addHeader("Authorization", String("Bearer ") + token);
-    http.addHeader("X-Device-Battery-mV", String(batteryMv));
-    http.addHeader("X-Device-RSSI", String(rssi));
-    if (touchValue != nullptr) {
-        http.addHeader("X-Device-Touch", touchValue);
-    }
-    if (lastEtag != nullptr && lastEtag[0] != '\0') {
-        http.addHeader("If-None-Match", lastEtag);
-    }
+    // Referenz auf das dateistatische Objekt -- der restliche Funktionskoerper
+    // bleibt unveraendert, aber es wird beim Verlassen NICHT zerstoert.
+    HTTPClient& http = persistentHttp;
+    http.setConnectTimeout(timeoutMs);
+    http.setTimeout(timeoutMs);
+    // Keep-Alive (Nutzervorgabe 2026-08-22): end() schliesst den TCP-Socket bei
+    // aktiviertem Reuse nicht mehr, damit der naechste fetchBoard()-Aufruf ihn
+    // ueber persistentClient wiederverwenden kann.
+    http.setReuse(true);
+    http.collectHeaders(HEADER_NAMES, HEADER_COUNT);
 
-    // Diagnose (2026-08-21): nach fw11 erreichten die Abrufe den Server nicht
-    // mehr. status <= 0 ist ein HTTPClient-Fehlercode (negativ), sonst der
-    // HTTP-Status -- ohne Ausgabe ist beides nicht unterscheidbar.
-    uint32_t t0 = millis();
-    int status = http.GET();
-    Serial.printf("[fetch] GET -> %d nach %lums, heap=%lu psram=%lu\n",
-                  status, (unsigned long)(millis() - t0),
-                  (unsigned long) ESP.getFreeHeap(), (unsigned long) ESP.getFreePsram());
-    if (status <= 0) {
+    // Bis zu 2 Versuche: der erste nutzt eine ggf. wiederverwendete Verbindung,
+    // der zweite erzwingt einen frischen Connect, falls status <= 0 zeigt, dass
+    // die wiederverwendete Verbindung von der Gegenstelle bereits zugemacht
+    // wurde (Robustheit vor Geschwindigkeit -- ein Fetch darf dadurch nie
+    // dauerhaft scheitern, Nutzervorgabe 2026-08-22).
+    int status = -1;
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (!ensureConnected(attempt == 1)) {
+            out.outcome = BoardFetchOutcome::NetworkUnavailable;
+            return;
+        }
+
+        if (!http.begin(persistentClient, url)) {
+            out.outcome = BoardFetchOutcome::NetworkUnavailable;
+            return;
+        }
+
+        http.addHeader("Authorization", String("Bearer ") + token);
+        http.addHeader("X-Device-Battery-mV", String(batteryMv));
+        http.addHeader("X-Device-RSSI", String(rssi));
+        if (touchValue != nullptr) {
+            http.addHeader("X-Device-Touch", touchValue);
+        }
+        if (lastEtag != nullptr && lastEtag[0] != '\0') {
+            http.addHeader("If-None-Match", lastEtag);
+        }
+
+        // Diagnose (2026-08-21): nach fw11 erreichten die Abrufe den Server nicht
+        // mehr. status <= 0 ist ein HTTPClient-Fehlercode (negativ), sonst der
+        // HTTP-Status -- ohne Ausgabe ist beides nicht unterscheidbar.
+        uint32_t t0 = millis();
+        status = http.GET();
+        Serial.printf("[fetch] GET -> %d nach %lums, heap=%lu psram=%lu\n",
+                      status, (unsigned long)(millis() - t0),
+                      (unsigned long) ESP.getFreeHeap(), (unsigned long) ESP.getFreePsram());
+
+        if (status > 0) {
+            break; // HTTP-Antwort erhalten (egal welcher Code) -> Verbindung war ok, kein Retry noetig
+        }
+
         Serial.printf("[fetch] Fehler: %s\n", http.errorToString(status).c_str());
         http.end();
-        out.outcome = BoardFetchOutcome::NetworkUnavailable;
-        return;
+        if (attempt == 1) {
+            out.outcome = BoardFetchOutcome::NetworkUnavailable;
+            return;
+        }
+        // attempt 0 mit status <= 0: koennte eine zugemachte wiederverwendete
+        // Verbindung sein -- naechste Schleifenrunde erzwingt frischen Connect.
     }
+    // Fehlerantworten haben einen (JSON-)Body, den wir hier bewusst nicht
+    // lesen -- damit bleibt der Socket unsauber, s. connectionDirty oben.
     if (status == 401) {
+        connectionDirty = true;
         http.end();
         out.outcome = BoardFetchOutcome::Unauthorized;
         return;
@@ -90,6 +164,7 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
     if (status != 200) {
         // 503 und alles sonstige Unerwartete: wie ein Verbindungsausfall
         // behandeln (Spec §11 "wie WLAN-Ausfall").
+        connectionDirty = true;
         http.end();
         out.outcome = BoardFetchOutcome::NetworkUnavailable;
         return;
@@ -139,6 +214,11 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
         out.body.insert(out.body.end(), buf, buf + got);
         if (contentLength > 0) contentLength -= got;
     }
+    // Sauber ist die Schleife nur zu Ende gelaufen, wenn der angekuendigte
+    // Body restlos gelesen wurde (contentLength genau auf 0 heruntergezaehlt).
+    // Bei -1 (kein Content-Length) laesst sich Vollstaendigkeit nicht pruefen
+    // -> ebenfalls als unsauber behandeln, s. connectionDirty oben.
+    connectionDirty = (contentLength != 0);
     http.end();
 
     out.parsed = validateBoardResponse(headers, out.body.size());

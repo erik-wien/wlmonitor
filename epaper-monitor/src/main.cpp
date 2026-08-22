@@ -53,7 +53,22 @@ static const uint32_t WIFI_PORTAL_TIMEOUT_S = 180;
 static const uint32_t ACTIVE_IDLE_TIMEOUT_MS = 5UL * 60 * 1000;   // 5 Minuten
 static const uint32_t REFRESH_INTERVAL_MS    = 25UL * 1000;      // 25 Sekunden
 static const uint32_t INPUT_POLL_MS          = 30;               // wie Seeeds Touch-Beispiel
-static const uint32_t POST_HIT_COOLDOWN_MS   = 900;              // ein gehaltener Finger loest nicht mehrfach aus
+// POST_HIT_COOLDOWN_MS (900ms) entfernt (2026-08-22): seit fw31 verhindert
+// der Press/Release-Zustand in runActiveSession() (touchDown/buttonDown)
+// bereits zuverlaessig Mehrfachausloesung bei gehaltenem Finger/Taste -- die
+// zusaetzliche Verzoegerung war nur noch spuerbare Wartezeit nach jeder
+// Eingabe ohne echten Nutzen (Nutzerbefund 2026-08-22).
+
+// showBuildMarker() zeichnet bei jedem Aufruf denselben konstanten Text
+// ("fw<FIRMWARE_BUILD>") -- ihn bei JEDEM Fetch neu zu schreiben aendert am
+// sichtbaren Ergebnis nichts, kostet aber einen Panel-Write pro Fetch
+// (~12x/Aktiv-Session bei 25s-Refresh). Die Flaeche wird nur durch ein
+// Vollbild ueberschrieben (ein Patch deckt diese lokale Debug-Flaeche in
+// aller Regel nicht ab) -- also nur nach einem Vollbild und einmal zu
+// Sessionbeginn neu zeichnen. Bewusst kein RTC_DATA_ATTR: jede Aktiv-Session
+// startet frisch mit true, der Marker wird also garantiert mindestens einmal
+// pro Session gezeichnet.
+static bool buildMarkerStale = true;
 
 static Preferences prefs;
 
@@ -162,6 +177,7 @@ static void fetchAndRender(const String& token, const char* touchValue, bool for
                   fetch.parsed.w, fetch.parsed.h, fetch.parsed.x, fetch.parsed.y,
                   (unsigned) fetch.body.size());
 
+    bool wasFullFrame = false;
     if (outcome == FetchOutcome::Success) {
         if (fetch.parsed.isPatch) {
             applyPatch(fetch.body.data(), fetch.parsed.x, fetch.parsed.y, fetch.parsed.w, fetch.parsed.h);
@@ -169,19 +185,31 @@ static void fetchAndRender(const String& token, const char* touchValue, bool for
         } else {
             applyFullFrame(fetch.body.data(), fetch.parsed.w, fetch.parsed.h);
             rtcPatchesSinceFull = 0;
+            wasFullFrame = true;
+            buildMarkerStale = true; // Vollbild uebermalt auch die Marker-Flaeche
         }
         rtcBannerShown = false;
         strncpy(rtcLastEtag, fetch.parsed.etag.c_str(), sizeof(rtcLastEtag) - 1);
         rtcLastEtag[sizeof(rtcLastEtag) - 1] = '\0';
         rtcLastFavoriteCount = fetch.parsed.favoriteCount;
         rtcLastTotalPages = fetch.parsed.totalPages;
-        showBuildMarker(FIRMWARE_BUILD);
+        if (buildMarkerStale) {
+            showBuildMarker(FIRMWARE_BUILD);
+            buildMarkerStale = false;
+        }
     } else if (st.banner != ErrorBanner::None) {
         showErrorBanner(st.banner, "??:??");
         rtcBannerShown = true;
     }
 
-    showStatusOverlay("Warte auf Eingabe");
+    // Bei einem Vollbild steht "Warte auf Eingabe" bereits serverseitig im
+    // Frame (BOARD_STATUS_IDLE_TEXT, s. board_template.php) -- lokales
+    // Nachzeichnen waere ein doppelter Panel-Write ohne sichtbaren Effekt.
+    // Bei Patch oder Fehlerfall bleibt es noetig (Patch deckt die Statuszeile
+    // i. d. R. nicht ab, Fehlerfall zeichnet gar keinen neuen Frame).
+    if (!wasFullFrame) {
+        showStatusOverlay("Warte auf Eingabe");
+    }
 
     // Erst NACH allen lokalen Zeichnungen dieses Zyklus hochladen -- der
     // Schnappschuss soll den tatsaechlich fertig eingestellten Panel-Inhalt
@@ -209,8 +237,8 @@ static void runActiveSession(const String& token) {
     Serial.println("[active] bereit, Eingaben werden jetzt ausgewertet");
     uint32_t lastActivity = millis();
     // Press/Release-Zustand statt Zeit-/Distanz-Heuristik (2026-08-22): der
-    // Fetch allein braucht schon 2-3s, dazu POST_HIT_COOLDOWN_MS -- ein
-    // 3000ms-Zeitfenster ab Touch-Erkennung ist da laengst abgelaufen,
+    // Fetch allein braucht schon 2-3s -- ein 3000ms-Zeitfenster ab
+    // Touch-Erkennung ist da laengst abgelaufen,
     // WAEHREND der Finger noch aufliegt (Nutzerbefund: zweiter Piep+Blob
     // nach jedem Refresh trotz durchgehend gehaltenem Finger). Stattdessen:
     // ein Touch zaehlt erst wieder als "neu", wenn der Sensor zwischenzeitlich
@@ -220,6 +248,17 @@ static void runActiveSession(const String& token) {
     bool touchDown = false;
     int touchReleaseStreak = 0;
     const int TOUCH_RELEASE_STREAK_NEEDED = 5;
+    // readPageButtons()/isFullUpdateButtonHeld() liefern anders als pollTouch()
+    // keinen eigenen Press/Release-Zustand -- jeder Poll waehrend gehaltener
+    // Taste liefert erneut "gedrueckt". Ohne Gegenmassnahme wuerde ein etwas
+    // laenger gehaltener Tastendruck bei jedem Schleifendurchlauf (30ms) nach
+    // Rueckkehr aus fetchAndRender() sofort den naechsten Fetch ausloesen.
+    // Gleiches Muster wie touchDown: erst bei Loslassen (Taste nicht mehr
+    // gedrueckt) zaehlt der naechste Druck wieder als neue Eingabe. Anders als
+    // beim Touch-Sensor braucht das GPIO-Signal keinen Release-Streak gegen
+    // Flackern -- readPageButtons()/isFullUpdateButtonHeld() entprellen die
+    // Flanke bereits selbst (~50ms, s. buttons.cpp).
+    bool buttonDown = false;
     uint32_t lastRefresh = millis(); // naechster automatischer Refresh erst in REFRESH_INTERVAL_MS
 
     while (millis() - lastActivity < ACTIVE_IDLE_TIMEOUT_MS) {
@@ -237,13 +276,20 @@ static void runActiveSession(const String& token) {
                 touchDown = true;
             }
         } else if (const char* btn = readPageButtons()) {
-            touchValue = btn;
-            beepRecognized();
+            if (!buttonDown) {
+                touchValue = btn;
+                beepRecognized();
+                buttonDown = true;
+            }
         } else if (isFullUpdateButtonHeld()) {
-            forceFull = true;
-            beepRecognized();
+            if (!buttonDown) {
+                forceFull = true;
+                beepRecognized();
+                buttonDown = true;
+            }
         } else {
             if (++touchReleaseStreak >= TOUCH_RELEASE_STREAK_NEEDED) touchDown = false;
+            buttonDown = false;
         }
 
         bool dueForRefresh = (millis() - lastRefresh >= REFRESH_INTERVAL_MS);
@@ -252,7 +298,6 @@ static void runActiveSession(const String& token) {
             lastRefresh = millis();
             if (touchValue != nullptr || forceFull) {
                 lastActivity = millis();
-                delay(POST_HIT_COOLDOWN_MS); // gehaltener Finger loest nicht mehrfach aus
             }
         }
 
