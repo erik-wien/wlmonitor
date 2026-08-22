@@ -1038,5 +1038,56 @@ Zykluszeiten über diesen Umbau (Aktiv-Session, 25-s-Refresh):
 | + Marke serverseitig (fw46) | **3,64 s** | nein |
 
 Aufschlüsselung fw46: Overlay „Lade …" 494 · GET 598 · Body lesen (328 KB)
-1490 · Panel 1024 ms. Der größte verbliebene Posten ist der **Body-Download mit
-~224 KB/s** — der einzige Punkt, an dem Patches je wirklich gewonnen hätten.
+1490 · Panel 1024 ms. Der größte verbliebene Posten war der **Body-Download mit
+~224 KB/s** — behoben in §20.9.
+
+### 20.9 Rumpf-Kompression: rohes Deflate, Entpacker auf den Heap
+
+1bpp-Bilddaten sind fast leer und lassen sich extrem gut packen. Am echten
+Frame gemessen (`gzdeflate`, 1872×1404):
+
+| Stufe | Größe | Anteil | Server-CPU |
+|---|---|---|---|
+| 1 | 21.258 B | 6,5 % | 0,8 ms |
+| **6** | **18.753 B** | **5,7 %** | **4,2 ms** |
+| 9 | 15.095 B | 4,6 % | 18,3 ms |
+
+Stufe 6 gewählt: Stufe 9 spart nochmal 3,6 KB (≈16 ms Transfer), kostet aber
+14 ms mehr CPU — das hebt sich auf.
+
+**Rohes Deflate, kein `Content-Encoding`.** Zwischen Gerät und Server hängt ein
+Cloudflare-Tunnel, der standardkonform komprimierte Antworten umpacken oder
+auspacken darf. Eigene Header (`X-Device-Accept-Encoding` hin,
+`X-Board-Encoding` / `X-Board-Raw-Length` zurück) machen den Rumpf zu opaken
+Bytes, an denen unterwegs niemand dreht. Roh (statt zlib-/gzip-Rahmen), weil
+tinfl es so ohne Zusatzflags nimmt.
+
+> ⚠️ **`tinfl_decompress_mem_to_mem()` sprengt den Stack.** Sie legt ihren
+> `tinfl_decompressor` als lokale Variable an — der ist mit drei
+> `tinfl_huff_table` à 3488 B rund **10,9 KB** groß, der Arduino-`loopTask` hat
+> **8 KB**. Ergebnis am Gerät (fw47): sofort `Guru Meditation Error … Stack
+> canary watchpoint triggered (loopTask)` und Dauer-Reboot. Richtig ist die
+> Low-Level-API `tinfl_decompress()` mit einem selbst per `malloc()`
+> beschafften Zustand. Der Entpacker steckt im **ESP32-S3-ROM** und kostet
+> deshalb kein Flash.
+
+> ⚠️ **`Content-Length` beschreibt danach den falschen Puffer.** Sie meldet den
+> *gepackten* Rumpf (~24 KB), `validateBoardResponse()` prüft aber gegen den
+> *entpackten* (328.536 B) — ohne Korrektur wird jede komprimierte Antwort als
+> unvollständig verworfen (fw48: `outcome=3, mode=full 0x0`).
+
+Ergebnis: Body lesen **1490 → 93 ms**, Entpacken **27 ms**.
+
+### Zykluszeit über den gesamten Umbau
+
+| Stand | Zyklus | Artefakte |
+|---|---|---|
+| Patches (fw42) | 2,9–6,2 s | ja |
+| nur Vollbilder (fw44) | 4,77 s | nein |
+| + Marke serverseitig (fw46) | 3,64 s | nein |
+| + Rumpf gepackt (fw49) | **2,30 s** | nein |
+
+Aufschlüsselung fw49: Overlay „Lade …" 495 · GET 627 · Body lesen 93 ·
+Entpacken 27 · Panel 1024 ms. Damit ist das **Panel-Schreiben selbst mit 45 %
+der größte Posten** und eine harte Untergrenze; danach käme das verbliebene
+lokale Overlay.

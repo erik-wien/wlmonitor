@@ -346,3 +346,54 @@ function board_wifi_bars_from_rssi(int $rssi): int
     if ($rssi >= -80) return 1;
     return 0;
 }
+
+/**
+ * Kompressionsstufe fuer den Bildrumpf. Am echten Frame (1872x1404, 1bpp)
+ * gemessen: roh 328.536 B -> Stufe 1: 21.258 B / 0,8 ms · Stufe 6: 18.753 B /
+ * 4,2 ms · Stufe 9: 15.095 B / 18,3 ms. Stufe 9 spart gegenueber 6 nochmal
+ * 3,6 KB (~16 ms Transfer bei den gemessenen 224 KB/s), kostet aber 14 ms
+ * mehr CPU -- das hebt sich auf. Stufe 6 ist der Punkt mit dem besten
+ * Verhaeltnis.
+ */
+const BOARD_DEFLATE_LEVEL = 6;
+
+/** Unterhalb dieser Groesse lohnt der Aufwand nicht (Patch-Antworten). */
+const BOARD_DEFLATE_MIN_BYTES = 1024;
+
+/**
+ * Packt den Bildrumpf mit ROHEM Deflate (kein zlib-, kein gzip-Rahmen), damit
+ * die Firmware ihn ohne Zusatzflags durch tinfl_decompress_mem_to_mem() aus
+ * dem ESP32-S3-ROM schicken kann.
+ *
+ * BEWUSST NICHT ueber `Content-Encoding: gzip`: zwischen Geraet und Server
+ * haengt ein Cloudflare-Tunnel, der standardkonform komprimierte Antworten
+ * umpacken oder auspacken darf. Ein eigener Header macht den Rumpf zu
+ * undurchsichtigen Bytes, an denen unterwegs niemand dreht.
+ *
+ * Faellt auf "unkomprimiert" zurueck, wenn das Geraet nichts angekuendigt hat
+ * (aeltere Firmware, Browser-Aufruf), der Rumpf zu klein ist oder das Packen
+ * nichts bringt -- der Aufrufer muss also immer beide Faelle behandeln.
+ *
+ * @return array{body: string, encoding: string|null, rawLength: int}
+ */
+function board_compress_body(string $body, bool $deviceAcceptsDeflate): array
+{
+    $plain = ['body' => $body, 'encoding' => null, 'rawLength' => strlen($body)];
+
+    if (!$deviceAcceptsDeflate || strlen($body) < BOARD_DEFLATE_MIN_BYTES) {
+        return $plain;
+    }
+
+    $packed = gzdeflate($body, BOARD_DEFLATE_LEVEL);
+    if ($packed === false || strlen($packed) >= strlen($body)) {
+        return $plain;
+    }
+
+    return ['body' => $packed, 'encoding' => 'deflate', 'rawLength' => strlen($body)];
+}
+
+/** Kuendigt das Geraet rohes Deflate an? Header aus board_client.cpp. */
+function board_device_accepts_deflate(?string $headerValue): bool
+{
+    return $headerValue !== null && str_contains($headerValue, 'deflate');
+}

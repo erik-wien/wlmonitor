@@ -2,6 +2,8 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include "board_config.h"
+#include <vector>
+#include "rom/miniz.h"
 #include <Arduino.h>
 
 namespace {
@@ -11,6 +13,7 @@ const char* HEADER_NAMES[] = {
     "X-Board-X", "X-Board-Y", "X-Board-W", "X-Board-H",
     "X-Board-Favorite-Count", "X-Board-Total-Pages", "Content-Length",
     "X-Board-Snapshot-Requested",
+    "X-Board-Encoding", "X-Board-Raw-Length",
 };
 const size_t HEADER_COUNT = sizeof(HEADER_NAMES) / sizeof(HEADER_NAMES[0]);
 
@@ -74,6 +77,68 @@ bool ensureConnected(bool force) {
 
 } // namespace
 
+// Packt einen mit rohem Deflate gelieferten Rumpf aus (Header X-Board-Encoding:
+// deflate, X-Board-Raw-Length: <n>, s. board_compress_body() in inc/board.php).
+// Nutzt tinfl aus dem ESP32-S3-ROM -- kostet also KEIN Flash. flags=0 heisst
+// "roher Deflate-Strom, kein zlib-Rahmen"; das Ausgabefenster ist mit
+// rawLength gross genug fuer den ganzen Strom.
+//
+// Die 328 KB Zielpuffer landen ueber die PSRAM-Rueckfallebene von malloc im
+// externen RAM (intern sind nur ~234 KB frei) -- genau wie der Empfangspuffer
+// selbst, der heute schon so gross wird.
+//
+// Antwortet der Server unkomprimiert (aeltere Version, zu kleiner Rumpf),
+// passiert hier nichts -- der Aufrufer muss beide Faelle vertragen.
+static bool inflateBodyIfNeeded(HTTPClient& http, std::vector<uint8_t>& body) {
+    if (http.header("X-Board-Encoding") != "deflate") {
+        return true;
+    }
+
+    const long rawLength = http.header("X-Board-Raw-Length").toInt();
+    if (rawLength <= 0 || rawLength > 4 * 1024 * 1024) {
+        Serial.printf("[fetch] X-Board-Raw-Length unbrauchbar: %ld\n", rawLength);
+        return false;
+    }
+
+    // NICHT tinfl_decompress_mem_to_mem() verwenden: die legt ihren
+    // tinfl_decompressor auf den STACK, und der ist mit 3 Huffman-Tabellen
+    // a 3488 Bytes rund 10,9 KB gross -- der Arduino-loopTask hat 8 KB.
+    // Ergebnis war ein sofortiger "Stack canary watchpoint triggered
+    // (loopTask)"-Panic samt Dauer-Reboot (fw47, am Geraet beobachtet).
+    // Deshalb der Zustand explizit auf dem Heap und die Low-Level-API.
+    tinfl_decompressor* dec = (tinfl_decompressor*) malloc(sizeof(tinfl_decompressor));
+    if (dec == nullptr) {
+        Serial.println("[fetch] kein Speicher fuer den Entpacker");
+        return false;
+    }
+    tinfl_init(dec);
+
+    const uint32_t t0 = millis();
+    std::vector<uint8_t> raw((size_t) rawLength);
+    size_t inSize = body.size();
+    size_t outSize = raw.size();
+
+    // flags: roher Deflate-Strom (kein zlib-Rahmen -> KEIN PARSE_ZLIB_HEADER),
+    // Eingabe vollstaendig vorhanden (kein HAS_MORE_INPUT), und der
+    // Ausgabepuffer fasst den ganzen Strom (NON_WRAPPING_OUTPUT_BUF).
+    const tinfl_status st = tinfl_decompress(
+        dec, body.data(), &inSize, raw.data(), raw.data(), &outSize,
+        TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF);
+    free(dec);
+
+    if (st != TINFL_STATUS_DONE || outSize != (size_t) rawLength) {
+        Serial.printf("[fetch] Entpacken fehlgeschlagen (status=%d, %u von %ld Bytes)\n",
+                      (int) st, (unsigned) outSize, rawLength);
+        return false;
+    }
+
+    Serial.printf("[perf] Entpacken: %u -> %u Bytes in %lu ms\n",
+                  (unsigned) body.size(), (unsigned) outSize,
+                  (unsigned long) (millis() - t0));
+    body.swap(raw);
+    return true;
+}
+
 void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
                  int batteryMv, int rssi, uint32_t timeoutMs, BoardFetchResult& out) {
     out = BoardFetchResult{};
@@ -128,6 +193,12 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
         // Statusleiste. Lokal aufs Panel gezeichnet kostete sie gemessene
         // 1104 ms pro Zyklus (s. docs/hardware/reterminal-e1003.md §20.8).
         http.addHeader("X-Device-Firmware", String(FIRMWARE_BUILD));
+        // Rohes Deflate (kein zlib-/gzip-Rahmen) -- so nimmt es
+        // tinfl_decompress_mem_to_mem() aus dem ESP32-S3-ROM ohne Zusatzflags
+        // entgegen. Bewusst ein eigener Header statt Accept-Encoding: der
+        // Cloudflare-Tunnel dazwischen darf standardkonform komprimierte
+        // Antworten umpacken, an einem unbekannten Header dreht er nicht.
+        http.addHeader("X-Device-Accept-Encoding", "deflate");
         if (touchValue != nullptr) {
             http.addHeader("X-Device-Touch", touchValue);
         }
@@ -226,6 +297,23 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
     Serial.printf("[perf] Body lesen: %u Bytes in %lu ms\n",
                   (unsigned) out.body.size(), (unsigned long) (millis() - readStart));
     http.end();
+
+    if (!inflateBodyIfNeeded(http, out.body)) {
+        out.outcome = BoardFetchOutcome::UnreadableResponse;
+        return;
+    }
+
+    // Content-Length beschreibt bei gepackter Antwort den KOMPRIMIERTEN Rumpf
+    // (hier ~24 KB), validateBoardResponse() vergleicht aber gegen die Groesse
+    // des entpackten Puffers (328.536 B). Ohne diese Korrektur verwirft die
+    // Pruefung jede komprimierte Antwort als unvollstaendig (am Geraet
+    // beobachtet, fw48: outcome=3, mode=full 0x0). Der Puffer muss bis zum
+    // validateBoardResponse()-Aufruf weiter unten leben.
+    char inflatedLengthText[16] = {0};
+    if (http.header("X-Board-Encoding") == "deflate") {
+        snprintf(inflatedLengthText, sizeof(inflatedLengthText), "%u", (unsigned) out.body.size());
+        headers.contentLength = inflatedLengthText;
+    }
 
     out.parsed = validateBoardResponse(headers, out.body.size());
     if (out.parsed.status == BoardResponseStatus::Ok) {

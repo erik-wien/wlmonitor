@@ -291,9 +291,22 @@ SVG;
     if (board_state_snapshot_requested($hash)) {
         header('X-Board-Snapshot-Requested: 1');
     }
+    // Rumpf packen, wenn das Geraet es ankuendigt. Am echten Frame: 328.536 B
+    // -> 18.753 B (5,7%) fuer 4,2 ms Server-CPU, gegen gemessene ~1470 ms
+    // Download bei 224 KB/s. Siehe board_compress_body() und
+    // docs/hardware/reterminal-e1003.md §20.8.
+    $encoded = board_compress_body(
+        $body,
+        board_device_accepts_deflate($_SERVER['HTTP_X_DEVICE_ACCEPT_ENCODING'] ?? null)
+    );
+    if ($encoded['encoding'] !== null) {
+        header('X-Board-Encoding: ' . $encoded['encoding']);
+        header('X-Board-Raw-Length: ' . $encoded['rawLength']);
+    }
+
     header('Content-Type: application/octet-stream');
-    header('Content-Length: ' . strlen($body));
-    echo $body;
+    header('Content-Length: ' . strlen($encoded['body']));
+    echo $encoded['body'];
     exit;
 } catch (RuntimeException | InvalidArgumentException $e) {
     appendLog($con, 'board', 'Upstream-Fehler: ' . $e->getMessage());
