@@ -1175,6 +1175,29 @@ Fußzeilen-Text („Stand HH:MM" bei `BOARD_SLEEP_FOOTER_Y=1330`) entfällt
 ersatzlos — `board_render_stand_and_pagination_svg()` liefert ihn an der
 Standardposition gleich mit.
 
+> **Nachtrag (2026-08-23, noch am selben Tag):** „die paginierung ist jetzt
+> aber leider auch zu sehen, wenn das panel schlaeft" — die Pille war
+> versehentlich auf **jedem** Schlafschirm-Frame zu sehen, auch dem
+> tatsächlich letzten vor `esp_deep_sleep_start()`. Dort ist sie toter
+> Zierrat: der Touch-Controller wird bis zum nächsten Tastendruck nicht
+> mehr abgefragt, ein Tipp täte nichts. Behoben mit einem
+> `$showPagination`-Parameter (`board_render_stand_and_pagination_svg()` →
+> `board_sleep_render_svg()` → `board_render_svg()`), gespeist aus
+> `!$forceSleepScreen` in `web/board.php` — **nur** der per
+> `X-Device-Screen: sleep` erzwungene Abruf blendet die Pille aus,
+> bewusstes Hinblättern per `page_next` zeigt sie weiter. „Stand HH:MM"
+> bleibt in beiden Fällen stehen, das ist reine Information, keine
+> Einladung zum Tippen.
+>
+> Zweite Hälfte des Fixes steckt in der Firmware: `runActiveSession()`
+> hatte eine Optimierung, die den finalen Vorschlaf-Abruf ÜBERSPRANG, wenn
+> `showingSleepPage` bereits `true` war (Nutzer hatte manuell zum
+> Schlafschirm geblättert und ihn stehen gelassen) — genau der Fall, in dem
+> der alte Frame noch die Pille zeigte. Diese „Optimierung" war ein echter
+> Bug: sie sparte einen Abruf, ließ dafür aber die Pille mit einschlafen.
+> `runActiveSession()` holt den Schlafschirm jetzt **immer** neu, bevor es
+> tatsächlich schläft. FIRMWARE_BUILD 55.
+
 ### 20.11 Seitenzahlen-Pille ohne Pfeile, rechtsbündig verankert (2026-08-23)
 
 Nutzerwunsch: „Paginierungs-Schaltfläche bitte 50% größer, aber ohne weitere

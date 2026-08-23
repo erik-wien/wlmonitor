@@ -114,6 +114,19 @@ class BoardSleepTest extends TestCase
         $this->assertStringContainsString('Stand 21:34', $svg);
     }
 
+    public function test_pagination_pill_is_hidden_on_the_final_pre_sleep_frame(): void
+    {
+        // Nutzerbefund 2026-08-23: "die paginierung ist jetzt aber leider
+        // auch zu sehen, wenn das panel schlaeft." $showPagination=false ist
+        // der erzwungene letzte Abruf vor esp_deep_sleep_start() -- die
+        // Pille darf hier nicht mit einschlafen, "Stand HH:MM" bleibt aber.
+        $svg = board_sleep_render_svg($this->today(), $this->day(), null, $this->wifi(), $this->now(), 4, false);
+
+        $this->assertStringContainsString('Stand 21:34', $svg);
+        $this->assertStringNotContainsString(sprintf('y="%d"', BOARD_PAGINATION_TOP), $svg);
+        $this->assertStringNotContainsString('font-size="30" fill="white">4<', $svg);
+    }
+
     public function test_pagination_pill_always_present_even_with_only_two_pages(): void
     {
         // Der Schlafschirm ist strukturell IMMER mindestens Seite 2 von 2

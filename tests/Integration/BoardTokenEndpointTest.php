@@ -569,4 +569,33 @@ final class BoardTokenEndpointTest extends TestCase
         $r2 = $this->runProbe('board.php', ['authorization' => 'Bearer ' . $token, 'mock_wl_response' => $mock]);
         $this->assertNull($this->headerValue($r2['headers'], 'X-Board-Is-Sleep-Page'));
     }
+
+    public function test_forced_sleep_screen_hides_the_pagination_pill_but_manual_paging_shows_it(): void
+    {
+        // Nutzerbefund 2026-08-23: "die paginierung ist jetzt aber leider
+        // auch zu sehen, wenn das panel schlaeft." X-Device-Screen: sleep
+        // ist per Definition der letzte Abruf vor esp_deep_sleep_start() --
+        // die Pille muss dort fehlen. Bewusst gewordenes Hinblaettern
+        // (page_next) laesst das Geraet wach, dort bleibt sie sichtbar.
+        $token = $this->createTokenUser();
+        $this->createFavorite('Test', '90111111', null);
+        $mock = $this->mockMonitorResponse('90111111', 4);
+
+        $forced = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $mock,
+            'headers' => ['X-Device-Screen' => 'sleep'],
+            'get' => ['debug' => 'svg'],
+        ]);
+        $this->assertStringNotContainsString('height="56" rx="28"', $forced['out'], 'erzwungener Vorschlaf-Abruf darf keine Pille zeigen');
+        $this->assertStringContainsString('Stand ', $forced['out'], '"Stand HH:MM" bleibt trotzdem stehen');
+
+        $paged = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $mock,
+            'headers' => ['X-Device-Touch' => 'page_next'],
+            'get' => ['debug' => 'svg'],
+        ]);
+        $this->assertStringContainsString('height="56" rx="28"', $paged['out'], 'bewusstes Hinblaettern zeigt die Pille');
+    }
 }

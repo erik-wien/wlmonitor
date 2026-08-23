@@ -355,7 +355,8 @@ function board_render_svg(
     ?int $firmwareBuild = null,
     ?array $sun = null,
     ?array $sleepWeather = null,
-    ?array $guestWifi = null
+    ?array $guestWifi = null,
+    bool $sleepShowPagination = true
 ): string {
     $departurePages = board_paginate_departures($activeFavorite, 1);
     $totalDeparturePages = $departurePages['totalPages'];
@@ -368,7 +369,8 @@ function board_render_svg(
     if ($requestedPage > $totalContentPages) {
         $sleepWeather ??= ['today' => ['available' => false], 'tomorrow' => ['available' => false]];
         return board_sleep_render_svg(
-            $sleepWeather['today'], $sleepWeather['tomorrow'], $sun, $guestWifi, $renderedAt, $totalPages
+            $sleepWeather['today'], $sleepWeather['tomorrow'], $sun, $guestWifi, $renderedAt,
+            $totalPages, $sleepShowPagination
         );
     }
 
@@ -944,17 +946,29 @@ function board_render_departure_row(array $item): string
  * wuerde das Band randlos ausfuellen. Slotbreite und Schrift bekommen die
  * vollen 50%, weil dort durch den Pfeil-Wegfall echter Platz frei wurde.
  */
-function board_render_stand_and_pagination_svg(DateTimeImmutable $dataStand, int $currentPage, int $totalPages): string
-{
+function board_render_stand_and_pagination_svg(
+    DateTimeImmutable $dataStand,
+    int $currentPage,
+    int $totalPages,
+    bool $showPagination = true
+): string {
     $standSvg = sprintf(
         '<text x="16" y="1286" font-family="Atkinson Hyperlegible Next" font-size="24" fill="black">Stand %s</text>',
         $dataStand->format('H:i')
     );
 
+    // $showPagination=false: der Schlafschirm auf dem Weg in den ECHTEN
+    // Tiefschlaf (Nutzerbefund 2026-08-23: "die paginierung ist jetzt aber
+    // leider auch zu sehen, wenn das panel schlaeft") -- die Pille ist dann
+    // toter Zierrat: der Touch-Controller wird bis zum naechsten Tastendruck
+    // nicht mehr abgefragt, ein Tipp darauf taete nichts. "Stand HH:MM"
+    // bleibt trotzdem stehen, das ist reine Information, keine Einladung
+    // zum Tippen.
+    //
     // In der Praxis nie mehr wahr (der Schlafschirm-Slot macht totalPages
     // >= 2) -- als Schutz fuer Direktaufrufe dieser reinen Funktion (Tests,
     // debug=svg&part=monitor) trotzdem stehen gelassen.
-    if ($totalPages <= 1) {
+    if ($totalPages <= 1 || !$showPagination) {
         return $standSvg;
     }
 

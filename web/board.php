@@ -200,8 +200,15 @@ SVG;
         // LETZTE Seite ($renderPage bis auf $totalPages geklemmt, board_render_svg()
         // erkennt den Slot selbst) -- entweder weil das Geraet ihn vor dem
         // Tiefschlaf ausdruecklich per Header verlangt ($forceSleepScreen)
-        // oder weil der Nutzer bewusst dorthin geblaettert hat. Beide Wege
-        // liefern PIXELIDENTISCHEN Inhalt.
+        // oder weil der Nutzer bewusst dorthin geblaettert hat.
+        //
+        // Die Seitenzahlen-Pille zeigt sich NUR im zweiten Fall
+        // (Nutzerbefund 2026-08-23: "die paginierung ist jetzt aber leider
+        // auch zu sehen, wenn das panel schlaeft") -- $forceSleepScreen IST
+        // per Definition der letzte Abruf vor esp_deep_sleep_start(), danach
+        // wird der Touch-Controller bis zum naechsten Tastendruck nicht mehr
+        // abgefragt. Ausserhalb dieses einen Unterschieds bleibt der Inhalt
+        // identisch.
         $svg = board_render_svg(
             $touchBarTitles,
             $resolved['activeFavoriteIndex'],
@@ -216,7 +223,8 @@ SVG;
             $firmwareBuild,
             weather_sun_times($renderedAt),
             weather_select_two_days(is_array($weatherCache) ? $weatherCache : null, $renderedAt),
-            board_guest_wifi_load()
+            board_guest_wifi_load(),
+            !$forceSleepScreen
         );
     }
 

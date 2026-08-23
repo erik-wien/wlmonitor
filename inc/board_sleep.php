@@ -165,6 +165,11 @@ function board_sleep_fit_lines(string $text, int $charsPerLine, int $firstY, int
  * @param int $totalPages Gesamtseitenzahl INKLUSIVE dieses Schlafschirm-Slots
  *        (board_total_pages()) -- der Schlafschirm ist strukturell immer die
  *        letzte Seite, seine eigene Seitenzahl ist also $totalPages.
+ * @param bool $showPagination false = der ECHTE Vorschlaf-Abruf (Nutzerbefund
+ *        2026-08-23: die Pille darf nicht sichtbar bleiben, waehrend das
+ *        Panel tatsaechlich schlaeft -- ein Tipp taete dann nichts, der
+ *        Touch-Controller wird bis zum naechsten Tastendruck nicht mehr
+ *        abgefragt). "Stand HH:MM" bleibt in jedem Fall stehen.
  */
 function board_sleep_render_svg(
     array $today,
@@ -172,7 +177,8 @@ function board_sleep_render_svg(
     ?array $sun,
     ?array $wifi,
     DateTimeImmutable $renderedAt,
-    int $totalPages
+    int $totalPages,
+    bool $showPagination = true
 ): string {
     $defs = board_svg_defs();
     $esc = static fn (string $s): string => htmlspecialchars($s, ENT_XML1);
@@ -294,7 +300,7 @@ function board_sleep_render_svg(
     // Position waere unsichtbar tippbar oder sichtbar untippbar. Der
     // Schlafschirm ist strukturell immer die letzte Seite, seine eigene
     // Seitenzahl ist also $totalPages.
-    $footer = board_render_stand_and_pagination_svg($renderedAt, $totalPages, $totalPages);
+    $footer = board_render_stand_and_pagination_svg($renderedAt, $totalPages, $totalPages, $showPagination);
 
     $divider = sprintf(
         '<line x1="%d" y1="90" x2="%d" y2="1310" stroke="black" stroke-width="2"/>',

@@ -404,20 +404,20 @@ static void runActiveSession(const String& token) {
     // stehen, sind schlimmer als nutzlos -- sie sehen aus wie gueltige Daten.
     // Stattdessen Wetter heute/morgen und der Gaeste-WLAN-QR-Code.
     //
-    // Steht er schon (showingSleepPage), weil der Nutzer bewusst dorthin
-    // geblaettert und ihn stehen gelassen hat, erspart sich das Geraet den
-    // erneuten Abruf -- derselbe Inhalt kaeme ohnehin zurueck, nur um densel-
-    // ben vollen Panel-Schreibvorgang (~1s, s. §20.8) ein zweites Mal zu
-    // bezahlen.
-    if (showingSleepPage) {
-        Serial.println("[active] Schlafschirm steht schon -- kein erneuter Abruf noetig");
-    } else {
-        Serial.println("[active] 10 Minuten ohne Eingabe -- Schlafschirm holen");
-        // Nur wenn der Schirm wirklich ankam: bei einem Netzfehler steht
-        // weiter die Abfahrtenliste auf dem Panel, und dann ist der lokale
-        // Schlafhinweis in goToSleep() genau richtig.
-        fetchAndRender(token, nullptr, true, "sleep");
-    }
+    // IMMER neu holen, auch wenn showingSleepPage schon true ist (z.B. weil
+    // der Nutzer bewusst dorthin geblaettert und ihn stehen gelassen hat):
+    // der Server rendert den erzwungenen Abruf OHNE Seitenzahlen-Pille
+    // (screen="sleep" -> X-Device-Screen: sleep -> board.php setzt
+    // $showPagination=false), der vorherige Frame hatte sie noch. Ohne
+    // diesen zweiten Abruf bliebe die Pille sichtbar, WAEHREND das Panel
+    // tatsaechlich schlaeft (Nutzerbefund 2026-08-23) -- ein fruehes "spart
+    // sich das Geraet den erneuten Abruf" war hier ein echter Bug, keine
+    // reine Optimierung.
+    Serial.println("[active] 10 Minuten ohne Eingabe -- Schlafschirm ohne Paginierung holen");
+    // Nur wenn der Schirm wirklich ankam: bei einem Netzfehler steht weiter
+    // die Abfahrtenliste auf dem Panel, und dann ist der lokale Schlafhinweis
+    // in goToSleep() genau richtig.
+    fetchAndRender(token, nullptr, true, "sleep");
 }
 
 void setup() {
