@@ -939,15 +939,24 @@ pro Zeile (Ziel gestrided mit `_width/8`, Quelle fortlaufend). Voraussetzung ist
 > `memcpy` ein zusammenhängender Überschreiber hinter dem Puffer → Heap-Korruption,
 > Gerät braucht einen Power-Cycle.
 
-### 20.5 Tastenbelegung unserer Firmware (Stand 2026-08-22)
+### 20.5 Tastenbelegung unserer Firmware (Stand 2026-08-23)
 
-| Taste | GPIO | schlafend | wach |
-|---|---|---|---|
-| **grün**, rechts | 3 | weckt auf | kurz: Vollbild-Update erzwingen |
-| weiß, Mitte | 4 | — | Seite weiter |
-| weiß, links | 5 | — | Seite zurück |
+| Taste | GPIO | schlafend | wach, Abfahrten/Störungen | wach, **Schlafschirm** |
+|---|---|---|---|---|
+| **grün**, rechts | 3 | weckt auf | Vollbild-Update erzwingen | **sofort schlafen** |
+| weiß, Mitte | 4 | — | Seite weiter | Seite zurück (letzte Seite) |
+| weiß, links | 5 | — | Seite zurück | — |
 
 Langer Druck (≥3 s) auf grün **beim Boot** → WLAN/Token-Reset (WiFiManager-Portal).
+
+> **Doppelbelegung der grünen Taste** (Nutzerwunsch 2026-08-23: „wie man die
+> Tasten doppelt belegen kann um ein bewusstes ‚geh schlafen‘ zu veranlassen"):
+> auf dem Schlafschirm ist „Vollbild-Update" bedeutungslos — es gibt keine
+> Abfahrten zu aktualisieren. Ein Druck bricht dort stattdessen sofort in den
+> Tiefschlaf ab (`break` aus der Eingabeschleife in `runActiveSession()`),
+> statt den Rest von `ACTIVE_IDLE_TIMEOUT_MS` zu warten. Erkannt wird der
+> Zustand über `showingSleepPage` (`X-Board-Is-Sleep-Page`-Header, aktualisiert
+> sich nach jedem erfolgreichen Abruf), nicht über einen eigenen Tastenmodus.
 
 > **Falle:** Weil Wecken und Vollbild-Update auf demselben Pin liegen, darf
 > `isFullUpdateButtonHeld()` **nicht** beim Boot geprüft werden — jeder normale
@@ -1091,3 +1100,92 @@ Aufschlüsselung fw49: Overlay „Lade …" 495 · GET 627 · Body lesen 93 ·
 Entpacken 27 · Panel 1024 ms. Damit ist das **Panel-Schreiben selbst mit 45 %
 der größte Posten** und eine harte Untergrenze; danach käme das verbliebene
 lokale Overlay.
+
+### 20.10 Schlafschirm als strukturell letzte Seite (2026-08-23)
+
+Der Schlafschirm (§20.9-Nachbarn: eigenes Layout in `inc/board_sleep.php`,
+Wetter heute/morgen + Gäste-WLAN-QR) war zunächst nur über einen eigenen
+Geräte-Header (`X-Device-Screen: sleep`) erreichbar — ausschließlich der
+erzwungene Abruf vor dem Tiefschlaf konnte ihn zeigen. Nutzerwunsch
+2026-08-23: „der Schlafschirm ist immer die letzte Seite zum Blättern, damit
+ich den Schirm auch absichtlich aufrufen kann."
+
+**Ein Slot, zwei Zugänge.** `board_render_svg()` zählt seither IMMER einen
+Slot mehr als Abfahrten+Störungen (`board_total_pages()`), und `$requestedPage
+> $totalContentPages` rendert dort `board_sleep_render_svg()` statt der
+Abfahrten-/Störungsseite. Landet man dort per bewusstem `page_next` ODER per
+erzwungenem Header, kommt **pixelidentischer** Inhalt heraus — ein
+Integrationstest rendert beide Wege und vergleicht sie.
+
+> **Falle: Persistenz des erzwungenen Abrufs.** `web/board.php` speichert
+> `activePage` für den nächsten Poll. Würde der erzwungene Vorschlaf-Abruf
+> naiv `$requestedPage = $totalPages` setzen und DAS persistieren, stünde
+> beim nächsten Aufwachen wieder der Schlafschirm da — unabhängig davon, wo
+> der Nutzer zuletzt tatsächlich war. Gegenmittel: eine zweite Variable
+> (`$renderPage`) nur fürs Rendern, `$requestedPage` bleibt unangetastet und
+> wird gespeichert. Ein Integrationstest fährt genau dieses Szenario (Abruf 1
+> normal, Abruf 2 erzwungen, Abruf 3 wieder normal → muss wieder Abfahrten
+> zeigen).
+
+> **Falle: `$totalContentPages` in der falschen Datei referenziert.** Die
+> Variable existierte zunächst nur *innerhalb* von `board_render_svg()`
+> (`inc/board_template.php`) — `web/board.php` bezog sich beim Setzen des
+> `X-Board-Is-Sleep-Page`-Headers versehentlich auf eine in dieser Datei nie
+> definierte gleichnamige Variable. PHP wertet den Vergleich mit einer
+> undefinierten Variable trotzdem aus (Warning, Wert `null`), `$renderPage >
+> null` ist für jede Seite ≥ 1 wahr — der Header stand also auf **jeder**
+> Seite, nicht nur auf dem Schlafschirm. Sichtbar wurde es nur, weil
+> `display_errors` unter `php-cgi` die Warnung in den Bildkörper schrieb und
+> ein Content-Length-Test genau darauf anschlug. Lehre: Variablen, die eine
+> Funktion lokal berechnet, nicht stillschweigend im Aufrufer als vorhanden
+> annehmen — grep bei jeder neuen Kreuzreferenz zwischen `board.php` und
+> `board_template.php`.
+
+Damit steht `X-Board-Total-Pages` nie mehr auf `1` — mindestens Abfahrten +
+Schlafschirm. Ältere Firmware-/Testannahmen, die `totalPages == 1` erwarten,
+sind bewusst nicht mehr gültig (s. `board_render_stand_and_pagination_svg()`s
+`totalPages <= 1`-Zweig: praktisch tot, als Schutz für Direktaufrufe stehen
+gelassen).
+
+**Doppelbelegung der grünen Taste** für „jetzt schlafen" auf dem
+Schlafschirm: s. §20.5. Erkannt über den neuen Header `X-Board-Is-Sleep-Page`
+(analog zu `X-Board-Snapshot-Requested`: außerhalb des strikt geprüften
+`ParsedBoardResponse`-Protokolls, ein optionaler Seitenkanal).
+
+### 20.11 Seitenzahlen-Pille ohne Pfeile, rechtsbündig verankert (2026-08-23)
+
+Nutzerwunsch: „Paginierungs-Schaltfläche bitte 50% größer, aber ohne weitere
+Pfeile. Nur Seitennummern." Manche Maße konnten die volle Vorgabe umsetzen,
+andere nicht — dokumentiert, damit niemand später „50 %" wörtlich
+nachrechnet und einen Bug vermutet:
+
+| Maß | vorher | nachher | Faktor |
+|---|---|---|---|
+| Slotbreite | 58px | 87px | **1,5×** (voll) |
+| Schrift | 24px | 30px | 1,25× |
+| Kreisradius | 20px | 24px | 1,2× |
+| Pillenhöhe | 48px | 56px | 1,17× |
+
+Slotbreite und Schrift bekommen die vollen 50 % (bzw. 25 %), weil der
+Pfeil-Wegfall echten Platz freimacht. Höhe und Radius sind **hart** durch das
+60-px-Band begrenzt, in dem die Pille sitzt (`BOARD_DEPARTURES_MAX_Y=1250`
+bis zur Trennlinie bei y=1310) — ein wortwörtlich 50 % größerer Kreis
+(r=30, Ø 60) würde das Band randlos ausfüllen, ohne jeden Rand zur
+Trennlinie oder zum letzten Abfahrten-Badge.
+
+**Rechtsbündig statt linksbündig.** Seit §20.10 ist `totalPages` nie mehr 1,
+oft 3–5 (Abfahrten + evtl. Störungen + Schlafschirm). Eine linksbündig ab
+x=793 wachsende Pille wäre bei 4+ Seiten und 87px-Slots über die
+Spaltentrennlinie (x=1113) hinausgewachsen. Die Pille verankert deshalb ihr
+**rechtes** Ende an x=1083 (rechter Rand der Abfahrtenspalte) und wächst bei
+mehr Seiten nach **links** — Formel `pillWidth = totalPages*87+20`,
+`pillStartX = 1083-pillWidth`.
+
+> **Geteiltes Raster, wie immer bei diesem Gerät.** Die Geometrie steht in
+> `BOARD_PAGINATION_*`-Konstanten (`inc/board_template.php`) UND in
+> `PAGINATION_*`-Konstanten (`touch_zone.cpp`) — identische Formel an beiden
+> Stellen, sonst tippt der Nutzer auf eine Zahl, die visuell woanders sitzt
+> als die Tipp-Zone der Firmware sie berechnet. Kein Renderer-seitiges
+> Tippen auf einzelne Zahlen: der linke/rechte Pillenhalbraum sendet weiter
+> unsichtbar `page_prev`/`page_next` — die physischen weißen Tasten bleiben
+> der primäre, klar beschriftete Navigationsweg.

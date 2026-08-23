@@ -14,6 +14,7 @@ const char* HEADER_NAMES[] = {
     "X-Board-Favorite-Count", "X-Board-Total-Pages", "Content-Length",
     "X-Board-Snapshot-Requested",
     "X-Board-Encoding", "X-Board-Raw-Length",
+    "X-Board-Is-Sleep-Page",
 };
 const size_t HEADER_COUNT = sizeof(HEADER_NAMES) / sizeof(HEADER_NAMES[0]);
 
@@ -250,6 +251,7 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
     }
 
     out.snapshotRequested = http.header("X-Board-Snapshot-Requested") == "1";
+    out.isSleepPage = http.header("X-Board-Is-Sleep-Page") == "1";
 
     BoardHeaders headers;
     headers.mode           = http.header("X-Board-Mode").c_str();

@@ -38,36 +38,41 @@ void test_zero_favorites_means_no_favorite_zones_at_all(void) {
     TEST_ASSERT_TRUE(mapTouchToZone(300, 1350, 0, 1) == TouchZone::None);
 }
 
-// --- Pagination-Zonen (y in [1256,1304)) -----------------------------------
+// --- Pagination-Zonen (y in [1252,1308)) -- rechtsbuendig an x=1083 --------
+// Seit der Schlafschirm immer eine zusaetzliche letzte Seite ist (2026-08-23),
+// ist totalPages praktisch nie mehr 1 -- die Pille waechst deshalb rechts-
+// buendig ab x=1083 nach LINKS (pillWidth = totalPages*87 + 20), statt wie
+// vor der Pfeil-Streichung linksbuendig ab einer festen Startposition.
 
 void test_pagination_zones_absent_when_only_one_page(void) {
     TEST_ASSERT_TRUE(mapTouchToZone(900, 1280, 3, 1) == TouchZone::None);
 }
 
-void test_pagination_pill_at_minimum_width_splits_at_938(void) {
-    // totalPages=2: arrowX=880+116=996, pillWidth=max(290,996-822+58)=max(290,232)=290
-    // pill: [793,1083), mid=793+145=938
-    TEST_ASSERT_TRUE(mapTouchToZone(800, 1280, 3, 2) == TouchZone::PagePrev);
-    TEST_ASSERT_TRUE(mapTouchToZone(937, 1280, 3, 2) == TouchZone::PagePrev);
-    TEST_ASSERT_TRUE(mapTouchToZone(938, 1280, 3, 2) == TouchZone::PageNext);
-    TEST_ASSERT_TRUE(mapTouchToZone(1080, 1280, 3, 2) == TouchZone::PageNext);
-    TEST_ASSERT_TRUE(mapTouchToZone(1083, 1280, 3, 2) == TouchZone::None); // past the pill
+void test_pagination_pill_two_pages_splits_at_986(void) {
+    // totalPages=2: pillWidth=2*87+20=194, pillStartX=1083-194=889, mid=889+97=986
+    TEST_ASSERT_TRUE(mapTouchToZone(888, 1280, 3, 2) == TouchZone::None);     // vor der Pille
+    TEST_ASSERT_TRUE(mapTouchToZone(889, 1280, 3, 2) == TouchZone::PagePrev); // Pillenanfang
+    TEST_ASSERT_TRUE(mapTouchToZone(985, 1280, 3, 2) == TouchZone::PagePrev);
+    TEST_ASSERT_TRUE(mapTouchToZone(986, 1280, 3, 2) == TouchZone::PageNext);
+    TEST_ASSERT_TRUE(mapTouchToZone(1082, 1280, 3, 2) == TouchZone::PageNext);
+    TEST_ASSERT_TRUE(mapTouchToZone(1083, 1280, 3, 2) == TouchZone::None);    // Pillenende, exklusiv
 }
 
-void test_pagination_pill_grows_with_more_pages(void) {
-    // totalPages=5: arrowX=880+290=1170, pillWidth=max(290,1170-822+58)=max(290,406)=406
-    // pill: [793,1199), mid=793+203=996
-    TEST_ASSERT_TRUE(mapTouchToZone(900, 1280, 3, 5) == TouchZone::PagePrev);
-    TEST_ASSERT_TRUE(mapTouchToZone(1100, 1280, 3, 5) == TouchZone::PageNext);
-    TEST_ASSERT_TRUE(mapTouchToZone(1198, 1280, 3, 5) == TouchZone::PageNext);
-    TEST_ASSERT_TRUE(mapTouchToZone(1199, 1280, 3, 5) == TouchZone::None);
+void test_pagination_pill_grows_leftward_with_more_pages(void) {
+    // totalPages=5: pillWidth=5*87+20=455, pillStartX=1083-455=628, mid=628+227=855
+    TEST_ASSERT_TRUE(mapTouchToZone(627, 1280, 3, 5) == TouchZone::None);     // vor der Pille
+    TEST_ASSERT_TRUE(mapTouchToZone(700, 1280, 3, 5) == TouchZone::PagePrev);
+    TEST_ASSERT_TRUE(mapTouchToZone(900, 1280, 3, 5) == TouchZone::PageNext);
+    TEST_ASSERT_TRUE(mapTouchToZone(1082, 1280, 3, 5) == TouchZone::PageNext);
+    TEST_ASSERT_TRUE(mapTouchToZone(1083, 1280, 3, 5) == TouchZone::None);
 }
 
 void test_pagination_row_boundaries_are_exact(void) {
-    TEST_ASSERT_TRUE(mapTouchToZone(900, 1256, 3, 2) == TouchZone::PagePrev); // top of row
-    TEST_ASSERT_TRUE(mapTouchToZone(900, 1303, 3, 2) == TouchZone::PagePrev); // bottom of row
-    TEST_ASSERT_TRUE(mapTouchToZone(900, 1304, 3, 2) == TouchZone::None);     // one px below
-    TEST_ASSERT_TRUE(mapTouchToZone(900, 1255, 3, 2) == TouchZone::None);     // one px above
+    // totalPages=2: pill [889,1083), mid=986 -- x=900 liegt links von mid.
+    TEST_ASSERT_TRUE(mapTouchToZone(900, 1252, 3, 2) == TouchZone::PagePrev); // top of row
+    TEST_ASSERT_TRUE(mapTouchToZone(900, 1307, 3, 2) == TouchZone::PagePrev); // bottom of row
+    TEST_ASSERT_TRUE(mapTouchToZone(900, 1308, 3, 2) == TouchZone::None);     // one px below
+    TEST_ASSERT_TRUE(mapTouchToZone(900, 1251, 3, 2) == TouchZone::None);     // one px above
 }
 
 // --- Zellen ausserhalb beider Reihen ----------------------------------------
@@ -95,8 +100,8 @@ int main(int argc, char** argv) {
     RUN_TEST(test_two_favorites_split_in_half);
     RUN_TEST(test_zero_favorites_means_no_favorite_zones_at_all);
     RUN_TEST(test_pagination_zones_absent_when_only_one_page);
-    RUN_TEST(test_pagination_pill_at_minimum_width_splits_at_938);
-    RUN_TEST(test_pagination_pill_grows_with_more_pages);
+    RUN_TEST(test_pagination_pill_two_pages_splits_at_986);
+    RUN_TEST(test_pagination_pill_grows_leftward_with_more_pages);
     RUN_TEST(test_pagination_row_boundaries_are_exact);
     RUN_TEST(test_touch_in_the_departures_area_maps_to_none);
     RUN_TEST(test_zone_to_header_value);

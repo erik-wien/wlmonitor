@@ -302,19 +302,41 @@ function board_render_touch_bar_svg(array $favoriteTitles, int $activeIndex): st
 }
 
 /**
+ * Anzahl Seiten INKLUSIVE des Schlafschirms, der seit 2026-08-23 immer die
+ * LETZTE Seite ist (Nutzerwunsch: "damit ich den Schirm auch absichtlich
+ * aufrufen kann"). EINE Formel fuer board_render_svg() und web/board.php,
+ * die $requestedPage schon vor dem Rendern gegen totalPages clampen muss.
+ */
+function board_total_pages(int $totalDeparturePages, bool $hasDisruptions): int
+{
+    return $totalDeparturePages + ($hasDisruptions ? 1 : 0) + 1;
+}
+
+/**
  * Setzt das komplette Board-SVG zusammen: Grundformen, Kopfzeile,
  * Abfahrten- ODER Stoerungsseite (je nach $requestedPage), Stand+
- * Pagination, Wetterkarte, Touch-Leiste.
+ * Pagination, Wetterkarte, Touch-Leiste. Die LETZTE Seite ist immer der
+ * Schlafschirm (board_sleep_render_svg(), inc/board_sleep.php) -- eigenes,
+ * vollstaendiges Layout ohne Kopf-/Fusszeile oder Touch-Leiste, identisch zu
+ * dem, was das Geraet vor dem Tiefschlaf anfordert (Nutzerwunsch 2026-08-23).
  *
  * Seitenzaehlung: board_paginate_departures() liefert totalPages fuer die
  * Abfahrten allein. Gibt es $filteredAlerts, kommt genau eine weitere
  * Seite dazu (die Stoerungsseite -- board_layout_disruptions() paginiert
- * selbst nicht, s. Task 8). $requestedPage bis totalDeparturePages zeigt
- * Abfahrten, totalDeparturePages+1 (falls vorhanden) zeigt Stoerungen.
+ * selbst nicht, s. Task 8), dann IMMER der Schlafschirm-Slot
+ * (board_total_pages()). $requestedPage bis totalDeparturePages zeigt
+ * Abfahrten, totalDeparturePages+1 (falls vorhanden) zeigt Stoerungen,
+ * der letzte Slot den Schlafschirm.
  *
  * @param list<string> $touchBarFavoriteTitles 1-3 Titel
  * @param array $activeFavorite board_favorite()-Ergebnis
  * @param list<array> $filteredAlerts bereits auf $activeFavorite gefiltert
+ * @param ?array{today: array, tomorrow: array} $sleepWeather Beide
+ *        Prognose-Scheiben fuer den Schlafschirm-Slot (weather_select_two_days()).
+ *        null ist nur fuer Aufrufe unzulaessig, die diesen Slot nie erreichen
+ *        koennen (z.B. Tests, die $requestedPage klein genug waehlen).
+ * @param ?array{ssid: string, password: string, encryption: string, hidden: bool} $guestWifi
+ *        null = kein QR-Block (board_guest_wifi_load() lieferte nichts)
  */
 function board_render_svg(
     array $touchBarFavoriteTitles,
@@ -328,19 +350,29 @@ function board_render_svg(
     int $batteryPercent,
     int $wifiBars,
     ?int $firmwareBuild = null,
-    ?array $sun = null
+    ?array $sun = null,
+    ?array $sleepWeather = null,
+    ?array $guestWifi = null
 ): string {
+    $departurePages = board_paginate_departures($activeFavorite, 1);
+    $totalDeparturePages = $departurePages['totalPages'];
+    $hasDisruptions = $filteredAlerts !== [];
+    $totalContentPages = $totalDeparturePages + ($hasDisruptions ? 1 : 0);
+    $totalPages = board_total_pages($totalDeparturePages, $hasDisruptions);
+
+    $requestedPage = max(1, min($totalPages, $requestedPage));
+
+    if ($requestedPage > $totalContentPages) {
+        $sleepWeather ??= ['today' => ['available' => false], 'tomorrow' => ['available' => false]];
+        return board_sleep_render_svg(
+            $sleepWeather['today'], $sleepWeather['tomorrow'], $sun, $guestWifi, $renderedAt
+        );
+    }
+
     $defs = board_svg_defs();
     $chrome = board_render_chrome_svg($renderedAt, $batteryPercent, $wifiBars);
     $touchBar = board_render_touch_bar_svg($touchBarFavoriteTitles, $activeFavoriteIndex);
     $weatherSvg = board_render_weather_svg($weather, $firmwareBuild, $sun);
-
-    $departurePages = board_paginate_departures($activeFavorite, 1);
-    $totalDeparturePages = $departurePages['totalPages'];
-    $hasDisruptions = $filteredAlerts !== [];
-    $totalPages = $totalDeparturePages + ($hasDisruptions ? 1 : 0);
-
-    $requestedPage = max(1, min($totalPages, $requestedPage));
 
     if ($requestedPage <= $totalDeparturePages) {
         $items = board_paginate_departures($activeFavorite, $requestedPage)['items'];
@@ -422,16 +454,19 @@ function board_wrap_text(string $text, int $maxCharsPerLine): array
 function board_render_weather_svg(array $weather, ?int $firmwareBuild = null, ?array $sun = null): string
 {
     $station = $weather['station'] ?? ['available' => false];
+    // 'period' fehlt nur in Alt-Fixtures/Tests von vor 2026-08-23 -- 'today'
+    // als Fallback erhaelt dort das bisherige Verhalten (Ueberschrift "Heute").
+    $heading = ($weather['period'] ?? 'today') === 'tomorrow' ? 'Morgen' : 'Heute';
 
     if ($weather['available'] === false) {
-        return board_render_weather_card('icon_unbekannt', null, null, ['Wetterdaten werden geladen …'], $station, $firmwareBuild, $sun);
+        return board_render_weather_card('icon_unbekannt', null, null, ['Wetterdaten werden geladen …'], $station, $firmwareBuild, $sun, $heading);
     }
 
     $iconId = BOARD_ICON_ID_BY_CATEGORY[$weather['icon_category']] ?? BOARD_ICON_ID_BY_CATEGORY['unbekannt'];
     $bodyText = $weather['text'] ?? $weather['text_error'] ?? '';
     $lines = board_wrap_text($bodyText, BOARD_WEATHER_TEXT_MAX_CHARS_PER_LINE);
 
-    return board_render_weather_card($iconId, $weather['temp_min'], $weather['temp_max'], $lines, $station, $firmwareBuild, $sun);
+    return board_render_weather_card($iconId, $weather['temp_min'], $weather['temp_max'], $lines, $station, $firmwareBuild, $sun, $heading);
 }
 
 /**
@@ -532,7 +567,8 @@ function board_render_weather_card(
     array $bodyLines,
     array $station = ['available' => false],
     ?int $firmwareBuild = null,
-    ?array $sun = null
+    ?array $sun = null,
+    string $heading = 'Heute'
 ): string {
     // Haupt-Icon: scale(6) -> scale(9) (Nutzerwunsch 2026-08-22, zweimal
     // nachgeschaerft). Die Tabler-Dateien sind 24x24, das ergibt 216 statt
@@ -599,8 +635,8 @@ function board_render_weather_card(
     // gerade steht -- sonst spraenge "Heute" je nach Wetterlage auf und ab.
     $headingSvg = $tempMin !== null
         ? sprintf(
-            '<text x="1150" y="%d" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="46" fill="black">Heute</text>',
-            BOARD_WEATHER_HEADING_Y
+            '<text x="1150" y="%d" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="46" fill="black">%s</text>',
+            BOARD_WEATHER_HEADING_Y, htmlspecialchars($heading, ENT_XML1)
         )
         : '';
 
@@ -637,6 +673,20 @@ SVG;
  * Abfahrtenspalte (1310-1250) fuer die Stand+Pagination-Leiste (Task 6b).
  */
 const BOARD_DEPARTURES_MAX_Y = 1250;
+
+/**
+ * Geometrie der Seitenzahlen-Pille (board_render_stand_and_pagination_svg()).
+ * MUSS deckungsgleich mit den PAGINATION_*-Konstanten in
+ * epaper-monitor/lib/boardlogic/touch_zone.cpp bleiben -- die Firmware
+ * berechnet aus denselben Werten die Tipp-Zonen fuer page_prev/page_next.
+ */
+const BOARD_PAGINATION_SLOT_WIDTH  = 87; // 58 * 1.5 -- volle 50%, der Pfeil-Wegfall macht den Platz frei
+const BOARD_PAGINATION_SIDE_PADDING = 20; // Luft links/rechts der aeussersten Zahl
+const BOARD_PAGINATION_CIRCLE_RADIUS = 24; // 20 * 1.2 -- Obergrenze des 60px-Bands, s. Funktionskommentar
+const BOARD_PAGINATION_FONT_SIZE   = 30; // 24 * 1.25
+const BOARD_PAGINATION_RIGHT_EDGE  = 1083; // rechter Rand der Abfahrtenspalte
+const BOARD_PAGINATION_TOP         = 1252;
+const BOARD_PAGINATION_HEIGHT      = 56;
 
 /**
  * Cursor-Layout + Pagination der Abfahrtenliste eines einzelnen Favoriten
@@ -852,6 +902,27 @@ function board_render_departure_row(array $item): string
  * als eine Seite gibt. Ein Pfeil ohne Ziel (erste/letzte Seite) wird
  * ausgegraut statt weggelassen, damit die Pille immer gleich breit bleibt.
  */
+/**
+ * Seitenzahlen-Pille aus reinen Zahlen, OHNE Pfeile (Nutzerwunsch 2026-08-23:
+ * "50% groesser, aber ohne weitere Pfeile, nur Seitennummern" -- seit der
+ * Schlafschirm immer eine zusaetzliche letzte Seite ist, wirkte die Pille mit
+ * Pfeilen an beiden Enden zu voll). Weiterhin tippbar: der linke/rechte
+ * Pillenhalbraum sendet unsichtbar page_prev/page_next
+ * (mapPaginationTouch() in touch_zone.cpp) -- die physischen weissen Tasten
+ * bleiben ohnehin der primaere Navigationsweg.
+ *
+ * Rechtsbuendig an x=1083 (rechter Rand der Abfahrtenspalte) statt wie
+ * frueher linksbuendig ab x=793: totalPages ist seit dem Schlafschirm-Slot
+ * IMMER mindestens 2, oft 3-5 (Abfahrten + evtl. Stoerungen + Schlaf) -- eine
+ * linksbuendige Pille waere bei 4+ Seiten und 87px breiten Slots ueber die
+ * Trennlinie bei x=1113 hinausgewachsen.
+ *
+ * Hoehe/Radius sind NICHT die vollen +50%: die Pille steht in einem hart
+ * begrenzten 60px-Band (BOARD_DEPARTURES_MAX_Y=1250 bis zur Trennlinie bei
+ * y=1310) -- ein wortwoertlich 50% groesserer Kreis (r=30, Durchmesser 60)
+ * wuerde das Band randlos ausfuellen. Slotbreite und Schrift bekommen die
+ * vollen 50%, weil dort durch den Pfeil-Wegfall echter Platz frei wurde.
+ */
 function board_render_stand_and_pagination_svg(DateTimeImmutable $dataStand, int $currentPage, int $totalPages): string
 {
     $standSvg = sprintf(
@@ -859,37 +930,40 @@ function board_render_stand_and_pagination_svg(DateTimeImmutable $dataStand, int
         $dataStand->format('H:i')
     );
 
+    // In der Praxis nie mehr wahr (der Schlafschirm-Slot macht totalPages
+    // >= 2) -- als Schutz fuer Direktaufrufe dieser reinen Funktion (Tests,
+    // debug=svg&part=monitor) trotzdem stehen gelassen.
     if ($totalPages <= 1) {
         return $standSvg;
     }
 
-    $backFill = $currentPage > 1 ? 'black' : '#b0b0b0';
-    $forwardFill = $currentPage < $totalPages ? 'black' : '#b0b0b0';
+    $pillWidth = $totalPages * BOARD_PAGINATION_SLOT_WIDTH + BOARD_PAGINATION_SIDE_PADDING;
+    $pillStartX = BOARD_PAGINATION_RIGHT_EDGE - $pillWidth;
+    $numberStartX = $pillStartX + (int) (BOARD_PAGINATION_SIDE_PADDING / 2) + (int) (BOARD_PAGINATION_SLOT_WIDTH / 2);
+    $cy = BOARD_PAGINATION_TOP + (int) (BOARD_PAGINATION_HEIGHT / 2); // = 1280
+    $baselineY = $cy + 9; // gleicher Versatz wie zuvor (cy=1280, baseline=1289)
 
     $pagesSvg = '';
-    $slotWidth = 58;
-    // Vereinfachtes, robustes Layout: Pfeile an den Raendern der Pille,
-    // Seitenzahlen mittig verteilt.
-    $pagesSvg .= sprintf('<text x="822" y="1289" text-anchor="middle" font-size="26" fill="%s">←</text>', $backFill);
-
-    $numberStartX = 880;
     for ($p = 1; $p <= $totalPages; $p++) {
-        $x = $numberStartX + ($p - 1) * 58;
+        $x = $numberStartX + ($p - 1) * BOARD_PAGINATION_SLOT_WIDTH;
         if ($p === $currentPage) {
-            $pagesSvg .= sprintf('<circle cx="%d" cy="1280" r="20" fill="black"/>', $x);
-            $pagesSvg .= sprintf('<text x="%d" y="1289" text-anchor="middle" font-weight="bold" font-size="24" fill="white">%d</text>', $x, $p);
+            $pagesSvg .= sprintf('<circle cx="%d" cy="%d" r="%d" fill="black"/>', $x, $cy, BOARD_PAGINATION_CIRCLE_RADIUS);
+            $pagesSvg .= sprintf(
+                '<text x="%d" y="%d" text-anchor="middle" font-weight="bold" font-size="%d" fill="white">%d</text>',
+                $x, $baselineY, BOARD_PAGINATION_FONT_SIZE, $p
+            );
         } else {
-            $pagesSvg .= sprintf('<text x="%d" y="1289" text-anchor="middle" font-size="24" fill="black">%d</text>', $x, $p);
+            $pagesSvg .= sprintf(
+                '<text x="%d" y="%d" text-anchor="middle" font-size="%d" fill="black">%d</text>',
+                $x, $baselineY, BOARD_PAGINATION_FONT_SIZE, $p
+            );
         }
     }
-    $arrowX = $numberStartX + $totalPages * 58;
-    $pagesSvg .= sprintf('<text x="%d" y="1289" text-anchor="middle" font-size="26" fill="%s">→</text>', $arrowX, $forwardFill);
-
-    $pillWidth = max(290, $arrowX - 822 + 58);
 
     return $standSvg . sprintf(
-        '<g font-family="Atkinson Hyperlegible Next"><rect x="793" y="1256" width="%d" height="48" rx="24" fill="white" stroke="black" stroke-width="2"/>%s</g>',
-        $pillWidth, $pagesSvg
+        '<g font-family="Atkinson Hyperlegible Next"><rect x="%d" y="%d" width="%d" height="%d" rx="%d" fill="white" stroke="black" stroke-width="2"/>%s</g>',
+        $pillStartX, BOARD_PAGINATION_TOP, $pillWidth, BOARD_PAGINATION_HEIGHT,
+        (int) (BOARD_PAGINATION_HEIGHT / 2), $pagesSvg
     );
 }
 

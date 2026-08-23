@@ -171,10 +171,11 @@ class BoardTemplateRenderTest extends TestCase
     public function test_disruptions_page_and_pagination_pill_render_through_real_pipeline(): void
     {
         // Abfahrten spannen 2 Seiten (multiPageFavoriteFixture) + echte
-        // Stoerungsmeldung -> 3 Seiten insgesamt, Stoerungsseite ist die
-        // letzte (Seite 3). Deckt ab, dass Stoerungsseite + Pagination-Pille
-        // auch durch svg_to_png() tatsaechlich sichtbares Pixelmaterial
-        // erzeugen -- bisher pruefte das kein Integrationstest.
+        // Stoerungsmeldung + der Schlafschirm-Slot (seit 2026-08-23 immer die
+        // letzte Seite) -> 4 Seiten insgesamt, Stoerungsseite bleibt Seite 3.
+        // Deckt ab, dass Stoerungsseite + Pagination-Pille auch durch
+        // svg_to_png() tatsaechlich sichtbares Pixelmaterial erzeugen --
+        // bisher pruefte das kein Integrationstest.
         $alerts = [[
             'title' => 'U3: Bauarbeiten',
             'description' => 'Die Linie U3 fährt derzeit nicht zwischen Hütteldorfer Straße und Westbahnhof.',
@@ -194,10 +195,12 @@ class BoardTemplateRenderTest extends TestCase
         $titleInkY = $this->firstInkY($im, 16, 700, 100, 200);
         $this->assertNotNull($titleInkY, 'Stoerungstitel muss auf der Stoerungsseite sichtbar sein');
 
-        // Pagination-Pille zeigt Seite 3 als schwarz gefuellten Kreis
-        // (cx=996 cy=1280 r=20). Bereich knapp innerhalb des Kreisradius,
-        // ohne den Pillenrand (y=1256/1304) mit einzuschliessen.
-        $pillInkY = $this->firstInkY($im, 985, 1007, 1265, 1295);
+        // Pagination-Pille zeigt Seite 3 von 4 als schwarz gefuellten Kreis.
+        // totalPages=4: pillWidth=4*87+20=368, pillStartX=1083-368=715,
+        // numberStartX=715+10+43=768, Seite 3 bei cx=768+2*87=942, cy=1280,
+        // r=24. Bereich knapp innerhalb des Kreisradius, ohne den Pillenrand
+        // (y=1252/1308) mit einzuschliessen.
+        $pillInkY = $this->firstInkY($im, 931, 953, 1265, 1295);
         $this->assertNotNull($pillInkY, 'aktueller Seiten-Kreis der Pagination-Pille muss sichtbar sein');
     }
 

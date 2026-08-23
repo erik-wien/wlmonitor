@@ -47,6 +47,24 @@ class WeatherSelectDisplayTest extends TestCase
         $this->assertSame('Morgen-Text', $result['text']);
     }
 
+    public function test_period_matches_the_chosen_slice(): void
+    {
+        // Regressionsschutz 2026-08-23: die Ueberschrift der Wetterkarte
+        // (board_render_weather_svg()) stand vorher hartcodiert auf "Heute",
+        // auch wenn hier laengst 'tomorrow' ausgewaehlt wurde.
+        $before = weather_select_display($this->cache('2026-08-15T15:00:00+02:00'), new DateTimeImmutable('2026-08-15T18:59:00+02:00'));
+        $after = weather_select_display($this->cache('2026-08-15T18:00:00+02:00'), new DateTimeImmutable('2026-08-15T19:00:00+02:00'));
+
+        $this->assertSame('today', $before['period']);
+        $this->assertSame('tomorrow', $after['period']);
+    }
+
+    public function test_weather_display_period_matches_the_1900_threshold(): void
+    {
+        $this->assertSame('today', weather_display_period(new DateTimeImmutable('2026-08-15T18:59:00+02:00')));
+        $this->assertSame('tomorrow', weather_display_period(new DateTimeImmutable('2026-08-15T19:00:00+02:00')));
+    }
+
     public function test_cache_older_than_6h_replaces_text_with_error(): void
     {
         $result = weather_select_display(

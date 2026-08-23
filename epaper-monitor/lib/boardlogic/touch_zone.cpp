@@ -12,13 +12,18 @@ const int FAVORITE_MARGIN = 16;
 const int FAVORITE_GAP = 16;
 const int PANEL_WIDTH = 1872;
 
-const int PAGINATION_ROW_TOP = 1256;
-const int PAGINATION_ROW_BOTTOM = 1304; // exklusiv
-const int PAGINATION_PILL_START_X = 793;
-const int PAGINATION_ARROW_BASE_X = 822;
-const int PAGINATION_NUMBER_START_X = 880;
-const int PAGINATION_SLOT_WIDTH = 58;
-const int PAGINATION_MIN_PILL_WIDTH = 290;
+// Deckungsgleich mit den BOARD_PAGINATION_*-Konstanten in
+// inc/board_template.php (Nutzerwunsch 2026-08-23: "50% groesser, ohne
+// Pfeile, nur Seitennummern"). Die Pille ist RECHTSBUENDIG an
+// PAGINATION_RIGHT_EDGE verankert und waechst bei mehr Seiten nach LINKS --
+// seit der Schlafschirm immer eine zusaetzliche letzte Seite ist, ist
+// totalPages nie mehr 1 und oft 3-5, eine linksbuendige Pille waere ueber die
+// Spaltentrennlinie hinausgewachsen.
+const int PAGINATION_ROW_TOP = 1252;
+const int PAGINATION_ROW_BOTTOM = 1308; // exklusiv (Top + Height)
+const int PAGINATION_RIGHT_EDGE = 1083;
+const int PAGINATION_SLOT_WIDTH = 87;
+const int PAGINATION_SIDE_PADDING = 20;
 
 TouchZone mapFavoriteTouch(int x, int favoriteCount) {
     if (favoriteCount <= 0) return TouchZone::None;
@@ -39,16 +44,19 @@ TouchZone mapFavoriteTouch(int x, int favoriteCount) {
 }
 
 TouchZone mapPaginationTouch(int x, int totalPages) {
+    // Praktisch nie <=1 (der Schlafschirm-Slot macht totalPages >= 2) -- als
+    // Schutz stehen gelassen, exakt wie im PHP-Gegenstueck.
     if (totalPages <= 1) return TouchZone::None;
 
-    int arrowX = PAGINATION_NUMBER_START_X + totalPages * PAGINATION_SLOT_WIDTH;
-    int pillWidth = arrowX - PAGINATION_ARROW_BASE_X + PAGINATION_SLOT_WIDTH;
-    if (pillWidth < PAGINATION_MIN_PILL_WIDTH) pillWidth = PAGINATION_MIN_PILL_WIDTH;
+    int pillWidth = totalPages * PAGINATION_SLOT_WIDTH + PAGINATION_SIDE_PADDING;
+    int pillStartX = PAGINATION_RIGHT_EDGE - pillWidth;
 
-    int pillEnd = PAGINATION_PILL_START_X + pillWidth;
-    if (x < PAGINATION_PILL_START_X || x >= pillEnd) return TouchZone::None;
+    if (x < pillStartX || x >= PAGINATION_RIGHT_EDGE) return TouchZone::None;
 
-    int mid = PAGINATION_PILL_START_X + pillWidth / 2;
+    // Keine Pfeile mehr sichtbar (Nutzerwunsch 2026-08-23) -- der linke/
+    // rechte Pillenhalbraum bleibt trotzdem als unsichtbare Zone aktiv,
+    // die physischen weissen Tasten sind ohnehin der primaere Navigationsweg.
+    int mid = pillStartX + pillWidth / 2;
     return (x < mid) ? TouchZone::PagePrev : TouchZone::PageNext;
 }
 

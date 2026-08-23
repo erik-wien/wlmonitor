@@ -133,8 +133,19 @@ try {
     }
 
     $totalDeparturePages = board_paginate_departures($activeFavorite, 1)['totalPages'];
-    $totalPages = $totalDeparturePages + ($filteredAlerts !== [] ? 1 : 0);
+    $totalContentPages = $totalDeparturePages + ($filteredAlerts !== [] ? 1 : 0);
+    $totalPages = board_total_pages($totalDeparturePages, $filteredAlerts !== []);
     $requestedPage = max(1, min($totalPages, $resolved['activePage']));
+
+    // Schlafschirm erzwingen (Nutzervorgabe 2026-08-23): der letzte Abruf vor
+    // dem Tiefschlaf verlangt ihn ausdruecklich per Header, UNABHAENGIG vom
+    // gespeicherten Blaetter-Zustand -- sonst muesste die Firmware erst per
+    // page_next dorthin navigieren. BEWUSST wird dafuer NICHT $requestedPage
+    // selbst ueberschrieben: persistiert wird unten weiterhin der unforcierte
+    // Wert, sonst stuende beim naechsten Aufwachen wieder der Schlafschirm da,
+    // obwohl der Nutzer zuletzt ganz woanders geblaettert hatte.
+    $forceSleepScreen = ($_SERVER['HTTP_X_DEVICE_SCREEN'] ?? '') === 'sleep';
+    $renderPage = $forceSleepScreen ? $totalPages : $requestedPage;
 
     $weatherCachePath = __DIR__ . '/../data/weather_cache.json';
     $weatherCache = file_exists($weatherCachePath)
@@ -184,33 +195,28 @@ try {
 {$standSvg}
 </svg>
 SVG;
-    } elseif (($_SERVER['HTTP_X_DEVICE_SCREEN'] ?? '') === 'sleep') {
-        // Schlafschirm (Nutzerwunsch 2026-08-23): der Abfahrtsmonitor ist
-        // waehrend des Tiefschlafs nutzlos -- eingefrorene Abfahrtszeiten, die
-        // stundenlang stehen. Das Geraet fordert deshalb vor dem Einschlafen
-        // ausdruecklich dieses Bild an (s. runActiveSession() in main.cpp).
-        $twoDays = weather_select_two_days(is_array($weatherCache) ? $weatherCache : null, $renderedAt);
-        $svg = board_sleep_render_svg(
-            $twoDays['today'],
-            $twoDays['tomorrow'],
-            weather_sun_times($renderedAt),
-            board_guest_wifi_load(),
-            $renderedAt
-        );
     } else {
+        // Der Schlafschirm (Nutzerwunsch 2026-08-23) ist strukturell die
+        // LETZTE Seite ($renderPage bis auf $totalPages geklemmt, board_render_svg()
+        // erkennt den Slot selbst) -- entweder weil das Geraet ihn vor dem
+        // Tiefschlaf ausdruecklich per Header verlangt ($forceSleepScreen)
+        // oder weil der Nutzer bewusst dorthin geblaettert hat. Beide Wege
+        // liefern PIXELIDENTISCHEN Inhalt.
         $svg = board_render_svg(
             $touchBarTitles,
             $resolved['activeFavoriteIndex'],
             $activeFavorite,
             $filteredAlerts,
-            $requestedPage,
+            $renderPage,
             $weather,
             $dataStand,
             $renderedAt,
             $batteryPercent,
             $wifiBars,
             $firmwareBuild,
-            weather_sun_times($renderedAt)
+            weather_sun_times($renderedAt),
+            weather_select_two_days(is_array($weatherCache) ? $weatherCache : null, $renderedAt),
+            board_guest_wifi_load()
         );
     }
 
@@ -300,6 +306,14 @@ SVG;
     // totalPages ab -- die Firmware braucht das, um die Touch-Zonen fuer
     // die Pfeile korrekt nachzurechnen.
     header('X-Board-Total-Pages: ' . $totalPages);
+    // Sagt der Firmware, ob GERADE der Schlafschirm-Slot ausgeliefert wurde --
+    // unabhaengig davon, ob per $forceSleepScreen oder durch bewusstes
+    // Hinblaettern (Nutzerwunsch 2026-08-23). Traegt main.cpps
+    // showingSleepPage-Zustand: nur darauf reagiert die gruene Taste mit
+    // "jetzt schlafen" statt "Vollupdate".
+    if ($renderPage > $totalContentPages) {
+        header('X-Board-Is-Sleep-Page: 1');
+    }
     // Debug-Feature (s. web/board_snapshot.php): ein per ?request=1 gesetztes
     // Flag laesst die Firmware ihren tatsaechlichen Panel-Inhalt hochladen --
     // zeigt auch lokale Overlay-Reste (Fehler-Banner, Marker), die dieser

@@ -64,6 +64,23 @@ class BoardTemplateWeatherTest extends TestCase
         $this->assertStringContainsString('>Heute<', $svg);
     }
 
+    public function test_heading_shows_morgen_when_the_selected_period_is_tomorrow(): void
+    {
+        // Regressionsschutz 2026-08-23: weather_select_display() zeigt ab
+        // 19:00 die Morgen-Prognose -- die Ueberschrift muss das nachziehen.
+        $svg = board_render_weather_svg($this->weatherFixture(['period' => 'tomorrow']));
+
+        $this->assertStringContainsString('>Morgen<', $svg);
+        $this->assertStringNotContainsString('>Heute<', $svg);
+    }
+
+    public function test_heading_defaults_to_heute_without_a_period_key(): void
+    {
+        // Alte Fixtures/Aufrufe ohne 'period' duerfen sich nicht aendern.
+        $svg = board_render_weather_svg($this->weatherFixture());
+        $this->assertStringContainsString('>Heute<', $svg);
+    }
+
     public function test_weather_svg_wraps_long_text_into_multiple_text_elements(): void
     {
         $svg = board_render_weather_svg($this->weatherFixture());

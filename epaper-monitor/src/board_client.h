@@ -20,6 +20,14 @@ struct BoardFetchResult {
     // getesteten Kern-Protokolls (board_response.cpp) ist, nur ein optionaler
     // Seitenkanal fuer den Debug-Screenshot-Upload.
     bool snapshotRequested = false;
+    // X-Board-Is-Sleep-Page: der gerade ausgelieferte Frame IST der
+    // Schlafschirm (board_sleep_render_svg()) -- egal ob per screen="sleep"
+    // erzwungen oder weil der Nutzer bewusst dorthin geblaettert hat (er ist
+    // seit 2026-08-23 strukturell immer die letzte Seite). Steuert in
+    // main.cpp, ob die gruene Taste "Vollupdate" oder "jetzt schlafen"
+    // bedeutet -- ebenfalls ausserhalb von ParsedBoardResponse, aus demselben
+    // Grund wie snapshotRequested.
+    bool isSleepPage = false;
 };
 
 // Fuehrt GET https://BOARD_HOST:BOARD_PORT/board.php aus (board_config.h),

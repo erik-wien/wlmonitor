@@ -299,7 +299,11 @@ final class BoardTokenEndpointTest extends TestCase
         $this->assertSame((string) strlen($r['out']), $this->headerValue($r['headers'], 'Content-Length'));
         $this->assertNotNull($this->headerValue($r['headers'], 'X-Board-ETag'));
         $this->assertSame('1', $this->headerValue($r['headers'], 'X-Board-Favorite-Count'));
-        $this->assertSame('1', $this->headerValue($r['headers'], 'X-Board-Total-Pages'));
+        // 1 Abfahrtenseite + der Schlafschirm-Slot, der seit 2026-08-23 immer
+        // die letzte Seite ist (Nutzerwunsch: "damit ich den Schirm auch
+        // absichtlich aufrufen kann").
+        $this->assertSame('2', $this->headerValue($r['headers'], 'X-Board-Total-Pages'));
+        $this->assertNull($this->headerValue($r['headers'], 'X-Board-Is-Sleep-Page'), 'Seite 1 von 2 ist Abfahrten, nicht der Schlafschirm');
     }
 
     public function test_favorite_count_header_reflects_two_configured_favorites(): void
@@ -518,5 +522,51 @@ final class BoardTokenEndpointTest extends TestCase
         ]);
         $this->assertSame(200, $r2['status']);
         $this->assertNotNull($this->headerValue($r2['headers'], 'X-Board-Mode'));
+    }
+
+    // --- Schlafschirm als letzte Seite (Nutzerwunsch 2026-08-23) --------------
+
+    public function test_page_next_reaches_the_sleep_screen_as_the_last_page(): void
+    {
+        $token = $this->createTokenUser();
+        $this->createFavorite('Test', '90111111', null);
+        $mock = $this->mockMonitorResponse('90111111', 4);
+
+        $r1 = $this->runProbe('board.php', ['authorization' => 'Bearer ' . $token, 'mock_wl_response' => $mock]);
+        $this->assertSame('2', $this->headerValue($r1['headers'], 'X-Board-Total-Pages'), '1 Abfahrtenseite + Schlafschirm-Slot');
+        $this->assertNull($this->headerValue($r1['headers'], 'X-Board-Is-Sleep-Page'));
+
+        $r2 = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $mock,
+            'headers' => ['X-Device-Touch' => 'page_next'],
+        ]);
+
+        $this->assertSame('1', $this->headerValue($r2['headers'], 'X-Board-Is-Sleep-Page'), 'Seite 2 von 2 ist der Schlafschirm-Slot');
+    }
+
+    public function test_forced_sleep_screen_does_not_persist_as_the_stored_page(): void
+    {
+        // Der letzte Abruf vor dem Tiefschlaf verlangt den Schlafschirm per
+        // X-Device-Screen: sleep, UNABHAENGIG vom gespeicherten Blaetter-
+        // Zustand. Wuerde das als activePage persistiert, staende beim
+        // naechsten Aufwachen wieder der Schlafschirm da, obwohl der Nutzer
+        // zuletzt auf Seite 1 (Abfahrten) war -- board.php muss den
+        // unforcierten Wert speichern, s. Kommentar bei $forceSleepScreen.
+        $token = $this->createTokenUser();
+        $this->createFavorite('Test', '90111111', null);
+        $mock = $this->mockMonitorResponse('90111111', 4);
+
+        $r1 = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $mock,
+            'headers' => ['X-Device-Screen' => 'sleep'],
+        ]);
+        $this->assertSame('1', $this->headerValue($r1['headers'], 'X-Board-Is-Sleep-Page'));
+
+        // Naechster regulaerer Poll (kein Screen-Header, kein Touch) MUSS
+        // wieder Seite 1 (Abfahrten) zeigen, nicht den Schlafschirm.
+        $r2 = $this->runProbe('board.php', ['authorization' => 'Bearer ' . $token, 'mock_wl_response' => $mock]);
+        $this->assertNull($this->headerValue($r2['headers'], 'X-Board-Is-Sleep-Page'));
     }
 }

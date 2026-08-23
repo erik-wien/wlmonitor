@@ -247,17 +247,30 @@ function weather_map_icon_code(string $code): array
  * @param ?array{fetched_at: string, today: array, tomorrow: array, station?: array, station_fetched_at?: string} $cache
  * @return array{available: bool, icon_category?: string, temp_min?: int, temp_max?: int, text?: ?string, text_error?: ?string, station: array{available: bool, temp_c?: float, humidity_pct?: int, wind_kmh?: int, wind_gusts_kmh?: int, wind_direction?: string, precipitation_mm?: float}}
  */
+/**
+ * "today" vor 19:00 Europe/Vienna, sonst "tomorrow" (Spec §8) -- EINZIGE
+ * Stelle, die diese Schwelle kennt. weather_select_display() nutzt sie fuer
+ * die Datenauswahl, board_render_weather_svg() fuer die dazu passende
+ * Ueberschrift ("Heute"/"Morgen"). Vor 2026-08-23 wich das auseinander: die
+ * Ueberschrift stand hartcodiert auf "Heute", auch wenn ab 19 Uhr laengst die
+ * Morgen-Prognose angezeigt wurde.
+ */
+function weather_display_period(DateTimeImmutable $now): string
+{
+    $vienna = new DateTimeZone('Europe/Vienna');
+    return ((int) $now->setTimezone($vienna)->format('H') < 19) ? 'today' : 'tomorrow';
+}
+
 function weather_select_display(?array $cache, DateTimeImmutable $now): array
 {
     $station = weather_select_station_display($cache, $now);
+    $period = weather_display_period($now);
 
     if ($cache === null) {
-        return ['available' => false, 'station' => $station];
+        return ['available' => false, 'station' => $station, 'period' => $period];
     }
 
     $vienna = new DateTimeZone('Europe/Vienna');
-    $localNow = $now->setTimezone($vienna);
-    $period = ((int) $localNow->format('H') < 19) ? 'today' : 'tomorrow';
     $slice = $cache[$period];
 
     $mapping = weather_map_icon_code($slice['icon_code']);
@@ -276,6 +289,7 @@ function weather_select_display(?array $cache, DateTimeImmutable $now): array
             ? 'Wetterbericht veraltet seit ' . $fetchedAt->setTimezone($vienna)->format('H:i')
             : null,
         'station' => $station,
+        'period' => $period,
     ];
 }
 

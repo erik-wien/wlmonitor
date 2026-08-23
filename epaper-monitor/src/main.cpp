@@ -83,10 +83,16 @@ static const uint32_t INPUT_POLL_MS          = 30;               // wie Seeeds T
 // 256x50-Rechteck, mehr als ein komplettes Vollbild (1024 ms) -- jede lokale
 // Teilaktualisierung zahlt die vollen Panel-Fixkosten.
 
-// Wurde in dieser Session der Schlafschirm erfolgreich geholt? Dann darf
-// goToSleep() nichts mehr darueber zeichnen. Bewusst KEIN RTC_DATA_ATTR:
-// gilt nur fuer den laufenden Wachzyklus.
-static bool sleepScreenShown = false;
+// Zeigt der zuletzt erfolgreich geschriebene Frame GERADE den Schlafschirm
+// (X-Board-Is-Sleep-Page, s. fetchAndRender())? Aktualisiert sich bei JEDEM
+// erfolgreichen Abruf neu -- egal ob durch bewusstes Hinblaettern oder den
+// erzwungenen Abruf vor dem Tiefschlaf. Zwei Stellen werten das aus:
+// goToSleep() darf dann nichts mehr lokal darueber malen (jedes Overlay
+// kostet einen vollen Panel-Schreibvorgang und wuerde den Inhalt verdecken),
+// und die gruene Taste bedeutet dann "jetzt schlafen" statt "Vollupdate"
+// (Nutzerwunsch 2026-08-23, Doppelbelegung statt einer eigenen vierten Taste).
+// Bewusst KEIN RTC_DATA_ATTR: gilt nur fuer den laufenden Wachzyklus.
+static bool showingSleepPage = false;
 
 static Preferences prefs;
 
@@ -135,7 +141,7 @@ static void goToSleep() {
     // vollen Panel-Schreibvorgang (~500ms Fixkosten, s. §20.8) und wuerde
     // seinen Inhalt ueberdecken. Nur wenn wir OHNE Schlafschirm einschlafen
     // (Verbindungsfehler beim Abruf), bleibt der bisherige Hinweis sinnvoll.
-    if (!sleepScreenShown) {
+    if (!showingSleepPage) {
         showStatus(StatusIcon::Sleep, "Schlaf");
         markSleepIcon();
     }
@@ -245,6 +251,7 @@ static bool fetchAndRender(const String& token, const char* touchValue, bool for
         rtcLastEtag[sizeof(rtcLastEtag) - 1] = '\0';
         rtcLastFavoriteCount = fetch.parsed.favoriteCount;
         rtcLastTotalPages = fetch.parsed.totalPages;
+        showingSleepPage = fetch.isSleepPage;
     } else if (st.banner != ErrorBanner::None) {
         showErrorBanner(st.banner, "??:??");
         rtcBannerShown = true;
@@ -337,9 +344,19 @@ static void runActiveSession(const String& token) {
             }
         } else if (isFullUpdateButtonHeld()) {
             if (!buttonDown) {
+                buttonDown = true;
+                if (showingSleepPage) {
+                    // Doppelbelegung (Nutzerwunsch 2026-08-23): auf dem
+                    // Schlafschirm gibt es keine Abfahrten zum Aktualisieren --
+                    // "Vollupdate" waere hier bedeutungslos. Stattdessen bricht
+                    // ein Druck auf die gruene Taste sofort in den Tiefschlaf
+                    // ab, statt den Rest von ACTIVE_IDLE_TIMEOUT_MS zu warten.
+                    beepConfirm();
+                    Serial.println("[active] gruene Taste auf Schlafschirm -- sofort schlafen");
+                    break;
+                }
                 forceFull = true;
                 beepRecognized();
-                buttonDown = true;
             }
         } else {
             if (++touchReleaseStreak >= TOUCH_RELEASE_STREAK_NEEDED) touchDown = false;
@@ -363,11 +380,21 @@ static void runActiveSession(const String& token) {
     // Schlafmodus wenig Sinn." Eingefrorene Abfahrtszeiten, die stundenlang
     // stehen, sind schlimmer als nutzlos -- sie sehen aus wie gueltige Daten.
     // Stattdessen Wetter heute/morgen und der Gaeste-WLAN-QR-Code.
-    Serial.println("[active] 5 Minuten ohne Eingabe -- Schlafschirm holen");
-    // Nur wenn der Schirm wirklich ankam: bei einem Netzfehler steht weiter
-    // die Abfahrtenliste auf dem Panel, und dann ist der lokale Schlafhinweis
-    // in goToSleep() genau richtig.
-    sleepScreenShown = fetchAndRender(token, nullptr, true, "sleep");
+    //
+    // Steht er schon (showingSleepPage), weil der Nutzer bewusst dorthin
+    // geblaettert und ihn stehen gelassen hat, erspart sich das Geraet den
+    // erneuten Abruf -- derselbe Inhalt kaeme ohnehin zurueck, nur um densel-
+    // ben vollen Panel-Schreibvorgang (~1s, s. §20.8) ein zweites Mal zu
+    // bezahlen.
+    if (showingSleepPage) {
+        Serial.println("[active] Schlafschirm steht schon -- kein erneuter Abruf noetig");
+    } else {
+        Serial.println("[active] 5 Minuten ohne Eingabe -- Schlafschirm holen");
+        // Nur wenn der Schirm wirklich ankam: bei einem Netzfehler steht
+        // weiter die Abfahrtenliste auf dem Panel, und dann ist der lokale
+        // Schlafhinweis in goToSleep() genau richtig.
+        fetchAndRender(token, nullptr, true, "sleep");
+    }
 }
 
 void setup() {
