@@ -1189,3 +1189,64 @@ mehr Seiten nach **links** — Formel `pillWidth = totalPages*87+20`,
 > Tippen auf einzelne Zahlen: der linke/rechte Pillenhalbraum sendet weiter
 > unsichtbar `page_prev`/`page_next` — die physischen weißen Tasten bleiben
 > der primäre, klar beschriftete Navigationsweg.
+
+### 20.12 Wach-/Schlafzeitplan getrennt nach Weckgrund (2026-08-23)
+
+Bis fw52 durchliefen **alle** Aufwachvorgänge — Tastendruck genauso wie der
+periodische Timer alle `POLL_INTERVAL_SEC` (120 s) — denselben Pfad:
+laden → piepen → bis zu 5/10 Minuten Aktiv-Session mit 25-s-Auto-Refresh.
+Ein reiner Timer-Weckvorgang ohne jede Berührung hielt das Display damit
+minutenlang wach samt hörbarem Piep — niemand stand davor, niemand wartete
+auf den Ton. Zwei Nutzervorgaben 2026-08-23 beheben das:
+
+> „Piepen bitte nur nach User-Interaktion. Beim Timer-Aufwachen kein Piep."
+> „Automatisches kann auf 1x pro Stunde ab 06:00 Uhr zurückgefahren werden.
+> Danach wieder einschlafen. 10 Minuten wach mit 25sec polling nur nach
+> manuellem Aufwecken."
+
+**Weckgrund wird jetzt unterschieden.** `esp_sleep_get_wakeup_cause() ==
+ESP_SLEEP_WAKEUP_TIMER` wird ganz am Anfang von `setup()` gesichert
+(`wokenByTimer`), bevor irgendetwas anderes passiert:
+
+| Weckgrund | Ablauf | Piep | Aktiv-Fenster |
+|---|---|---|---|
+| Taste (oder Kaltstart) | `runActiveSession()` | ja (`beepConfirm()`) | 10 Min., 25-s-Refresh (`ACTIVE_IDLE_TIMEOUT_MS`, war 5 Min.) |
+| Timer | **ein** `fetchAndRender()`, direkt `goToSleep()` | **nein** | keins |
+
+`runActiveSession()` durchläuft der Timer-Pfad seit fw53 gar nicht mehr —
+der Piep dort ist deshalb wieder bedingungslos (kein Parameter, keine
+Fallunterscheidung nötig). Gezeigt wird beim Timer-Wecken die zuletzt aktive
+Abfahrtenseite, **nicht** der Schlafschirm: eine stündlich aufgefrischte
+Abfahrtszeit ist noch brauchbar, anders als nach stundenlanger Funkstille
+(dafür bleibt der Schlafschirm-Mechanismus am Ende einer manuellen
+Aktiv-Session unverändert zuständig, s. §20.10).
+
+**Der Zeitplan fürs Timer-Wecken selbst** steckt in
+`lib/boardlogic/wake_schedule.h`/`.cpp` — bewusst eine reine, native testbare
+Funktion (`secondsUntilNextAutomaticWake(hour, minute, second)`), analog zu
+`touch_zone`/`error_state`:
+
+- **00:00–05:59:** kein Zwischenschritt, direkt bis 06:00 durchschlafen.
+- **06:00–22:59:** stündlich (`+3600 s`).
+- **ab 23:00:** die nächste volle Stunde würde nach Mitternacht fallen (immer
+  der Fall ab 23:00, da 23:00+3600 s=Mitternacht) — dann direkt bis 06:00
+  **morgen**, statt eines einzelnen verlorenen Wake-ups kurz nach Mitternacht
+  (z. B. 23:30 → nicht 00:30, sondern 06:00 morgen).
+
+`goToSleep()` ruft diese Funktion mit der lokalen Zeit aus `getLocalTime()`
+auf und setzt `esp_sleep_enable_timer_wakeup()` entsprechend — **für jeden**
+Schlafvorgang, unabhängig davon, ob die vorausgegangene Session manuell oder
+automatisch war.
+
+> **Fallback ohne bekannte Zeit.** Schlägt `getLocalTime()` fehl (WLAN/NTP in
+> `syncTimeForTls()` nicht erreichbar), wäre jede Zeitplan-Berechnung
+> Zufall — `NETWORK_RETRY_INTERVAL_SEC` (120 s, `board_config.h`, die
+> umbenannte alte `POLL_INTERVAL_SEC`) sorgt stattdessen für einen kurzen
+> Verbindungs-Retry, damit ein vorübergehender WLAN-Ausfall das Gerät nicht
+> für den Rest der Nacht verstummen lässt.
+
+**Diagnose-Log:** `[boot] wokenByTimer=%d (cause=%d)` direkt nach
+`Serial.begin()`, `[sleep] naechstes automatisches Wecken in %lu s` in
+`goToSleep()` — am Gerät verifiziert (fw53): korrekter Übergang in den
+Schlaf nach 10 Minuten Inaktivität, `naechstes automatisches Wecken in
+3600 s` tagsüber.

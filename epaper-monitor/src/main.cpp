@@ -15,6 +15,7 @@
 #include "sensor.h"
 #include "buzzer.h"
 #include "error_state.h"
+#include "wake_schedule.h"
 
 // Ueberlebt Tiefschlaf (RTC-Speicher, ESP32-intern -- keine externe RTC
 // noetig, s. Spec §10 und Global Constraints).
@@ -63,12 +64,15 @@ static const uint32_t WAKE_BUTTON_LONG_PRESS_MS = 3000;
 static const uint32_t WIFI_PORTAL_TIMEOUT_S = 180;
 
 // Aktiv-Session (Nutzervorgabe 2026-08-21): "nach dem Aufwachen nur EINE
-// Aktion ist Bloedsinn". Nach dem Aufwachen bleibt das Geraet in einer
-// ECHTEN Schleife wach -- kein Deep Sleep zwischen einzelnen Aktionen.
+// Aktion ist Bloedsinn". Nach MANUELLEM Wecken (Taste) bleibt das Geraet in
+// einer ECHTEN Schleife wach -- kein Deep Sleep zwischen einzelnen Aktionen.
 // Eingaben werden sofort quittiert, Inhalt laedt periodisch nach. Erst nach
 // ACTIVE_IDLE_TIMEOUT_MS ohne Eingabe geht es in den Tiefschlaf zurueck.
-// Werte bewusst grosszuegig ("einmal die Woche laden ist ok" -- Nutzer).
-static const uint32_t ACTIVE_IDLE_TIMEOUT_MS = 5UL * 60 * 1000;   // 5 Minuten
+// 5 -> 10 Minuten (Nutzervorgabe 2026-08-23: "10 Minuten wach mit 25sec
+// polling nur nach manuellem aufwecken") -- gilt seither NUR noch fuer
+// manuelles Wecken, automatisches (Timer-)Wecken durchlaeuft diese Schleife
+// gar nicht mehr (ein Abruf, sofort zurueck in den Schlaf, s. setup()).
+static const uint32_t ACTIVE_IDLE_TIMEOUT_MS = 10UL * 60 * 1000;  // 10 Minuten
 static const uint32_t REFRESH_INTERVAL_MS    = 25UL * 1000;      // 25 Sekunden
 static const uint32_t INPUT_POLL_MS          = 30;               // wie Seeeds Touch-Beispiel
 // POST_HIT_COOLDOWN_MS (900ms) entfernt (2026-08-22): seit fw31 verhindert
@@ -161,7 +165,20 @@ static void goToSleep() {
     }
     touchClearInterrupt();
 
-    esp_sleep_enable_timer_wakeup((uint64_t) POLL_INTERVAL_SEC * 1000000ULL);
+    // Zeitplan fuer das naechste automatische (Timer-)Wecken (Nutzervorgabe
+    // 2026-08-23): 1x/Stunde ab 06:00, Nacht (00:00-05:59) komplett still --
+    // s. wake_schedule.h. Braucht die lokale Uhrzeit; ist sie NICHT bekannt
+    // (WLAN/NTP fehlgeschlagen, s. syncTimeForTls()), waere jede
+    // Zeitplan-Berechnung Zufall -- dann der kurze Verbindungs-Retry
+    // (NETWORK_RETRY_INTERVAL_SEC), damit ein voruebergehender Ausfall das
+    // Geraet nicht fuer den Rest der Nacht verstummen laesst.
+    struct tm localNow;
+    const uint32_t sleepSeconds = getLocalTime(&localNow, 100)
+        ? secondsUntilNextAutomaticWake(localNow.tm_hour, localNow.tm_min, localNow.tm_sec)
+        : NETWORK_RETRY_INTERVAL_SEC;
+    Serial.printf("[sleep] naechstes automatisches Wecken in %lu s\n", (unsigned long) sleepSeconds);
+
+    esp_sleep_enable_timer_wakeup((uint64_t) sleepSeconds * 1000000ULL);
     esp_deep_sleep_start();
 }
 
@@ -283,6 +300,12 @@ static bool fetchAndRender(const String& token, const char* touchValue, bool for
 // Bleibt wach, bis ACTIVE_IDLE_TIMEOUT_MS lang keine Eingabe mehr kam.
 // Eingaben (Touch/Tasten) loesen sofort einen Abruf aus; ohne Eingabe wird
 // trotzdem alle REFRESH_INTERVAL_MS nachgeladen.
+//
+// NUR fuer manuelles (Tasten-)Wecken (Nutzervorgabe 2026-08-23: "10 Minuten
+// wach mit 25sec polling nur nach manuellem aufwecken") -- automatisches
+// (Timer-)Wecken durchlaeuft diese Funktion gar nicht mehr, s. setup(). Der
+// "bereit"-Piep ist deshalb wieder bedingungslos: wer hier landet, hat das
+// Geraet gerade selbst geweckt.
 static void runActiveSession(const String& token) {
     // Ersten Abruf VOR dem "bereit"-Piep, nicht mehr danach (2026-08-21):
     // ein sofortiger erzwungener Refresh als allererste Schleifenaktion
@@ -389,7 +412,7 @@ static void runActiveSession(const String& token) {
     if (showingSleepPage) {
         Serial.println("[active] Schlafschirm steht schon -- kein erneuter Abruf noetig");
     } else {
-        Serial.println("[active] 5 Minuten ohne Eingabe -- Schlafschirm holen");
+        Serial.println("[active] 10 Minuten ohne Eingabe -- Schlafschirm holen");
         // Nur wenn der Schirm wirklich ankam: bei einem Netzfehler steht
         // weiter die Abfahrtenliste auf dem Panel, und dann ist der lokale
         // Schlafhinweis in goToSleep() genau richtig.
@@ -398,6 +421,13 @@ static void runActiveSession(const String& token) {
 }
 
 void setup() {
+    // Weckgrund VOR jeder anderen Aktion sichern (Nutzervorgabe 2026-08-23,
+    // s. runActiveSession()) -- esp_sleep_get_wakeup_cause() bleibt zwar bis
+    // zum naechsten Schlaf gueltig, aber so steht die Absicht unmissverstaendlich
+    // am Anfang von setup(), statt sich auf eine spaetere zufaellige
+    // Gueltigkeit zu verlassen.
+    const bool wokenByTimer = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER;
+
     buzzerWarmup();
     // KEIN Boot-Zeit-Check von isFullUpdateButtonHeld() mehr (Nutzervorgabe
     // 2026-08-22): die gruene Taste ist jetzt derselbe Pin, der das Geraet
@@ -407,6 +437,7 @@ void setup() {
     // laeuft (s. runActiveSession()), also wirklich schon wach ist.
     Serial.begin(115200);
     delay(300);
+    Serial.printf("[boot] wokenByTimer=%d (cause=%d)\n", wokenByTimer, (int) esp_sleep_get_wakeup_cause());
 
     initDisplay();
     initTouch(); // Rueckgabewert bewusst ignoriert -- fehlender Touch ist nicht fatal, s. touch.h
@@ -425,11 +456,22 @@ void setup() {
 
     syncTimeForTls();
 
-    // Touch-/Tastenpruefung startet HIER, nicht erst nach einem ersten Abruf
-    // (der bisher WLAN-Connect+Zeit-Sync+Fetch bloehte -- spuerbare Verzoegerung
-    // zwischen Piep und tatsaechlicher Touch-Reaktion, Nutzerbefund 2026-08-21).
-    // runActiveSession() macht den ersten Abruf selbst, als Teil der Schleife.
-    runActiveSession(token);
+    if (wokenByTimer) {
+        // Automatisches Wecken (Nutzervorgabe 2026-08-23): EIN Abruf, KEIN
+        // Piep (niemand steht davor), sofort zurueck in den Schlaf -- keine
+        // 10-Minuten-Aktiv-Session. Zeigt die zuletzt aktive Abfahrtenseite
+        // (nicht den Schlafschirm): stuendliche Abfahrtsdaten sind noch
+        // brauchbar frisch, anders als nach einer stundenlangen Funkstille.
+        Serial.println("[boot] automatisches Wecken -- ein Abruf, kein Piep");
+        fetchAndRender(token, nullptr, false);
+    } else {
+        // Touch-/Tastenpruefung startet HIER, nicht erst nach einem ersten
+        // Abruf (der bisher WLAN-Connect+Zeit-Sync+Fetch bloehte -- spuerbare
+        // Verzoegerung zwischen Piep und tatsaechlicher Touch-Reaktion,
+        // Nutzerbefund 2026-08-21). runActiveSession() macht den ersten Abruf
+        // selbst, als Teil der Schleife.
+        runActiveSession(token);
+    }
 
     goToSleep();
 }
