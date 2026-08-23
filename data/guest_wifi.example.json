@@ -1,0 +1,7 @@
+{
+  "_hinweis": "Kopie dieser Datei als data/guest_wifi.json anlegen und ausfuellen. NICHT in Git aufnehmen -- data/guest_wifi.json steht in .gitignore und ist vom Deploy ausgenommen, die Datei wird pro Instanz von Hand gepflegt. Fehlt sie, laesst der Schlafschirm den QR-Block einfach weg.",
+  "ssid": "Mein-Gaeste-WLAN",
+  "password": "hier-das-passwort",
+  "encryption": "WPA",
+  "hidden": false
+}

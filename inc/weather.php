@@ -346,3 +346,49 @@ function weather_sun_times(DateTimeImmutable $day): array
         'sunset'    => (new DateTimeImmutable('@' . $info['sunset']))->setTimezone($tz),
     ];
 }
+
+/**
+ * Beide Prognose-Scheiben fuer den Schlafschirm (inc/board_sleep.php).
+ *
+ * weather_select_display() liefert bewusst nur EINE Scheibe -- ab 19:00 die
+ * von morgen, weil der Abfahrtsmonitor am Abend die relevante Prognose zeigen
+ * soll. Der Schlafschirm hat Platz fuer beide und beschriftet sie auch als
+ * das, was sie sind: die Cache-Felder "today" und "tomorrow".
+ *
+ * Die Veralterungsregel ist dieselbe wie bei weather_select_display(): aelter
+ * als 6h ersetzt NUR den Fliesstext, Icon und Temperatur bleiben stehen.
+ *
+ * @param ?array{fetched_at: string, today: array, tomorrow: array, station?: array, station_fetched_at?: string} $cache
+ * @return array{today: array, tomorrow: array}
+ */
+function weather_select_two_days(?array $cache, DateTimeImmutable $now): array
+{
+    $unavailable = ['available' => false];
+
+    if ($cache === null || !isset($cache['today'], $cache['tomorrow'], $cache['fetched_at'])) {
+        return ['today' => $unavailable + ['station' => weather_select_station_display($cache, $now)], 'tomorrow' => $unavailable];
+    }
+
+    $vienna = new DateTimeZone('Europe/Vienna');
+    $fetchedAt = new DateTimeImmutable($cache['fetched_at']);
+    $stale = ($now->getTimestamp() - $fetchedAt->getTimestamp()) > 6 * 3600;
+    $staleText = 'Wetterbericht veraltet seit ' . $fetchedAt->setTimezone($vienna)->format('H:i');
+
+    $slice = static function (array $raw) use ($stale, $staleText): array {
+        return [
+            'available'     => true,
+            'icon_category' => weather_map_icon_code($raw['icon_code'])['category'],
+            'temp_min'      => $raw['temp_min'],
+            'temp_max'      => $raw['temp_max'],
+            'text'          => $stale ? null : $raw['text'],
+            'text_error'    => $stale ? $staleText : null,
+        ];
+    };
+
+    return [
+        // Nur "heute" bekommt die Stationsmesswerte -- ein aktueller Messwert
+        // fuer morgen waere ein Widerspruch in sich.
+        'today'    => $slice($cache['today']) + ['station' => weather_select_station_display($cache, $now)],
+        'tomorrow' => $slice($cache['tomorrow']),
+    ];
+}

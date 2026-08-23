@@ -27,8 +27,13 @@ struct BoardFetchResult {
 // optional X-Device-Touch (touchValue == nullptr -> Header weggelassen)
 // und optional If-None-Match (lastEtag == nullptr oder leer -> weggelassen,
 // Spec §5). timeoutMs begrenzt Verbindungsaufbau UND Antwortwartezeit.
+// screen: nullptr = regulaerer Abfahrtsmonitor, "sleep" = Schlafschirm
+// (Wetter heute/morgen + Gaeste-WLAN-QR statt eingefrorener Abfahrtszeiten,
+// s. inc/board_sleep.php). Das Geraet fordert ihn als letztes Bild vor dem
+// Tiefschlaf an.
 void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
-                 int batteryMv, int rssi, uint32_t timeoutMs, BoardFetchResult& out);
+                 int batteryMv, int rssi, uint32_t timeoutMs, BoardFetchResult& out,
+                 const char* screen = nullptr);
 
 // Laedt den aktuellen Panel-Puffer (s. getPanelBuffer()/getPanelBufferSize()
 // in display.h) per POST zu web/board_snapshot.php hoch -- Antwort auf

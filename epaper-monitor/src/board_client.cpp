@@ -140,7 +140,8 @@ static bool inflateBodyIfNeeded(HTTPClient& http, std::vector<uint8_t>& body) {
 }
 
 void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
-                 int batteryMv, int rssi, uint32_t timeoutMs, BoardFetchResult& out) {
+                 int batteryMv, int rssi, uint32_t timeoutMs, BoardFetchResult& out,
+                 const char* screen) {
     out = BoardFetchResult{};
 
     // arduino-esp32 buendelt seit Core 2.x ein Mozilla-Root-CA-Bundle
@@ -201,6 +202,9 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
         http.addHeader("X-Device-Accept-Encoding", "deflate");
         if (touchValue != nullptr) {
             http.addHeader("X-Device-Touch", touchValue);
+        }
+        if (screen != nullptr) {
+            http.addHeader("X-Device-Screen", screen);
         }
         if (lastEtag != nullptr && lastEtag[0] != '\0') {
             http.addHeader("If-None-Match", lastEtag);

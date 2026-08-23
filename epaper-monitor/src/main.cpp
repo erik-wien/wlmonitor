@@ -83,6 +83,11 @@ static const uint32_t INPUT_POLL_MS          = 30;               // wie Seeeds T
 // 256x50-Rechteck, mehr als ein komplettes Vollbild (1024 ms) -- jede lokale
 // Teilaktualisierung zahlt die vollen Panel-Fixkosten.
 
+// Wurde in dieser Session der Schlafschirm erfolgreich geholt? Dann darf
+// goToSleep() nichts mehr darueber zeichnen. Bewusst KEIN RTC_DATA_ATTR:
+// gilt nur fuer den laufenden Wachzyklus.
+static bool sleepScreenShown = false;
+
 static Preferences prefs;
 
 static String loadToken() {
@@ -125,8 +130,15 @@ static void syncTimeForTls() {
 }
 
 static void goToSleep() {
-    showStatus(StatusIcon::Sleep, "Schlaf");
-    markSleepIcon();
+    // Ueber den Schlafschirm wird NICHTS mehr lokal gemalt: er ist bereits das
+    // fertige Bild fuer die naechsten Stunden, und jedes Overlay kostet einen
+    // vollen Panel-Schreibvorgang (~500ms Fixkosten, s. §20.8) und wuerde
+    // seinen Inhalt ueberdecken. Nur wenn wir OHNE Schlafschirm einschlafen
+    // (Verbindungsfehler beim Abruf), bleibt der bisherige Hinweis sinnvoll.
+    if (!sleepScreenShown) {
+        showStatus(StatusIcon::Sleep, "Schlaf");
+        markSleepIcon();
+    }
     sleepPanel();
     WiFi.disconnect(true);
     // GPIO2 (Touch-INT) bewusst NICHT in der Weckmaske: der GT911 haelt
@@ -164,7 +176,9 @@ static const char* inputStatusText(const char* touchValue, bool forceFull) {
 // Ein Abruf+Render-Zyklus. touchValue darf nullptr sein (reiner Zeit-Refresh).
 // forceFull leert rtcLastEtag, damit board.php ohne If-None-Match antwortet
 // und automatisch ein Vollbild statt eines Patches liefert.
-static void fetchAndRender(const String& token, const char* touchValue, bool forceFull) {
+// Liefert true, wenn ein Bild empfangen UND aufs Panel geschrieben wurde.
+static bool fetchAndRender(const String& token, const char* touchValue, bool forceFull,
+                           const char* screen = nullptr) {
     const uint32_t tCycle = millis();
     // Vollbild erzwingen, wenn ein Fehler-Banner lokal steht (der Server weiss
     // nichts davon) oder das periodische Resync-Intervall erreicht ist --
@@ -185,14 +199,19 @@ static void fetchAndRender(const String& token, const char* touchValue, bool for
     // frueheren separaten "in:<label>"-Kasten in der Abfahrtenspalte
     // (Nutzerwunsch 2026-08-22, "kompakter"): dieselbe Information, aber in
     // der Zeile, die ohnehin schon da ist, und in Klartext statt Protokoll-ID.
-    showStatus(forceFull ? StatusIcon::Full : StatusIcon::Loading,
-               inputStatusText(touchValue, forceFull));
+    // Beim Schlafschirm KEIN Overlay: es wuerde einen vollen Panel-Schreib-
+    // vorgang kosten (~500ms Fixkosten, s. §20.8) und im selben Zyklus vom
+    // ankommenden Vollbild wieder ueberschrieben.
+    if (screen == nullptr) {
+        showStatus(forceFull ? StatusIcon::Full : StatusIcon::Loading,
+                   inputStatusText(touchValue, forceFull));
+    }
 
     int batteryMv = readBatteryMillivolts();
     int rssi = WiFi.RSSI();
 
     BoardFetchResult fetch;
-    fetchBoard(token.c_str(), touchValue, rtcLastEtag, batteryMv, rssi, HTTP_TIMEOUT_MS, fetch);
+    fetchBoard(token.c_str(), touchValue, rtcLastEtag, batteryMv, rssi, HTTP_TIMEOUT_MS, fetch, screen);
 
     FetchOutcome outcome;
     switch (fetch.outcome) {
@@ -250,6 +269,8 @@ static void fetchAndRender(const String& token, const char* touchValue, bool for
     Serial.printf("[perf] Zyklus gesamt (%s): %lu ms\n",
                   wasFullFrame ? "Vollbild" : "Patch/Fehler",
                   (unsigned long) (millis() - tCycle));
+
+    return outcome == FetchOutcome::Success;
 }
 
 // Bleibt wach, bis ACTIVE_IDLE_TIMEOUT_MS lang keine Eingabe mehr kam.
@@ -337,13 +358,16 @@ static void runActiveSession(const String& token) {
         delay(INPUT_POLL_MS);
     }
 
-    // Letzter Abruf vor dem Schlafengehen erzwingt ein Vollbild (Nutzervorgabe
-    // 2026-08-22, "damit der Schirm huebsch ist waehrend das Geraet schlaeft")
-    // -- unabhaengig davon, ob der letzte reguläre Abruf ein Patch war, zeigt
-    // das Panel waehrend des Tiefschlafs garantiert ein sauberes, vollstaendig
-    // synchronisiertes Bild statt moeglicher Patch-/Overlay-Reste.
-    Serial.println("[active] 5 Minuten ohne Eingabe -- letztes Vollbild vor dem Schlafen");
-    fetchAndRender(token, nullptr, true);
+    // Letztes Bild vor dem Tiefschlaf ist der SCHLAFSCHIRM (Nutzerwunsch
+    // 2026-08-23): "Bei naeherer Betrachtung macht der Abfahrtsmonitor im
+    // Schlafmodus wenig Sinn." Eingefrorene Abfahrtszeiten, die stundenlang
+    // stehen, sind schlimmer als nutzlos -- sie sehen aus wie gueltige Daten.
+    // Stattdessen Wetter heute/morgen und der Gaeste-WLAN-QR-Code.
+    Serial.println("[active] 5 Minuten ohne Eingabe -- Schlafschirm holen");
+    // Nur wenn der Schirm wirklich ankam: bei einem Netzfehler steht weiter
+    // die Abfahrtenliste auf dem Panel, und dann ist der lokale Schlafhinweis
+    // in goToSleep() genau richtig.
+    sleepScreenShown = fetchAndRender(token, nullptr, true, "sleep");
 }
 
 void setup() {

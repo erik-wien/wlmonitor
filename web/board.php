@@ -70,6 +70,8 @@ require_once __DIR__ . '/../inc/weather.php';
 require_once __DIR__ . '/../inc/board_render.php';
 require_once __DIR__ . '/../inc/board_template.php';
 require_once __DIR__ . '/../inc/board_state.php';
+require_once __DIR__ . '/../inc/board_sleep.php';
+require_once __DIR__ . '/../inc/board_guest_wifi.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
@@ -182,6 +184,19 @@ try {
 {$standSvg}
 </svg>
 SVG;
+    } elseif (($_SERVER['HTTP_X_DEVICE_SCREEN'] ?? '') === 'sleep') {
+        // Schlafschirm (Nutzerwunsch 2026-08-23): der Abfahrtsmonitor ist
+        // waehrend des Tiefschlafs nutzlos -- eingefrorene Abfahrtszeiten, die
+        // stundenlang stehen. Das Geraet fordert deshalb vor dem Einschlafen
+        // ausdruecklich dieses Bild an (s. runActiveSession() in main.cpp).
+        $twoDays = weather_select_two_days(is_array($weatherCache) ? $weatherCache : null, $renderedAt);
+        $svg = board_sleep_render_svg(
+            $twoDays['today'],
+            $twoDays['tomorrow'],
+            weather_sun_times($renderedAt),
+            board_guest_wifi_load(),
+            $renderedAt
+        );
     } else {
         $svg = board_render_svg(
             $touchBarTitles,
