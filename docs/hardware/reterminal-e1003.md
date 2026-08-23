@@ -1152,6 +1152,29 @@ Schlafschirm: s. §20.5. Erkannt über den neuen Header `X-Board-Is-Sleep-Page`
 (analog zu `X-Board-Snapshot-Requested`: außerhalb des strikt geprüften
 `ParsedBoardResponse`-Protokolls, ein optionaler Seitenkanal).
 
+**Paginierung auf dem Schlafschirm selbst** (Nutzerwunsch 2026-08-23: „der
+Schlafschirm sollte die Paginierung zeigen, so lange das Gerät nicht
+effektiv schläft, sonst gibts nur den Tastenweg zurück"). Kein Stilentscheid,
+sondern eine harte Randbedingung: `mapPaginationTouch()` (`touch_zone.cpp`)
+erkennt einen Fingertipp rein anhand fester Bildschirmkoordinaten
+(`BOARD_PAGINATION_TOP=1252`, `HEIGHT=56`, rechtsbündig an
+`RIGHT_EDGE=1083`) — **unabhängig davon, was dort gerade gezeichnet ist**.
+Eine Pille an anderer Stelle wäre entweder unsichtbar tippbar (Tipp landet
+auf leerer Fläche, tut aber etwas) oder sichtbar untippbar (Pille zu sehen,
+Tipp wirkungslos). `board_sleep_render_svg()` ruft deshalb **dieselbe**
+`board_render_stand_and_pagination_svg()` wie die Abfahrtenseite, an
+**derselben** Position — beide Seiten sind für die Firmware ununterscheidbar,
+was Touch angeht.
+
+Dafür musste der Schlafschirm Platz schaffen: `BOARD_SLEEP_TODAY_MAX_Y`
+1280→1230 (22 px Sicherheitsabstand zur Pille), der Gäste-WLAN-QR-Code
+rückt von y=915/Zielgröße 365 auf y=900/340 — beides in dem Wissen, dass
+`png_to_1bpp_packed()` auch bei 6 px/Modul noch pixelgenau bleibt (getestet,
+§20.9-Nachbarschaft „QR-Code als `<rect>`-Gitter"). Der alte eigene
+Fußzeilen-Text („Stand HH:MM" bei `BOARD_SLEEP_FOOTER_Y=1330`) entfällt
+ersatzlos — `board_render_stand_and_pagination_svg()` liefert ihn an der
+Standardposition gleich mit.
+
 ### 20.11 Seitenzahlen-Pille ohne Pfeile, rechtsbündig verankert (2026-08-23)
 
 Nutzerwunsch: „Paginierungs-Schaltfläche bitte 50% größer, aber ohne weitere

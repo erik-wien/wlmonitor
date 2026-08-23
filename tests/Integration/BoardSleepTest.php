@@ -46,7 +46,7 @@ class BoardSleepTest extends TestCase
 
     public function test_renders_both_days_and_the_wifi_block(): void
     {
-        $svg = board_sleep_render_svg($this->today(), $this->day(), null, $this->wifi(), $this->now());
+        $svg = board_sleep_render_svg($this->today(), $this->day(), null, $this->wifi(), $this->now(), 3);
 
         $this->assertStringContainsString('>Heute<', $svg);
         $this->assertStringContainsString('>Morgen<', $svg);
@@ -64,7 +64,7 @@ class BoardSleepTest extends TestCase
     {
         // Fehlt data/guest_wifi.json, soll der Schirm weiter funktionieren --
         // nur eben ohne WLAN-Block, statt mit einem kaputten Code.
-        $svg = board_sleep_render_svg($this->today(), $this->day(), null, null, $this->now());
+        $svg = board_sleep_render_svg($this->today(), $this->day(), null, null, $this->now(), 3);
 
         $this->assertStringNotContainsString('Gäste-WLAN', $svg);
         $this->assertStringContainsString('>Heute<', $svg);
@@ -74,7 +74,7 @@ class BoardSleepTest extends TestCase
     {
         // Der QR-Code traegt das Passwort, die Beschriftung darf es nicht --
         // sonst stuende es fuer jeden lesbar auf einem Bildschirm im Flur.
-        $svg = board_sleep_render_svg($this->today(), $this->day(), null, $this->wifi(), $this->now());
+        $svg = board_sleep_render_svg($this->today(), $this->day(), null, $this->wifi(), $this->now(), 3);
 
         $this->assertStringNotContainsString('>Willkommen2026<', $svg);
     }
@@ -82,7 +82,7 @@ class BoardSleepTest extends TestCase
     public function test_overlong_forecast_is_truncated_instead_of_running_into_the_wifi_block(): void
     {
         $long = $this->day(['text' => str_repeat('Sehr ausfuehrliche Wettervorhersage. ', 30)]);
-        $svg = board_sleep_render_svg($this->today(), $long, null, $this->wifi(), $this->now());
+        $svg = board_sleep_render_svg($this->today(), $long, null, $this->wifi(), $this->now(), 3);
 
         $this->assertStringContainsString('…', $svg);
         // Keine Textzeile darf in den WLAN-Block ragen.
@@ -91,6 +91,39 @@ class BoardSleepTest extends TestCase
         foreach ($m[1] as $y) {
             $this->assertLessThanOrEqual(BOARD_SLEEP_TOMORROW_MAX_Y, (int) $y);
         }
+    }
+
+    public function test_shows_the_pagination_pill_at_the_identical_position_as_the_departures_page(): void
+    {
+        // Nutzerwunsch 2026-08-23: "der Schlafschirm sollte die Paginierung
+        // zeigen, so lange das Geraet nicht effektiv schlaeft, sonst gibts
+        // nur den Tastenweg zurueck." Kein Stilentscheid: die Firmware
+        // erkennt einen Tipp rein anhand fester Koordinaten (touch_zone.cpp),
+        // die Pille MUSS also exakt an derselben Stelle sitzen wie auf der
+        // Abfahrtenseite (BOARD_PAGINATION_TOP/HEIGHT/RIGHT_EDGE).
+        $svg = board_sleep_render_svg($this->today(), $this->day(), null, $this->wifi(), $this->now(), 4);
+
+        $this->assertStringContainsString(
+            sprintf('y="%d" width="%d" height="%d"', BOARD_PAGINATION_TOP, 368, BOARD_PAGINATION_HEIGHT),
+            $svg,
+            'Pillenhoehe/-position muessen exakt mit der Abfahrtenseite uebereinstimmen'
+        );
+        // Seite 4 von 4 (der Schlafschirm-Slot selbst) ist die aktive --
+        // schwarzer Kreis mit weisser "4".
+        $this->assertStringContainsString('font-weight="bold" font-size="30" fill="white">4<', $svg);
+        $this->assertStringContainsString('Stand 21:34', $svg);
+    }
+
+    public function test_pagination_pill_always_present_even_with_only_two_pages(): void
+    {
+        // Der Schlafschirm ist strukturell IMMER mindestens Seite 2 von 2
+        // (1 Abfahrtenseite + Schlafschirm) -- die Pille darf hier nicht dem
+        // "totalPages <= 1"-Schutz von board_render_stand_and_pagination_svg()
+        // zum Opfer fallen.
+        $svg = board_sleep_render_svg($this->today(), $this->day(), null, null, $this->now(), 2);
+
+        $this->assertStringContainsString(sprintf('y="%d"', BOARD_PAGINATION_TOP), $svg);
+        $this->assertStringContainsString('font-weight="bold" font-size="30" fill="white">2<', $svg);
     }
 
     public function test_qr_survives_the_1bpp_pipeline_pixel_exact(): void

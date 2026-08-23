@@ -317,8 +317,11 @@ function board_total_pages(int $totalDeparturePages, bool $hasDisruptions): int
  * Abfahrten- ODER Stoerungsseite (je nach $requestedPage), Stand+
  * Pagination, Wetterkarte, Touch-Leiste. Die LETZTE Seite ist immer der
  * Schlafschirm (board_sleep_render_svg(), inc/board_sleep.php) -- eigenes,
- * vollstaendiges Layout ohne Kopf-/Fusszeile oder Touch-Leiste, identisch zu
- * dem, was das Geraet vor dem Tiefschlaf anfordert (Nutzerwunsch 2026-08-23).
+ * vollstaendiges Layout ohne Kopf-/Touch-Leiste, aber MIT "Stand HH:MM" und
+ * der Seitenzahlen-Pille an derselben Stelle wie die Abfahrtenseite (solange
+ * das Geraet nicht effektiv schlaeft, bleibt so ein Tippweg zurueck, nicht
+ * nur die physischen Tasten -- Nutzerwunsch 2026-08-23). Identisch zu dem,
+ * was das Geraet vor dem Tiefschlaf anfordert.
  *
  * Seitenzaehlung: board_paginate_departures() liefert totalPages fuer die
  * Abfahrten allein. Gibt es $filteredAlerts, kommt genau eine weitere
@@ -365,7 +368,7 @@ function board_render_svg(
     if ($requestedPage > $totalContentPages) {
         $sleepWeather ??= ['today' => ['available' => false], 'tomorrow' => ['available' => false]];
         return board_sleep_render_svg(
-            $sleepWeather['today'], $sleepWeather['tomorrow'], $sun, $guestWifi, $renderedAt
+            $sleepWeather['today'], $sleepWeather['tomorrow'], $sun, $guestWifi, $renderedAt, $totalPages
         );
     }
 
@@ -542,17 +545,19 @@ function board_render_firmware_marker_svg(?int $build): string
 }
 
 /**
- * Festes Zeilenraster der Wetterkarte. BEWUSST absolute Werte statt einer
- * fortlaufenden Zaehlung: die Niederschlagszeile erscheint nur bei
- * Niederschlag > 0, und mit Fortzaehlung wuerde die Sonnenzeile darunter je
- * nach Wetterlage um 56px springen. Aus demselben Grund liegen Ueberschrift
- * und Fliesstext seit jeher fest.
+ * Zeilenraster der Wetterkarte. Nur der Startwert ist fest -- die Zeilen
+ * selbst zaehlen ab hier FORTLAUFEND (Nutzerbefund 2026-08-23: "fehlender
+ * Regen macht auf der Monitorseite wieder eine Leerzeile"). Eine fruehere
+ * Fassung hielt die Sonnenzeile absichtlich an einer festen Y-Position, um
+ * einen Sprung zu vermeiden, wenn die bedingte Niederschlagszeile
+ * verschwindet -- das hinterliess dafuer bei jedem trockenen Refresh (dem
+ * Normalfall) eine sichtbare Luecke. "Heute"/Fliesstext bleiben trotzdem
+ * fest: selbst der laengste Zeilenblock (5 Zeilen) endet bei
+ * 190+4*56=414, 72px Luft bis zur Ueberschrift bei 486 -- die muss dafuer
+ * nie ausweichen.
  */
 const BOARD_WEATHER_ROW_TEMP_Y     = 190;
-const BOARD_WEATHER_ROW_HUMIDITY_Y = 246;
-const BOARD_WEATHER_ROW_WIND_Y     = 302;
-const BOARD_WEATHER_ROW_PRECIP_Y   = 358;
-const BOARD_WEATHER_ROW_SUN_Y      = 414;
+const BOARD_WEATHER_ROW_LEAD       = 56;
 const BOARD_WEATHER_HEADING_Y      = 486;
 const BOARD_WEATHER_BODY_Y         = 542;
 
@@ -596,22 +601,39 @@ function board_render_weather_card(
     };
 
     $rowsSvg = '';
+    // Laufender Cursor statt fester Y-Positionen pro Zeile (Nutzerbefund
+    // 2026-08-23: "fehlender Regen macht auf der Monitorseite wieder eine
+    // Leerzeile"). Die fruehere feste Rasterung sollte verhindern, dass die
+    // Sonnenzeile springt, wenn die bedingte Niederschlagszeile erscheint --
+    // hat dabei aber bei jedem trockenen Refresh (dem Normalfall) eine
+    // sichtbare Luecke zwischen Wind- und Sonnenzeile hinterlassen. Das
+    // wiegt schwerer als der seltene 56px-Sprung genau in dem Moment, in dem
+    // Niederschlag einsetzt oder aufhoert -- gleiche Abwaegung wie beim
+    // Schlafschirm (board_sleep.php), der aus demselben Grund von Anfang an
+    // fortlaufend zaehlt. "Heute"/Fliesstext bleiben trotzdem fest
+    // (BOARD_WEATHER_HEADING_Y=486): selbst der laengste Zeilenblock (5
+    // Zeilen, Temp+Feuchte+Wind+Regen+Sonne) endet bei 190+4*56=414, 72px
+    // Luft bis 486 -- die Ueberschrift muss dafuer nie ausweichen.
+    $y = BOARD_WEATHER_ROW_TEMP_Y;
 
     if ($tempMin !== null && $tempMax !== null) {
-        $rowsSvg .= $row('iconTemp', BOARD_WEATHER_ROW_TEMP_Y, $station['available']
+        $rowsSvg .= $row('iconTemp', $y, $station['available']
             ? sprintf('<tspan font-weight="bold">%s°</tspan> %d–%d°C', number_format($station['temp_c'], 1), $tempMin, $tempMax)
             : sprintf('%d–%d°C', $tempMin, $tempMax));
+        $y += BOARD_WEATHER_ROW_LEAD;
     }
 
     if ($station['available']) {
-        $rowsSvg .= $row('iconDroplet', BOARD_WEATHER_ROW_HUMIDITY_Y,
-            sprintf('%d%%', $station['humidity_pct']));
-        $rowsSvg .= $row('iconWind', BOARD_WEATHER_ROW_WIND_Y,
+        $rowsSvg .= $row('iconDroplet', $y, sprintf('%d%%', $station['humidity_pct']));
+        $y += BOARD_WEATHER_ROW_LEAD;
+        $rowsSvg .= $row('iconWind', $y,
             sprintf('%d–%d km/h', $station['wind_kmh'], $station['wind_gusts_kmh']));
+        $y += BOARD_WEATHER_ROW_LEAD;
 
         if ($station['precipitation_mm'] > 0) {
-            $rowsSvg .= $row('iconDroplets', BOARD_WEATHER_ROW_PRECIP_Y,
+            $rowsSvg .= $row('iconDroplets', $y,
                 sprintf('%s mm/h', number_format($station['precipitation_mm'], 1)));
+            $y += BOARD_WEATHER_ROW_LEAD;
         }
     }
 
@@ -620,7 +642,6 @@ function board_render_weather_card(
     // eingerueckt hinter der Aufgangszeit. Die Zeiten sind gerechnet, nicht
     // gescrapt (weather_sun_times() in inc/weather.php).
     if ($sun !== null && ($sun['available'] ?? false)) {
-        $y = BOARD_WEATHER_ROW_SUN_Y;
         $sunsetIconX = 1600;
         $sunsetTextX = 1650;
         $rowsSvg .= $row('iconSunrise', $y, $sun['sunrise']->format('H:i'));

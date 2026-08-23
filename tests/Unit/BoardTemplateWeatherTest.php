@@ -275,22 +275,33 @@ class BoardTemplateWeatherTest extends TestCase
         );
     }
 
-    public function test_sun_row_does_not_move_when_precipitation_appears(): void
+    public function test_sun_row_moves_up_when_precipitation_is_absent_no_gap(): void
     {
-        // Der eigentliche Grund fuer das feste Zeilenraster: die
-        // Niederschlagszeile erscheint nur bei Niederschlag > 0. Mit
-        // fortlaufender Zaehlung wuerde die Sonnenzeile darunter je nach
-        // Wetterlage um 56px springen.
+        // Regressionsschutz 2026-08-23 ("fehlender Regen macht auf der
+        // Monitorseite wieder eine Leerzeile"): eine fruehere Fassung hielt
+        // die Sonnenzeile an einer festen Y-Position, um einen Sprung zu
+        // vermeiden, wenn die bedingte Niederschlagszeile verschwindet --
+        // das hinterliess dafuer bei jedem trockenen Refresh (dem
+        // Normalfall) eine sichtbare Luecke zwischen Wind- und Sonnenzeile.
+        // Jetzt zaehlen die Zeilen fortlaufend: OHNE Niederschlag ruecken
+        // Sonnenauf-/-untergang eine Zeile hoeher nach, MIT Niederschlag
+        // steht die zusaetzliche Zeile lueckenlos dazwischen.
         $dry = $this->weatherFixture();
         $dry['station'] = ['available' => true, 'temp_c' => 23.4, 'humidity_pct' => 61,
             'wind_kmh' => 12, 'wind_gusts_kmh' => 28, 'wind_direction' => 'W', 'precipitation_mm' => 0.0];
         $wet = $dry;
         $wet['station']['precipitation_mm'] = 1.4;
 
-        $sunY = sprintf('y="%d"', BOARD_WEATHER_ROW_SUN_Y);
+        // Reihenfolge: Temp(190), Feuchte(246), Wind(302), [Regen(358)], Sonne.
+        $sunYDry = BOARD_WEATHER_ROW_TEMP_Y + 3 * BOARD_WEATHER_ROW_LEAD;  // 358 -- ruecktup, keine Luecke
+        $sunYWet = BOARD_WEATHER_ROW_TEMP_Y + 4 * BOARD_WEATHER_ROW_LEAD;  // 414 -- eine Zeile weiter unten
 
-        $this->assertStringContainsString($sunY, board_render_weather_svg($dry, null, $this->sunFixture()));
-        $this->assertStringContainsString($sunY, board_render_weather_svg($wet, null, $this->sunFixture()));
-        $this->assertStringNotContainsString('mm/h', board_render_weather_svg($dry, null, $this->sunFixture()));
+        $svgDry = board_render_weather_svg($dry, null, $this->sunFixture());
+        $svgWet = board_render_weather_svg($wet, null, $this->sunFixture());
+
+        $this->assertStringContainsString(sprintf('href="#iconSunrise" transform="translate(1400,%d)', $sunYDry - 14), $svgDry);
+        $this->assertStringContainsString(sprintf('href="#iconSunrise" transform="translate(1400,%d)', $sunYWet - 14), $svgWet);
+        $this->assertStringNotContainsString('mm/h', $svgDry);
+        $this->assertStringContainsString('1.4 mm/h', $svgWet);
     }
 }

@@ -22,7 +22,6 @@ const BOARD_SLEEP_DIVIDER_X   = 1120;
 const BOARD_SLEEP_LEFT_X      = 56;
 const BOARD_SLEEP_RIGHT_X     = 1160;
 const BOARD_SLEEP_RIGHT_WIDTH = 656; // 1160 bis 1816
-const BOARD_SLEEP_FOOTER_Y    = 1330;
 
 /** Zeichen pro Zeile, aus der Spaltenbreite und der gemessenen mittleren
  *  Zeichenbreite von Atkinson Hyperlegible Next (0,445 * Schriftgroesse),
@@ -41,7 +40,11 @@ const BOARD_SLEEP_TOMORROW_LEAD   = 54;
  *  reichen. Links begrenzt die Fusszeile. */
 const BOARD_SLEEP_WIFI_TITLE_Y    = 830;
 const BOARD_SLEEP_TOMORROW_MAX_Y  = 760;
-const BOARD_SLEEP_TODAY_MAX_Y     = 1280;
+// 1230 statt frueher 1280 (Nutzerwunsch 2026-08-23: "der Schlafschirm sollte
+// die Paginierung zeigen, solange das Geraet nicht effektiv schlaeft") --
+// die Pille sitzt jetzt bei y=1252..1308 (BOARD_PAGINATION_TOP/HEIGHT in
+// board_template.php), 22px Sicherheitsabstand zur Textgrundlinie.
+const BOARD_SLEEP_TODAY_MAX_Y     = 1230;
 
 /**
  * QR-Code als <rect>-Gitter.
@@ -159,13 +162,17 @@ function board_sleep_fit_lines(string $text, int $charsPerLine, int $firstY, int
  * @param array{available: bool, sunrise?: DateTimeImmutable, sunset?: DateTimeImmutable}|null $sun
  * @param array{ssid: string, password: string, encryption: string, hidden: bool}|null $wifi
  *        null = keine data/guest_wifi.json -> der QR-Block entfaellt ersatzlos
+ * @param int $totalPages Gesamtseitenzahl INKLUSIVE dieses Schlafschirm-Slots
+ *        (board_total_pages()) -- der Schlafschirm ist strukturell immer die
+ *        letzte Seite, seine eigene Seitenzahl ist also $totalPages.
  */
 function board_sleep_render_svg(
     array $today,
     array $tomorrow,
     ?array $sun,
     ?array $wifi,
-    DateTimeImmutable $renderedAt
+    DateTimeImmutable $renderedAt,
+    int $totalPages
 ): string {
     $defs = board_svg_defs();
     $esc = static fn (string $s): string => htmlspecialchars($s, ENT_XML1);
@@ -260,7 +267,9 @@ function board_sleep_render_svg(
         // Matrixgroesse haengt von der Laenge der Zugangsdaten ab (eine lange
         // SSID oder ein langes Passwort ergibt eine groessere Matrix), also
         // steht die endgueltige Kantenlaenge erst nach dem Bauen fest.
-        $qr = board_sleep_qr(board_guest_wifi_payload($wifi), BOARD_SLEEP_RIGHT_X, 915, 365);
+        // y=900/Zielgroesse 340 (vorher 915/365) -- Platz fuer die
+        // Paginierungs-Pille bei y=1252..1308 unter dem QR-Code.
+        $qr = board_sleep_qr(board_guest_wifi_payload($wifi), BOARD_SLEEP_RIGHT_X, 900, 340);
         $qrOffsetX = intdiv(BOARD_SLEEP_RIGHT_WIDTH - $qr['size'], 2);
 
         $right .= sprintf(
@@ -274,16 +283,22 @@ function board_sleep_render_svg(
         $right .= sprintf('<g transform="translate(%d,0)">%s</g>', $qrOffsetX, $qr['svg']);
     }
 
-    $footer = sprintf(
-        '<line x1="0" y1="%d" x2="1872" y2="%d" stroke="black" stroke-width="2"/>'
-        . '<text x="%d" y="%d" font-family="Atkinson Hyperlegible Next" font-size="28" fill="black">Stand %s</text>',
-        BOARD_SLEEP_FOOTER_Y, BOARD_SLEEP_FOOTER_Y,
-        BOARD_SLEEP_LEFT_X, BOARD_SLEEP_FOOTER_Y + 46, $renderedAt->format('H:i')
-    );
+    // "Stand HH:MM" + Seitenzahlen-Pille -- DIESELBE Funktion, DIESELBE
+    // Position wie auf der Abfahrten-/Stoerungsseite (Nutzerwunsch
+    // 2026-08-23: "der Schlafschirm sollte die Paginierung zeigen, so lange
+    // das Geraet nicht effektiv schlaeft, sonst gibts nur den Tastenweg
+    // zurueck"). Das ist kein Stilentscheid, sondern Pflicht: die Firmware
+    // erkennt einen Tipp auf die Pille rein anhand fester Bildschirmkoordi-
+    // naten (y=1252..1308, rechtsbuendig an x=1083, s. touch_zone.cpp),
+    // unabhaengig davon, was dort tatsaechlich gezeichnet ist. Eine andere
+    // Position waere unsichtbar tippbar oder sichtbar untippbar. Der
+    // Schlafschirm ist strukturell immer die letzte Seite, seine eigene
+    // Seitenzahl ist also $totalPages.
+    $footer = board_render_stand_and_pagination_svg($renderedAt, $totalPages, $totalPages);
 
     $divider = sprintf(
-        '<line x1="%d" y1="90" x2="%d" y2="%d" stroke="black" stroke-width="2"/>',
-        BOARD_SLEEP_DIVIDER_X, BOARD_SLEEP_DIVIDER_X, BOARD_SLEEP_FOOTER_Y
+        '<line x1="%d" y1="90" x2="%d" y2="1310" stroke="black" stroke-width="2"/>',
+        BOARD_SLEEP_DIVIDER_X, BOARD_SLEEP_DIVIDER_X
     );
 
     return <<<SVG
