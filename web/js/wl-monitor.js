@@ -44,6 +44,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   wireStationSort();
   wireStationDropdown();
   loadStationsAlpha();
+
+  // Wire add-fav submit button once, unconditionally — was previously wired
+  // inside updateMonitorToolbar(), which returns early when no monitor is
+  // loaded yet (e.g. a fresh account with no favourites/last_diva), leaving
+  // the button dead when the add-favourite modal is opened from Search
+  // (Nutzerbefund 2026-08-24).
+  const addSubmit = document.getElementById('addFavSubmit');
+  if (addSubmit) addSubmit.onclick = () => addFavoriteFromMonitor();
 });
 
 // --- API helpers -------------------------------------------------------------
@@ -166,10 +174,6 @@ function updateMonitorToolbar() {
     });
     bar.appendChild(addBtn);
   }
-
-  // Wire add-fav submit button
-  const addSubmit = document.getElementById('addFavSubmit');
-  if (addSubmit) addSubmit.onclick = () => addFavoriteFromMonitor();
 }
 
 async function addFavoriteFromMonitor() {

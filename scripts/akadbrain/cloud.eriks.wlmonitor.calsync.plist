@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>cloud.eriks.wlmonitor.calsync</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__CALSYNC_BIN__</string>
+  </array>
+
+  <!-- LaunchAgent (nicht LaunchDaemon): EventKit/TCC braucht die eingeloggte
+       GUI-Session des Nutzers "Erik" -- ein Daemon ohne Session bekommt vom
+       System nie eine Freigabe, egal wie oft man sie erteilt. -->
+  <key>StartInterval</key>
+  <integer>900</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- launchd-Agents erben keine Shell-Umgebung -- calsync.swift liest seine
+       Konfiguration deshalb selbst aus ~/.config/wlmonitor/calsync.env. -->
+  <key>StandardOutPath</key>
+  <string>__LOG_DIR__/calsync.log</string>
+  <key>StandardErrorPath</key>
+  <string>__LOG_DIR__/calsync.error.log</string>
+</dict>
+</plist>

@@ -36,10 +36,21 @@ const BOARD_SLEEP_TODAY_LEAD      = 62;
 const BOARD_SLEEP_TOMORROW_TEXT_Y = 470;
 const BOARD_SLEEP_TOMORROW_LEAD   = 54;
 
-/** Ab hier beginnt rechts der WLAN-Block -- so weit darf der Morgen-Text
- *  reichen. Links begrenzt die Fusszeile. */
-const BOARD_SLEEP_WIFI_TITLE_Y    = 830;
-const BOARD_SLEEP_TOMORROW_MAX_Y  = 760;
+/** Abstand zwischen QR-Code und Morgen-Text darueber -- die Untergrenze des
+ *  Textes (wieviel Zeilen passen) wird aus der TATSAECHLICHEN QR-Position
+ *  gerechnet, nicht mehr aus einer festen Konstante (s. board_sleep_render_svg()):
+ *  liegt keine data/guest_wifi.json vor, darf der Text bis zur Fusszeile
+ *  laufen; liegt eine vor, richtet sich die Grenze nach der QR-Groesse (die
+ *  mit den Zugangsdaten schwankt). */
+const BOARD_SLEEP_WIFI_BOTTOM_GAP = 16;
+const BOARD_SLEEP_WIFI_TEXT_GAP   = 58;
+// Untergrenze OHNE Paginierungs-Pille: "Stand HH:MM" steht bei x=16, also
+// LINKS, die rechte Spalte ist auf dem Schlaf-Frame komplett frei bis zur
+// Fusszeilenlinie (y=1310) -- BOARD_SLEEP_TODAY_MAX_Y waere hier falsch,
+// die ist mit Ruecksicht auf die Pille kalibriert, die es auf diesem Frame
+// gar nicht gibt (Nutzerbefund 2026-08-25, zweiter Anlauf: "immer noch
+// mindestens eine Zeile frei" -- der erste Fix sparte nur 6px statt ~80px).
+const BOARD_SLEEP_WIFI_NO_PILL_MAX_Y = 1294;
 // 1230 statt frueher 1280 (Nutzerwunsch 2026-08-23: "der Schlafschirm sollte
 // die Paginierung zeigen, solange das Geraet nicht effektiv schlaeft") --
 // die Pille sitzt jetzt bei y=1252..1308 (BOARD_PAGINATION_TOP/HEIGHT in
@@ -178,7 +189,18 @@ function board_sleep_render_svg(
     ?array $wifi,
     DateTimeImmutable $renderedAt,
     int $totalPages,
-    bool $showPagination = true
+    bool $showPagination = true,
+    // Favoritenleiste, wenn der Schirm BEWUSST aufgeblaettert wurde
+    // (Nutzerwunsch 2026-08-26): dann ist er eine normale Seite und ein Tipp
+    // auf einen Favoriten soll funktionieren. Beim echten Vorschlaf-Abruf
+    // entfaellt sie -- dasselbe Signal wie bei der Paginierung, denn danach
+    // wird der Touch-Controller bis zum naechsten Tastendruck nicht mehr
+    // abgefragt. Leere Liste = keine Favoriten, keine Leiste.
+    array $touchBarFavoriteTitles = [],
+    int $activeFavoriteIndex = 0,
+    // Icon-Pille statt Ziffern (board_pagination_categories()) -- leer =
+    // alte Ziffernpille, s. board_render_stand_and_pagination_svg().
+    array $pageCategories = []
 ): string {
     $defs = board_svg_defs();
     $esc = static fn (string $s): string => htmlspecialchars($s, ENT_XML1);
@@ -247,6 +269,41 @@ function board_sleep_render_svg(
     $right = '<text x="' . BOARD_SLEEP_RIGHT_X . '" y="160" font-family="Atkinson Hyperlegible Next"'
         . ' font-weight="bold" font-size="64" fill="black">Morgen</text>';
 
+    // WLAN-Block ZUERST vermessen, aber noch nicht anhaengen: seine Hoehe
+    // haengt von der QR-Matrixgroesse ab (laengere Zugangsdaten = groesserer
+    // Code), und erst daraus ergibt sich, wieviel Platz der Morgen-Text
+    // darueber wirklich hat. Vorher standen Blockanfang (830) und Textgrenze
+    // (760) fest verdrahtet da, kalibriert auf den groessten denkbaren QR --
+    // bei einem kleineren blieb unter dem Code toter Raum stehen, WAEHREND
+    // der Morgen-Text darueber abgeschnitten wurde (Nutzerbefund 2026-08-25:
+    // "unnoetig gekuerzt").
+    $qr = null;
+    $qrTranslateY = 0;
+    // Ohne WLAN-Block (keine data/guest_wifi.json) ist die ganze Spalte frei --
+    // dann gilt dieselbe Untergrenze wie links, statt den Text bei 760 zu
+    // kappen und darunter eine halbe leere Spalte stehen zu lassen
+    // (Nutzerbefund 2026-08-25: "unnoetig gekuerzt" -- auf akadbrain fehlt
+    // die Datei, dort war genau das der sichtbare Fall).
+    $tomorrowMaxY = BOARD_SLEEP_TODAY_MAX_Y;
+
+    if ($wifi !== null) {
+        // y=0 bauen und beim Anhaengen per translate an die endgueltige
+        // Position schieben -- so ist die Groesse vor der Platzierung bekannt.
+        $qr = board_sleep_qr(board_guest_wifi_payload($wifi), BOARD_SLEEP_RIGHT_X, 0, 340);
+
+        // QR ueber der Fusszeile, was dann noch bleibt, gehoert dem Text.
+        // Kein "WLAN"-Titel und keine eigene SSID-Zeile mehr darueber
+        // (Nutzerwunsch 2026-08-25: "WLAN steht immer noch da, weg damit" --
+        // die SSID steht jetzt NEBEN dem QR, s. unten). Die Paginierungs-Pille
+        // (y ab BOARD_PAGINATION_TOP) braucht nur Platz, wenn sie ueberhaupt
+        // gezeichnet wird -- auf dem erzwungenen letzten Frame vor dem
+        // Tiefschlaf ($showPagination=false) waere das reservierte ~74px
+        // sonst leerer Raum unter dem QR gewesen.
+        $qrBottomLimit = $showPagination ? (BOARD_PAGINATION_TOP - BOARD_SLEEP_WIFI_BOTTOM_GAP) : BOARD_SLEEP_WIFI_NO_PILL_MAX_Y;
+        $qrTranslateY = $qrBottomLimit - $qr['size'];
+        $tomorrowMaxY = $qrTranslateY - BOARD_SLEEP_WIFI_TEXT_GAP;
+    }
+
     if ($tomorrow['available']) {
         $iconId = BOARD_ICON_ID_BY_CATEGORY[$tomorrow['icon_category']] ?? BOARD_ICON_ID_BY_CATEGORY['unbekannt'];
         $right .= sprintf('<g transform="translate(1290,330) scale(9)"><use href="#%s"/></g>', $iconId);
@@ -257,7 +314,7 @@ function board_sleep_render_svg(
 
         $lines = board_sleep_fit_lines(
             (string) ($tomorrow['text'] ?? $tomorrow['text_error'] ?? ''), BOARD_SLEEP_TOMORROW_CHARS,
-            BOARD_SLEEP_TOMORROW_TEXT_Y, BOARD_SLEEP_TOMORROW_LEAD, BOARD_SLEEP_TOMORROW_MAX_Y
+            BOARD_SLEEP_TOMORROW_TEXT_Y, BOARD_SLEEP_TOMORROW_LEAD, $tomorrowMaxY
         );
         foreach ($lines as $i => $line) {
             $right .= sprintf(
@@ -267,26 +324,18 @@ function board_sleep_render_svg(
         }
     }
 
-    // --- rechts unten: Gaeste-WLAN ------------------------------------------
-    if ($wifi !== null) {
-        // Erst bauen, dann waagrecht in der Spalte zentrieren: die
-        // Matrixgroesse haengt von der Laenge der Zugangsdaten ab (eine lange
-        // SSID oder ein langes Passwort ergibt eine groessere Matrix), also
-        // steht die endgueltige Kantenlaenge erst nach dem Bauen fest.
-        // y=900/Zielgroesse 340 (vorher 915/365) -- Platz fuer die
-        // Paginierungs-Pille bei y=1252..1308 unter dem QR-Code.
-        $qr = board_sleep_qr(board_guest_wifi_payload($wifi), BOARD_SLEEP_RIGHT_X, 900, 340);
-        $qrOffsetX = intdiv(BOARD_SLEEP_RIGHT_WIDTH - $qr['size'], 2);
+    // --- rechts unten: Gaeste-WLAN -------------------------------------------
+    if ($qr !== null) {
+        // QR rechtsbuendig, SSID links daneben statt darueber -- kein
+        // eigener "WLAN"-Titel mehr (Nutzerwunsch 2026-08-25: "weg damit").
+        $qrOffsetX = BOARD_SLEEP_RIGHT_WIDTH - $qr['size'];
+        $ssidY = $qrTranslateY + intdiv($qr['size'], 2) + 14; // vertikal zur QR-Mitte zentriert
 
         $right .= sprintf(
-            '<text x="%d" y="' . BOARD_SLEEP_WIFI_TITLE_Y . '" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="46" fill="black">Gäste-WLAN</text>',
-            BOARD_SLEEP_RIGHT_X
-        );
-        $right .= sprintf(
             '<text x="%d" y="%d" font-family="Atkinson Hyperlegible Next" font-weight="500" font-size="40" fill="black">%s</text>',
-            BOARD_SLEEP_RIGHT_X, BOARD_SLEEP_WIFI_TITLE_Y + 52, $esc($wifi['ssid'])
+            BOARD_SLEEP_RIGHT_X, $ssidY, $esc($wifi['ssid'])
         );
-        $right .= sprintf('<g transform="translate(%d,0)">%s</g>', $qrOffsetX, $qr['svg']);
+        $right .= sprintf('<g transform="translate(%d,%d)">%s</g>', $qrOffsetX, $qrTranslateY, $qr['svg']);
     }
 
     // "Stand HH:MM" + Seitenzahlen-Pille -- DIESELBE Funktion, DIESELBE
@@ -300,12 +349,16 @@ function board_sleep_render_svg(
     // Position waere unsichtbar tippbar oder sichtbar untippbar. Der
     // Schlafschirm ist strukturell immer die letzte Seite, seine eigene
     // Seitenzahl ist also $totalPages.
-    $footer = board_render_stand_and_pagination_svg($renderedAt, $totalPages, $totalPages, $showPagination);
+    $footer = board_render_stand_and_pagination_svg($renderedAt, $totalPages, $totalPages, $showPagination, $pageCategories);
 
     $divider = sprintf(
         '<line x1="%d" y1="90" x2="%d" y2="1310" stroke="black" stroke-width="2"/>',
         BOARD_SLEEP_DIVIDER_X, BOARD_SLEEP_DIVIDER_X
     );
+
+    $touchBar = ($showPagination && $touchBarFavoriteTitles !== [])
+        ? board_render_touch_bar_svg($touchBarFavoriteTitles, $activeFavoriteIndex)
+        : '';
 
     return <<<SVG
 <svg xmlns="http://www.w3.org/2000/svg" width="1872" height="1404" viewBox="0 0 1872 1404">
@@ -317,6 +370,7 @@ function board_sleep_render_svg(
 {$left}
 {$right}
 {$footer}
+{$touchBar}
 </svg>
 SVG;
 }

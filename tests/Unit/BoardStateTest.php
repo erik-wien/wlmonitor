@@ -123,6 +123,45 @@ class BoardStateTest extends TestCase
         );
     }
 
+    // --- page_<N>: absolute Touch-Pille (TASK-25, Nutzerwunsch 2026-08-27:
+    // "Vor/zurueck ist ein Anachronismus" -- nur die kapazitive Pille, NICHT
+    // die physischen Tasten, s. page_prev/page_next-Tests oben) --------------
+
+    public function test_page_n_jumps_directly_to_that_page(): void
+    {
+        $this->assertSame(
+            ['activeFavoriteIndex' => 0, 'activePage' => 3],
+            board_resolve_touch(['activeFavoriteIndex' => 0, 'activePage' => 1], 'page_3', 3)
+        );
+    }
+
+    public function test_page_n_does_not_touch_the_active_favorite(): void
+    {
+        $this->assertSame(
+            ['activeFavoriteIndex' => 2, 'activePage' => 5],
+            board_resolve_touch(['activeFavoriteIndex' => 2, 'activePage' => 1], 'page_5', 3)
+        );
+    }
+
+    public function test_page_0_clamps_to_one_instead_of_a_bogus_zero(): void
+    {
+        $this->assertSame(
+            ['activeFavoriteIndex' => 0, 'activePage' => 1],
+            board_resolve_touch(['activeFavoriteIndex' => 0, 'activePage' => 4], 'page_0', 3)
+        );
+    }
+
+    public function test_page_n_has_no_upper_clamp_here_either(): void
+    {
+        // Wie page_next: der Aufrufer klemmt gegen die tatsaechliche
+        // Seitenzahl -- eine veraltete Simulator-/Geraete-Zone darf hier
+        // nicht ins Leere greifen, sondern landet sicher auf der letzten Seite.
+        $this->assertSame(
+            ['activeFavoriteIndex' => 0, 'activePage' => 99],
+            board_resolve_touch(['activeFavoriteIndex' => 0, 'activePage' => 1], 'page_99', 3)
+        );
+    }
+
     public function test_zero_favorites_forces_index_zero_regardless_of_stored_state(): void
     {
         $this->assertSame(

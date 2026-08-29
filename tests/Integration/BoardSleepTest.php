@@ -50,7 +50,9 @@ class BoardSleepTest extends TestCase
 
         $this->assertStringContainsString('>Heute<', $svg);
         $this->assertStringContainsString('>Morgen<', $svg);
-        $this->assertStringContainsString('>Gäste-WLAN<', $svg);
+        // Kein eigener "WLAN"-Titel mehr (Nutzerwunsch 2026-08-25) -- die
+        // SSID steht direkt neben dem QR-Code.
+        $this->assertStringNotContainsString('>WLAN<', $svg);
         $this->assertStringContainsString('>Jardyx-Gaeste<', $svg);
         $this->assertStringContainsString('Stand 21:34', $svg);
         // Keine Abfahrten, keine Touch-Leiste -- das ist der ganze Punkt.
@@ -66,7 +68,7 @@ class BoardSleepTest extends TestCase
         // nur eben ohne WLAN-Block, statt mit einem kaputten Code.
         $svg = board_sleep_render_svg($this->today(), $this->day(), null, null, $this->now(), 3);
 
-        $this->assertStringNotContainsString('Gäste-WLAN', $svg);
+        $this->assertStringNotContainsString('>Jardyx-Gaeste<', $svg);
         $this->assertStringContainsString('>Heute<', $svg);
     }
 
@@ -85,11 +87,71 @@ class BoardSleepTest extends TestCase
         $svg = board_sleep_render_svg($this->today(), $long, null, $this->wifi(), $this->now(), 3);
 
         $this->assertStringContainsString('…', $svg);
-        // Keine Textzeile darf in den WLAN-Block ragen.
+
+        // Keine Textzeile darf in den QR-Block ragen. Gegen die TATSAECHLICHE
+        // QR-Position pruefen (ihr translate()-y), nicht gegen eine feste
+        // Konstante: seit 2026-08-25 wird der Block von unten aufgebaut und die
+        // Textgrenze aus seiner echten Hoehe gerechnet (vorher blieb unter einem
+        // kleinen QR-Code toter Raum stehen, waehrend der Text darueber schon
+        // gekuerzt wurde -- Nutzerbefund "unnoetig gekuerzt"). Kein eigener
+        // "WLAN"-Titel mehr (Nutzerwunsch 2026-08-25), die SSID steht neben
+        // dem QR und ist selbst Teil der Hoehenberechnung nicht mehr.
+        $this->assertSame(1, preg_match('/<g transform="translate\(\d+,(\d+)\)"><rect x="1160" y="0" width="\d+" height="\d+" fill="white"\/>/', $svg, $t));
+        $qrTop = (int) $t[1];
+
         preg_match_all('/<text x="1160" y="(\d+)" [^>]*font-size="44"/', $svg, $m);
         $this->assertNotEmpty($m[1]);
         foreach ($m[1] as $y) {
-            $this->assertLessThanOrEqual(BOARD_SLEEP_TOMORROW_MAX_Y, (int) $y);
+            $this->assertLessThan($qrTop, (int) $y, 'Morgen-Text ragt in den QR-Block');
+        }
+        // ... und der Abstand muss auch gross genug fuer die Schriftgroesse sein.
+        $this->assertGreaterThanOrEqual(50, $qrTop - (int) max($m[1]));
+    }
+
+    public function test_without_wifi_block_the_forecast_may_use_the_whole_column(): void
+    {
+        // Der eigentliche Nutzerbefund 2026-08-25 ("unnoetig gekuerzt"): auf
+        // akadbrain fehlt data/guest_wifi.json, der QR-Block entfaellt also --
+        // dann darf der Morgen-Text bis zur Fusszeile laufen statt bei 760 zu
+        // enden und darunter eine halbe leere Spalte stehen zu lassen.
+        $long = $this->day(['text' => str_repeat('Sehr ausfuehrliche Wettervorhersage. ', 30)]);
+
+        $ohneWifi = board_sleep_render_svg($this->today(), $long, null, null, $this->now(), 3);
+        $mitWifi  = board_sleep_render_svg($this->today(), $long, null, $this->wifi(), $this->now(), 3);
+
+        $zeilen = static function (string $svg): array {
+            preg_match_all('/<text x="1160" y="(\d+)" [^>]*font-size="44"/', $svg, $m);
+            return array_map('intval', $m[1]);
+        };
+
+        $this->assertGreaterThan(
+            count($zeilen($mitWifi)),
+            count($zeilen($ohneWifi)),
+            'ohne WLAN-Block muss mehr Text passen'
+        );
+        // Aber weiterhin nicht in die Fusszeile/Paginierung hineinlaufen.
+        $this->assertLessThanOrEqual(BOARD_SLEEP_TODAY_MAX_Y, max($zeilen($ohneWifi)));
+    }
+
+    public function test_forecast_and_wifi_block_never_overlap_regardless_of_qr_size(): void
+    {
+        // Die QR-Kantenlaenge schwankt mit den Zugangsdaten (Modulzahl x
+        // ganzzahlige Modulgroesse, 294-339px bei 340px Zielgroesse). Der
+        // Block wird seit 2026-08-25 von unten aufgebaut, die Textgrenze
+        // daraus gerechnet -- das muss fuer JEDE dieser Groessen aufgehen.
+        $long = $this->day(['text' => str_repeat('Sehr ausfuehrliche Wettervorhersage. ', 30)]);
+
+        foreach ([['AB', 'cd'], ['Jardyx-Gaeste', 'Willkommen2026'], [str_repeat('S', 30), str_repeat('p', 30)]] as [$ssid, $pw]) {
+            $svg = board_sleep_render_svg(
+                $this->today(), $long, null,
+                ['ssid' => $ssid, 'password' => $pw, 'encryption' => 'WPA', 'hidden' => false],
+                $this->now(), 3
+            );
+
+            $this->assertSame(1, preg_match('/<g transform="translate\(\d+,(\d+)\)"><rect x="1160" y="0" width="\d+" height="\d+" fill="white"\/>/', $svg, $t));
+            preg_match_all('/<text x="1160" y="(\d+)" [^>]*font-size="44"/', $svg, $m);
+            $this->assertNotEmpty($m[1]);
+            $this->assertGreaterThanOrEqual(50, (int) $t[1] - (int) max($m[1]), "SSID '$ssid': Text zu dicht am QR-Block");
         }
     }
 

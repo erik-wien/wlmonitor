@@ -218,6 +218,7 @@ const WEATHER_ICON_CATEGORIES = [
     '100000' => 'klar',
     '110000' => 'leicht_bewoelkt',
     '112000' => 'regen_leicht',   // "leicht bewölkt mit (starkem) Niederschlag"
+    '120000' => 'leicht_bewoelkt', // Sonne hinter Wolken, kein Niederschlag -- live am 2026-08-25 gegen ORF geprueft (vorherige Ziffern-Vermutung "bewoelkt" war falsch)
     '122000' => 'regen_stark',    // "stark bewölkt mit starkem Niederschlag"
     '122001' => 'gewitter',       // "stark bewölkt mit starkem Niederschlag und Gewitter"
 ];

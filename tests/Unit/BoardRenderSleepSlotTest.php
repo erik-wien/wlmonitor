@@ -59,11 +59,13 @@ class BoardRenderSleepSlotTest extends TestCase
 
         $this->assertStringContainsString('>Heute<', $svg);
         $this->assertStringContainsString('>Morgen<', $svg);
-        // Chrome/Touch-Leiste des regulaeren Boards duerfen NICHT auftauchen --
-        // der Schlafschirm ist ein eigenes, vollstaendiges Layout. Die Touch-
-        // Leiste rendert den Favoritentitel als >Test< in einer schwarzen
-        // Pille (board_render_touch_bar_svg()) -- das darf hier nicht stehen.
-        $this->assertStringNotContainsString('>Test<', $svg, 'Favoriten-Touch-Leiste darf nicht gerendert werden');
+        // Die regulaere Abfahrten-Chrome (Stationskoepfe) darf NICHT auftauchen --
+        // der Schlafschirm ist ein eigenes Layout. Die Touch-Leiste mit dem
+        // Favoritentitel ("Test") gehoert hier aber bewusst dazu, solange das
+        // Geraet per page_next hierher geblaettert hat ($sleepShowPagination):
+        // dieselbe Pille+Stand-Zeile wie auf den anderen Seiten, damit die
+        // Firmware nach denselben festen Koordinaten tippen kann.
+        $this->assertStringContainsString('>Test<', $svg, 'Favoriten-Touch-Leiste gehoert auf den geblaetterten Schlafschirm');
         $this->assertStringNotContainsString('STATION', $svg, 'Stationskopf der Abfahrtenliste darf nicht gerendert werden');
     }
 

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>cloud.eriks.wlmonitor.mqtt-subscriber</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__VENV_PYTHON__</string>
+    <string>__SCRIPT_PATH__</string>
+  </array>
+
+  <!-- Dauerlaufprozess (KeepAlive), KEIN periodischer StartInterval-Task wie
+       calsync -- MQTT ist push/pub-sub, ein periodischer Neustart wuerde
+       zwischen den Laeufen Nachrichten verpassen. Reines Netzwerk-I/O, keine
+       GUI-Session/TCC noetig -- anders als calsync kann das auch als
+       System-weiter Dienst laufen, hier trotzdem als User-Agent gehalten,
+       weil ~/.config/wlmonitor/mqtt.env dem User "erik" gehoert. -->
+  <key>KeepAlive</key>
+  <true/>
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Python puffert stdout beim Schreiben in eine Datei (kein TTY) block-
+       weise -- ohne das blieben Log-Zeilen unsichtbar, bis der Puffer voll
+       ist oder der Prozess endet. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>__LOG_DIR__/mqtt-subscriber.log</string>
+  <key>StandardErrorPath</key>
+  <string>__LOG_DIR__/mqtt-subscriber.error.log</string>
+</dict>
+</plist>

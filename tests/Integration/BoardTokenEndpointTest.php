@@ -484,6 +484,132 @@ final class BoardTokenEndpointTest extends TestCase
         $this->assertStringStartsWith("\x89PNG\r\n\x1a\n", $r['out']);
     }
 
+    // --- Browser-Simulator (?debug=ui, ?debug=png&sim=1) ----------------------
+
+    public function test_debug_ui_lists_touch_zones_for_the_configured_favorites(): void
+    {
+        $token = $this->createTokenUser();
+        $this->createFavorite('A', '90111111', null);
+        $this->createFavorite('B', '90222222', null);
+
+        $r = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $this->mockMonitorResponse('90111111', 4),
+            'get' => ['debug' => 'ui'],
+        ]);
+
+        $this->assertSame(200, $r['status']);
+        $this->assertSame('text/html; charset=utf-8', $this->headerValue($r['headers'], 'Content-Type'));
+        $this->assertStringContainsString('"zone":"fav0"', $r['out']);
+        $this->assertStringContainsString('"zone":"fav1"', $r['out']);
+        $this->assertStringNotContainsString('"zone":"fav2"', $r['out'], 'nur 2 Favoriten konfiguriert');
+        // Absolut statt relativ (TASK-25): 2 Seiten (Monitor+Wetter, keine
+        // Stoerung/Kalender im Mock) -> page_1/page_2, kein page_prev/page_next.
+        $this->assertStringContainsString('"zone":"page_1"', $r['out']);
+        $this->assertStringContainsString('"zone":"page_2"', $r['out']);
+        $this->assertStringNotContainsString('page_prev', $r['out']);
+        $this->assertStringNotContainsString('page_next', $r['out']);
+        // Live-Befund 2026-08-27 auf akadbrain: die CSP (script-src 'self'
+        // 'nonce-...', kein 'unsafe-inline') blockt das eingebettete <script>
+        // stillschweigend ohne Nonce -- Seite laedt mit 200, aber keine Zone
+        // reagiert. Muss zur Nonce aus der CSP-Antwortheader-Direktive passen.
+        $this->assertMatchesRegularExpression('/<script nonce="[^"]+">/', $r['out'], 'Inline-Script braucht eine nicht-leere CSP-Nonce');
+        $csp = $this->headerValue($r['headers'], 'Content-Security-Policy');
+        preg_match('/<script nonce="([^"]+)">/', $r['out'], $scriptNonce);
+        $this->assertStringContainsString("'nonce-{$scriptNonce[1]}'", (string) $csp, 'Script-Nonce muss mit der CSP-Direktive uebereinstimmen');
+    }
+
+    public function test_debug_png_without_sim_resolves_touch_but_does_not_persist_it(): void
+    {
+        $token = $this->createTokenUser();
+        $this->createFavorite('A', '90111111', null);
+        $this->createFavorite('B', '90222222', null);
+
+        $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $this->mockMonitorResponse('90222222', 4),
+            'get' => ['debug' => 'png'],
+            'headers' => ['X-Device-Touch' => 'fav1'],
+        ]);
+
+        $meta = board_state_load_meta(board_state_meta_path(board_state_hash($token)));
+        $this->assertSame(0, $meta['activeFavoriteIndex'], 'einfaches debug=png (ohne sim) darf den Geraetezustand nicht veraendern');
+    }
+
+    public function test_debug_png_with_sim_persists_the_resolved_touch(): void
+    {
+        $token = $this->createTokenUser();
+        $this->createFavorite('A', '90111111', null);
+        $this->createFavorite('B', '90222222', null);
+
+        $r = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $this->mockMonitorResponse('90222222', 4),
+            'get' => ['debug' => 'png', 'sim' => '1'],
+            'headers' => ['X-Device-Touch' => 'fav1'],
+        ]);
+
+        $this->assertSame(200, $r['status']);
+        $meta = board_state_load_meta(board_state_meta_path(board_state_hash($token)));
+        $this->assertSame(1, $meta['activeFavoriteIndex'], '&sim=1 muss die im Simulator angeklickte Navigation persistieren');
+    }
+
+    public function test_debug_png_with_sim_returns_fresh_touch_zones_reflecting_a_disruption_page(): void
+    {
+        // Nutzerbefund 2026-08-27 (live auf akadbrain): eine Stoerung fuegt
+        // eine zusaetzliche Seite hinzu, die Pille wird breiter -- die im
+        // Simulator einmalig geladenen Zonen passten danach nicht mehr zur
+        // tatsaechlich gerenderten Pille. Der &sim=1-Response muss die
+        // GERADE aufgeloesten Zonen mitliefern, nicht die vom Seitenaufbau.
+        $token = $this->createTokenUser();
+        $this->createFavorite('A', '90111111', null);
+
+        $mockWithAlert = json_encode([
+            'message' => ['serverTime' => '2026-08-16T19:00:00+02:00'],
+            'data' => [
+                'monitors' => [[
+                    'locationStop' => ['properties' => [
+                        'title' => 'Halt', 'name' => 'STK90111111', 'diva' => ['statId' => '90111111'],
+                    ]],
+                    'lines' => [[
+                        'name' => 'L1', 'towards' => 'Z', 'type' => 'ptTram', 'platform' => '1',
+                        'departures' => ['departure' => [['departureTime' => ['countdown' => 4]]]],
+                    ]],
+                ]],
+                'trafficInfos' => [[
+                    'name' => 'stoerung1', 'title' => 'Stoerung', 'description' => '…',
+                    'priority' => 'high', 'relatedLines' => ['L1'],
+                ]],
+            ],
+        ]);
+
+        $r = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $mockWithAlert,
+            'get' => ['debug' => 'png', 'sim' => '1'],
+        ]);
+
+        $this->assertSame(200, $r['status']);
+        $zonesHeader = $this->headerValue($r['headers'], 'X-Board-Touch-Zones');
+        $this->assertNotNull($zonesHeader, '&sim=1 muss X-Board-Touch-Zones setzen');
+        // 1 Favorit, totalPages = 1 Abfahrtenseite + Stoerung + Schlafschirm = 3.
+        $this->assertSame(board_touch_zones(1, 3), json_decode($zonesHeader, true));
+    }
+
+    public function test_debug_png_without_sim_does_not_set_touch_zones_header(): void
+    {
+        $token = $this->createTokenUser();
+        $this->createFavorite('A', '90111111', null);
+
+        $r = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $this->mockMonitorResponse('90111111', 4),
+            'get' => ['debug' => 'png'],
+        ]);
+
+        $this->assertNull($this->headerValue($r['headers'], 'X-Board-Touch-Zones'), 'einfaches debug=png ist read-only, kein Simulator-Header noetig');
+    }
+
     public function test_user_with_no_favorites_still_gets_a_valid_full_frame(): void
     {
         // Kein mock_wl_response -- board.php darf monitor_get() bei null
@@ -545,6 +671,46 @@ final class BoardTokenEndpointTest extends TestCase
         $this->assertSame('1', $this->headerValue($r2['headers'], 'X-Board-Is-Sleep-Page'), 'Seite 2 von 2 ist der Schlafschirm-Slot');
     }
 
+    public function test_page_n_jumps_directly_to_the_sleep_screen_in_a_single_touch(): void
+    {
+        // TASK-25: die Touch-Pille springt absolut, nicht mehr schrittweise --
+        // EIN Touch auf page_3 muss direkt die Seite 3 (hier: der Schlafschirm-
+        // Slot bei Monitor+Stoerung+Schlaf) liefern, ohne zweimal page_next
+        // zu brauchen. page_next selbst bleibt fuer die physischen Tasten
+        // unveraendert funktionsfaehig (s. test_page_next_reaches_the_sleep_screen...).
+        $token = $this->createTokenUser();
+        $this->createFavorite('Test', '90111111', null);
+        $mockWithAlert = json_encode([
+            'message' => ['serverTime' => '2026-08-16T19:00:00+02:00'],
+            'data' => [
+                'monitors' => [[
+                    'locationStop' => ['properties' => [
+                        'title' => 'Halt', 'name' => 'STK90111111', 'diva' => ['statId' => '90111111'],
+                    ]],
+                    'lines' => [[
+                        'name' => 'L1', 'towards' => 'Z', 'type' => 'ptTram', 'platform' => '1',
+                        'departures' => ['departure' => [['departureTime' => ['countdown' => 4]]]],
+                    ]],
+                ]],
+                'trafficInfos' => [[
+                    'name' => 'stoerung1', 'title' => 'Stoerung', 'description' => '…',
+                    'priority' => 'high', 'relatedLines' => ['L1'],
+                ]],
+            ],
+        ]);
+
+        $r1 = $this->runProbe('board.php', ['authorization' => 'Bearer ' . $token, 'mock_wl_response' => $mockWithAlert]);
+        $this->assertSame('3', $this->headerValue($r1['headers'], 'X-Board-Total-Pages'), '1 Abfahrtenseite + Stoerung + Schlafschirm-Slot');
+
+        $r2 = $this->runProbe('board.php', [
+            'authorization' => 'Bearer ' . $token,
+            'mock_wl_response' => $mockWithAlert,
+            'headers' => ['X-Device-Touch' => 'page_3'],
+        ]);
+
+        $this->assertSame('1', $this->headerValue($r2['headers'], 'X-Board-Is-Sleep-Page'), 'ein einzelner page_3-Touch muss direkt Seite 3 (Schlafschirm) treffen');
+    }
+
     public function test_forced_sleep_screen_does_not_persist_as_the_stored_page(): void
     {
         // Der letzte Abruf vor dem Tiefschlaf verlangt den Schlafschirm per
@@ -587,7 +753,7 @@ final class BoardTokenEndpointTest extends TestCase
             'headers' => ['X-Device-Screen' => 'sleep'],
             'get' => ['debug' => 'svg'],
         ]);
-        $this->assertStringNotContainsString('height="56" rx="28"', $forced['out'], 'erzwungener Vorschlaf-Abruf darf keine Pille zeigen');
+        $this->assertStringNotContainsString('height="48" rx="24"', $forced['out'], 'erzwungener Vorschlaf-Abruf darf keine Pille zeigen');
         $this->assertStringContainsString('Stand ', $forced['out'], '"Stand HH:MM" bleibt trotzdem stehen');
 
         $paged = $this->runProbe('board.php', [
@@ -596,6 +762,6 @@ final class BoardTokenEndpointTest extends TestCase
             'headers' => ['X-Device-Touch' => 'page_next'],
             'get' => ['debug' => 'svg'],
         ]);
-        $this->assertStringContainsString('height="56" rx="28"', $paged['out'], 'bewusstes Hinblaettern zeigt die Pille');
+        $this->assertStringContainsString('height="48" rx="24"', $paged['out'], 'bewusstes Hinblaettern zeigt die Pille');
     }
 }

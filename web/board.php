@@ -22,7 +22,13 @@
  * Der Token-Wert selbst wird nie ins auth_log geschrieben.
  * X-Device-Battery-mV: <n>           (optional)
  * X-Device-RSSI: <n>                 (optional)
- * X-Device-Touch: fav0|fav1|fav2|page_prev|page_next   (optional)
+ * X-Device-Touch: fav0|fav1|fav2|page_<N>|page_prev|page_next   (optional)
+ *                                     page_<N>: Tipp auf die Touch-Pille,
+ *                                     springt ABSOLUT zu Seite N (TASK-25).
+ *                                     page_prev/page_next: NUR die
+ *                                     physischen Tasten (main.cpp) -- eine
+ *                                     Taste kann keine Zielseite ausdruecken,
+ *                                     bleibt bewusst relativ.
  * If-None-Match: "<letzter ETag>"    (optional)
  *
  * Bewusst KEINE Sitzung -- wie im Vorgänger, alles haengt am Token-Nutzer.
@@ -72,6 +78,8 @@ require_once __DIR__ . '/../inc/board_template.php';
 require_once __DIR__ . '/../inc/board_state.php';
 require_once __DIR__ . '/../inc/board_sleep.php';
 require_once __DIR__ . '/../inc/board_guest_wifi.php';
+require_once __DIR__ . '/../inc/board_calendar.php';
+require_once __DIR__ . '/../inc/board_mqtt.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
@@ -104,6 +112,18 @@ try {
     $touchBarTitles = array_map(static fn (array $f): string => (string) $f['title'], $touchBarFavorites);
 
     $touchHeader = $_SERVER['HTTP_X_DEVICE_TOUCH'] ?? null;
+
+    // Loesch-X auf einer MQTT-Karte (TASK-26, Nutzerwunsch 2026-08-29).
+    // VOR board_resolve_touch() und vor dem Laden des Caches weiter unten --
+    // so rendert derselbe Request bereits die Seite OHNE die geloeschte
+    // Nachricht, statt erst beim naechsten Poll. Der Touch veraendert
+    // ausserdem KEINE Navigation: die Seite soll unter dem Finger stehen
+    // bleiben, deshalb faellt der Wert danach weg (null).
+    if (is_string($touchHeader) && str_starts_with($touchHeader, 'mqtt_del_')) {
+        board_mqtt_delete(substr($touchHeader, strlen('mqtt_del_')));
+        $touchHeader = null;
+    }
+
     $resolved = board_resolve_touch($oldMeta, is_string($touchHeader) ? $touchHeader : null, count($touchBarFavorites));
 
     if ($touchBarFavorites === []) {
@@ -132,9 +152,22 @@ try {
         $filteredAlerts = board_filter_alerts_for_favorite($monitor['alerts'] ?? [], $activeFavorite);
     }
 
+    // Kalenderseite: Existenz haengt ALLEIN an der Dateipraesenz, nicht am Alter
+    // oder Inhalt. Sonst verschoeben sich die Seitenindizes unter dem
+    // gespeicherten activePage des Geraets, sobald die Daten veralten. Das
+    // Anzeige-Array entsteht weiter unten, sobald $renderedAt existiert --
+    // $hasCalendar === ($calendar !== null) haelt beide Seitenrechnungen im
+    // Gleichschritt (hier und in board_render_svg()).
+    $calendarCache = board_calendar_load($userId);
+    $hasCalendar = $calendarCache !== null;
+    // MQTT-Seite (TASK-26): dieselbe Regel wie beim Kalender -- Existenz haengt
+    // ALLEIN an der Dateipraesenz, nie an Inhalt/Alter.
+    $mqttCache = board_mqtt_load();
+    $hasMqtt = $mqttCache !== null;
+
     $totalDeparturePages = board_paginate_departures($activeFavorite, 1)['totalPages'];
-    $totalContentPages = $totalDeparturePages + ($filteredAlerts !== [] ? 1 : 0);
-    $totalPages = board_total_pages($totalDeparturePages, $filteredAlerts !== []);
+    $totalContentPages = $totalDeparturePages + ($filteredAlerts !== [] ? 1 : 0) + ($hasCalendar ? 1 : 0) + ($hasMqtt ? 1 : 0);
+    $totalPages = board_total_pages($totalDeparturePages, $filteredAlerts !== [], $hasCalendar, $hasMqtt);
     $requestedPage = max(1, min($totalPages, $resolved['activePage']));
 
     // Schlafschirm erzwingen (Nutzervorgabe 2026-08-23): der letzte Abruf vor
@@ -155,6 +188,16 @@ try {
     $renderedAt = new DateTimeImmutable();
     $dataStand = $renderedAt; // s. Global Constraints: bewusst kein Reparse von monitor_get()['update_at']
     $weather = weather_select_display(is_array($weatherCache) ? $weatherCache : null, $renderedAt);
+    $calendar = $hasCalendar ? board_calendar_select_display($calendarCache, $renderedAt) : null;
+    $mqtt = $hasMqtt ? board_mqtt_select_display($mqttCache, $renderedAt) : null;
+    // Steht GERADE die MQTT-Seite an? Nur dann gehoeren die Loesch-X der
+    // Karten in die Touch-Zonen (s. weiter unten). Dieselbe Seitenreihenfolge
+    // wie board_render_svg(): Abfahrten -> Stoerungen -> Kalender -> MQTT.
+    $istMqttSeiteFuerZonen = $hasMqtt
+        && $requestedPage === $totalDeparturePages
+            + ($filteredAlerts !== [] ? 1 : 0)
+            + ($hasCalendar ? 1 : 0)
+            + 1;
 
     $batteryMv = $_SERVER['HTTP_X_DEVICE_BATTERY_MV'] ?? null;
     $batteryPercent = is_numeric($batteryMv) ? board_battery_percent_from_mv((int) $batteryMv) : 0;
@@ -170,19 +213,41 @@ try {
     $debug = (string) ($_GET['debug'] ?? '');
     $part = (string) ($_GET['part'] ?? '');
 
+    if ($debug === 'ui') {
+        // Browser-Simulator: rendert KEIN Bild selbst, sondern eine HTML-
+        // Huelle mit anklickbaren Zonen ueber einem <img>, das auf
+        // ?debug=png zeigt -- jeder Klick schickt denselben X-Device-Touch-
+        // Header, den die echte Firmware setzen wuerde, gegen genau dieselbe
+        // Token-gebundene Zustandsdatei (board_state_hash()). Kein neuer
+        // Codepfad fuer Zustand/Touch-Aufloesung, nur eine duenne UI davor.
+        board_render_debug_ui($token, count($touchBarFavorites), $totalPages, (string) ($_cspNonce ?? ''));
+        exit;
+    }
+
     if ($part === 'monitor' && ($debug === 'svg' || $debug === 'png')) {
         // Nur die Abfahrten-/Stoerungsseite, ohne Kopf-/Fusszeile, Touch-
         // Leiste oder Wetterkarte -- zugeschnitten auf die linke Spalte, die
         // im Vollbild durch die Trennlinien bei x=1113 und y=90..1310
         // definiert ist (board_render_chrome_svg()). Nur fuer debug=svg/png,
         // das reale Geraeteprotokoll bleibt unveraendert das Vollbild.
-        $items = $requestedPage <= $totalDeparturePages
-            ? board_paginate_departures($activeFavorite, $requestedPage)['items']
-            : null;
-        $mainOnlySvg = $items !== null
-            ? board_render_departures_svg($items)
-            : board_render_disruptions_svg(board_layout_disruptions($filteredAlerts));
-        $standSvg = board_render_stand_and_pagination_svg($dataStand, $requestedPage, $totalPages);
+        // Dieselbe Vierteilung wie in board_render_svg() -- ohne sie wuerde
+        // ?part=monitor auf der Kalender- oder MQTT-Seite stillschweigend die
+        // Stoerungsseite zeigen.
+        $disruptionsPage = $filteredAlerts !== [] ? $totalDeparturePages + 1 : null;
+        $calendarPage = $hasCalendar ? $totalDeparturePages + ($filteredAlerts !== [] ? 1 : 0) + 1 : null;
+        if ($requestedPage <= $totalDeparturePages) {
+            $mainOnlySvg = board_render_departures_svg(
+                board_paginate_departures($activeFavorite, $requestedPage, $filteredAlerts)['items']
+            );
+        } elseif ($requestedPage === $disruptionsPage) {
+            $mainOnlySvg = board_render_disruptions_svg(board_layout_disruptions($filteredAlerts));
+        } elseif ($requestedPage === $calendarPage) {
+            $mainOnlySvg = board_calendar_render_svg(board_calendar_layout($calendar));
+        } else {
+            $mainOnlySvg = board_mqtt_render_svg(board_mqtt_layout($mqtt));
+        }
+        $pageCategories = board_pagination_categories($totalDeparturePages, $filteredAlerts !== [], $hasCalendar, $hasMqtt);
+        $standSvg = board_render_stand_and_pagination_svg($dataStand, $requestedPage, $totalPages, true, $pageCategories);
         $defs = board_svg_defs();
 
         $svg = <<<SVG
@@ -224,7 +289,9 @@ SVG;
             weather_sun_times($renderedAt),
             weather_select_two_days(is_array($weatherCache) ? $weatherCache : null, $renderedAt),
             board_guest_wifi_load(),
-            !$forceSleepScreen
+            !$forceSleepScreen,
+            $calendar,
+            $mqtt
         );
     }
 
@@ -237,6 +304,37 @@ SVG;
     $png = svg_to_png($svg);
 
     if ($debug === 'png') {
+        // &sim=1: nur vom Browser-Simulator (?debug=ui) gesetzt, NIE vom
+        // echten Geraet oder einem einfachen debug=png-Aufruf -- persistiert
+        // die gerade aufgeloeste Touch-Navigation, damit ein zweiter Klick
+        // vom ANGEZEIGTEN Stand weitermacht statt immer vom letzten
+        // echten Geraete-Poll. Absichtlich ohne Frame/Diff/ETag: die
+        // 1bpp-Patch-Logik betrifft nur das Geraeteprotokoll. Fehlende Felder
+        // (etag, fullRefreshAt) fallen beim naechsten echten Poll auf
+        // board_state_default_meta() zurueck -- harmlos, erzwingt hoechstens
+        // einmal ein Vollbild statt eines Patches.
+        if (($_GET['sim'] ?? '') === '1') {
+            board_state_save_meta($metaPath, [
+                'activeFavoriteIndex' => $resolved['activeFavoriteIndex'],
+                'activePage' => $requestedPage,
+            ]);
+            // totalPages haengt vom AKTIVEN Favoriten ab (eine Stoerung
+            // fuegt eine Seite hinzu, die Pille wird breiter/wandert nach
+            // links) -- ohne diesen Header blieben die im Simulator einmalig
+            // beim Laden berechneten Zonen nach einem Favoritenwechsel
+            // stehen und passten nicht mehr zur tatsaechlich gerenderten
+            // Pille (Nutzerbefund 2026-08-27, live auf akadbrain).
+            //
+            // Auf der MQTT-Seite kommen die Loesch-X der einzelnen Karten
+            // dazu. Die sind INHALTSABHAENGIG (Masonry-Umbruch), lassen sich
+            // also anders als Favoritenleiste und Pille nicht aus einer festen
+            // Formel ableiten -- sie MUESSEN vom Server kommen.
+            $zonen = board_touch_zones(count($touchBarFavorites), $totalPages);
+            if ($istMqttSeiteFuerZonen && $mqtt !== null) {
+                $zonen = array_merge($zonen, board_mqtt_touch_zones(board_mqtt_layout($mqtt)));
+            }
+            header('X-Board-Touch-Zones: ' . json_encode($zonen, JSON_THROW_ON_ERROR));
+        }
         header('Content-Type: image/png');
         echo $png;
         exit;

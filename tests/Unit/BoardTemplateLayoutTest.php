@@ -136,4 +136,34 @@ class BoardTemplateLayoutTest extends TestCase
         $this->assertCount(2, $items);
         $this->assertSame('VOLL', $items[0]['text']);
     }
+
+    public function test_rows_are_flagged_disrupted_only_when_their_line_has_an_alert(): void
+    {
+        $favorite = $this->favorite(1, 'x', [
+            ['diva' => '1', 'name' => 'Station', 'lines' => [
+                $this->line('U1', '1', 'Leopoldau', 'metro', true, [['in' => 2]]),
+                $this->line('59A', '1', 'Schönbrunn', 'bus', true, [['in' => 5]]),
+            ]],
+        ]);
+        $filteredAlerts = [
+            ['title' => 'Störung', 'description' => '…', 'priority' => 'high', 'lines' => ['U1'], 'stops' => []],
+        ];
+
+        $items = board_paginate_departures($favorite, 1, $filteredAlerts)['items'];
+
+        $this->assertTrue($items[1]['disrupted'], 'U1 hat einen passenden Alert');
+        $this->assertFalse($items[2]['disrupted'], '59A hat keinen Alert');
+    }
+
+    public function test_rows_default_to_not_disrupted_without_alerts_argument(): void
+    {
+        $favorite = $this->favorite(1, 'x', [
+            ['diva' => '1', 'name' => 'Station', 'lines' => [
+                $this->line('U1', '1', 'Leopoldau', 'metro', true, [['in' => 2]]),
+            ]],
+        ]);
+
+        $items = board_paginate_departures($favorite, 1)['items'];
+        $this->assertFalse($items[1]['disrupted']);
+    }
 }

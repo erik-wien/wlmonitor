@@ -194,9 +194,22 @@ function board_resolve_touch(array $meta, ?string $touch, int $favoriteCount): a
             $page = 1;
         }
     } elseif ($touch === 'page_prev') {
+        // Physische Taste (KEY2 kurz, main.cpp) -- eine Taste kann keine
+        // absolute Zielseite ausdruecken, bleibt bewusst relativ. Getrennt
+        // vom Touchscreen-Pfad unten (Nutzerwunsch 2026-08-27: "Vor/zurueck
+        // ist ein Anachronismus" -- bezog sich nachweislich nur auf die
+        // kapazitive Pille, s. TASK-25).
         $page = max(1, $page - 1);
     } elseif ($touch === 'page_next') {
+        // Physische mittlere Taste (readPageButtons(), main.cpp) -- s.o.
         $page++;
+    } elseif ($touch !== null && preg_match('/^page_(\d+)$/', $touch, $m)) {
+        // Touchscreen-Pille (mapPaginationTouch(), touch_zone.cpp): jeder
+        // Slot springt DIREKT zu seiner eigenen Seitenzahl, kein
+        // schrittweises Blaettern mehr. Untergrenze 1 gegen "page_0"; die
+        // Obergrenze kennt diese reine Funktion nicht (s. Funktionskommentar) --
+        // der Aufrufer klemmt gegen die reale Seitenzahl.
+        $page = max(1, (int) $m[1]);
     }
 
     return ['activeFavoriteIndex' => $index, 'activePage' => $page];

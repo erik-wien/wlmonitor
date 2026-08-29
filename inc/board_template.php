@@ -56,8 +56,14 @@ function board_badge_label_font_size(string $label, string $badgeType = ''): int
  * Wetter-Icons kommen als Tabler-Outline-Dateien aus assets/img/wetter/
  * (Nutzerwunsch 2026-08-22, ersetzt die handgezeichneten Formen). Mapping
  * 1:1 wo eine passende Datei existiert; "bewoelkt"/"bedeckt" teilen sich
- * cloud.svg (keine zwei Bewoelkungsgrad-Varianten verfuegbar), "regen_leicht"/
- * "regen_stark" teilen sich cloud-rain.svg (keine Intensitaets-Variante).
+ * cloud.svg (keine zwei Bewoelkungsgrad-Varianten verfuegbar). "regen_leicht"
+ * (leicht bewoelkt + Niederschlag) bekommt cloud-sun-rain.svg statt der
+ * reinen Regenwolke -- "regen_stark" (stark bewoelkt + Niederschlag) bleibt
+ * bei cloud-rain.svg, da dort keine Sonne mehr zu sehen waere.
+ * cloud-sun.svg/cloud-sun-rain.svg kommen aus Lucide statt Tabler (Tabler hat
+ * keine Sonne-Wolke-Kombi-Icons; Lucide ist derselbe offene MIT-Icon-Stil,
+ * 2026-08-25 -- ersetzt eine vorherige handgebaute Version mit falschem
+ * Format, die deshalb nicht rendern wollte).
  * icon_unbekannt bleibt handgezeichnet -- kein Wetterzustand, sondern ein
  * UI-Fallback ("Icon-Code nicht erkannt").
  */
@@ -66,7 +72,7 @@ const BOARD_WEATHER_ICON_FILES = [
     'icon_leicht_bewoelkt' => 'cloud-sun.svg',
     'icon_bewoelkt'        => 'cloud.svg',
     'icon_bedeckt'         => 'cloud.svg',
-    'icon_regen_leicht'    => 'cloud-rain.svg',
+    'icon_regen_leicht'    => 'cloud-sun-rain.svg',
     'icon_regen_stark'     => 'cloud-rain.svg',
     'icon_schnee'          => 'cloud-snow.svg',
     'icon_gewitter'        => 'cloud-bolt.svg',
@@ -90,9 +96,15 @@ function board_svg_defs(): string
 
     return $weatherIcons . $rowIcons . <<<'SVG'
 <g id="icon_unbekannt">
-  <circle r="26" fill="white" stroke="black" stroke-width="5"/>
-  <text x="0" y="11" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="34"
+  <circle r="10" fill="white" stroke="black" stroke-width="2"/>
+  <text x="0" y="4" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="13"
         fill="black" text-anchor="middle">?</text>
+</g>
+
+<g id="iconWarn">
+  <polygon points="0,-13 13,10 -13,10" fill="white" stroke="black" stroke-width="2.5" stroke-linejoin="round"/>
+  <text x="0" y="8" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="13"
+        fill="black" text-anchor="middle">!</text>
 </g>
 
 <g id="badgeTram"><circle r="34" fill="black"/></g>
@@ -206,8 +218,15 @@ function board_battery_fill_width(int $percent): int
  * "Stand HH:MM" und die Touch-Leiste sind NICHT Teil dieser Funktion
  * (Task 6b bzw. Task 3b).
  */
-function board_render_chrome_svg(DateTimeImmutable $renderedAt, int $batteryPercent, int $wifiBars): string
-{
+function board_render_chrome_svg(
+    DateTimeImmutable $renderedAt,
+    int $batteryPercent,
+    int $wifiBars,
+    // Die Kalenderseite nutzt die volle Breite (Nutzerentscheidung 2026-08-26)
+    // und braucht die Spaltentrennlinie deshalb nicht. Kopf- und Fusszeile
+    // bleiben identisch -- nur der senkrechte Strich entfaellt.
+    bool $withColumnDivider = true
+): string {
     $wifiBars = max(0, min(3, $wifiBars));
     $percent = max(0, min(100, $batteryPercent));
     // Ab 95% ist am Ladekabel in Wahrheit "laedt gerade" -- Blitz statt
@@ -237,6 +256,10 @@ function board_render_chrome_svg(DateTimeImmutable $renderedAt, int $batteryPerc
         );
     }
 
+    $dividerSvg = $withColumnDivider
+        ? '<line x1="1113" y1="90" x2="1113" y2="1310" stroke="black" stroke-width="2"/>' . "\n"
+        : '';
+
     $logo = board_wl_logo_paths();
 
     return <<<SVG
@@ -256,8 +279,7 @@ function board_render_chrome_svg(DateTimeImmutable $renderedAt, int $batteryPerc
   {$percentSvg}
 </g>
 
-<line x1="1113" y1="90" x2="1113" y2="1310" stroke="black" stroke-width="2"/>
-<line x1="0" y1="1310" x2="1872" y2="1310" stroke="black" stroke-width="2"/>
+{$dividerSvg}<line x1="0" y1="1310" x2="1872" y2="1310" stroke="black" stroke-width="2"/>
 SVG;
 }
 
@@ -302,14 +324,185 @@ function board_render_touch_bar_svg(array $favoriteTitles, int $activeIndex): st
 }
 
 /**
+ * Tipp-Zonen als Pixel-Rechtecke (Panel-Koordinaten 1872x1404) fuer den
+ * Browser-Simulator (web/board.php?debug=ui) -- KEINE eigene Geometrie,
+ * sondern dieselben Formeln wie board_render_touch_bar_svg() und
+ * board_render_stand_and_pagination_svg() nochmal ausgewertet, damit die
+ * anklickbaren Bereiche niemals von dem abweichen, was tatsaechlich
+ * gezeichnet wurde. MUSS inhaltlich mit mapTouchToZone() in
+ * epaper-monitor/lib/boardlogic/touch_zone.cpp uebereinstimmen (die
+ * Firmware kennt dieses Array nicht -- dritte, unabhaengige Ableitung
+ * derselben drei Konstantensaetze).
+ *
+ * @return list<array{zone: string, x: int, y: int, w: int, h: int}>
+ */
+function board_touch_zones(int $favoriteCount, int $totalPages): array
+{
+    $zones = [];
+
+    if ($favoriteCount > 0) {
+        $margin = 16;
+        $gap = 16;
+        $buttonWidth = intdiv(1872 - 2 * $margin - ($favoriteCount - 1) * $gap, $favoriteCount);
+        $favZoneNames = ['fav0', 'fav1', 'fav2'];
+        for ($i = 0; $i < $favoriteCount; $i++) {
+            $zones[] = [
+                'zone' => $favZoneNames[$i],
+                'x' => $margin + $i * ($buttonWidth + $gap),
+                'y' => 1320,
+                'w' => $buttonWidth,
+                'h' => 1404 - 1320,
+            ];
+        }
+    }
+
+    if ($totalPages > 1) {
+        // Absolut statt relativ (Nutzerwunsch 2026-08-27, TASK-25): jeder
+        // Slot springt per "page_<N>" DIREKT zu seiner eigenen Seitenzahl --
+        // kein page_prev/page_next-Halbraum mehr fuer die Pille. Die letzte
+        // Zone reicht bewusst bis BOARD_PAGINATION_RIGHT_EDGE (nicht nur bis
+        // zum Slotende): mapPaginationTouch() in touch_zone.cpp klemmt einen
+        // Tipp im rechten Padding-Streifen auf den letzten Slot, diese Zone
+        // MUSS deckungsgleich sein, sonst zeigt der Simulator dort eine
+        // Luecke, die es am echten Geraet gar nicht gibt.
+        $pillWidth = $totalPages * BOARD_PAGINATION_SLOT_WIDTH + BOARD_PAGINATION_SIDE_PADDING;
+        $pillStartX = BOARD_PAGINATION_RIGHT_EDGE - $pillWidth;
+        for ($p = 1; $p <= $totalPages; $p++) {
+            $slotStart = $pillStartX + ($p - 1) * BOARD_PAGINATION_SLOT_WIDTH;
+            $slotEnd = $p === $totalPages ? BOARD_PAGINATION_RIGHT_EDGE : $slotStart + BOARD_PAGINATION_SLOT_WIDTH;
+            $zones[] = ['zone' => 'page_' . $p, 'x' => $slotStart, 'y' => BOARD_PAGINATION_TOP, 'w' => $slotEnd - $slotStart, 'h' => BOARD_PAGINATION_HEIGHT];
+        }
+    }
+
+    return $zones;
+}
+
+/**
+ * Browser-Simulator (web/board.php?debug=ui): eine HTML-Huelle um das
+ * ?debug=png-Bild mit anklickbaren Zonen aus board_touch_zones(). Jeder
+ * Klick schickt per fetch() denselben X-Device-Touch-Header, den die echte
+ * Firmware setzen wuerde -- Zustand/Navigation laeuft komplett ueber den
+ * bestehenden, bereits getesteten Codepfad in web/board.php
+ * (board_resolve_touch() + board_state_*), diese Funktion fuegt nur eine
+ * duenne UI davor. Kein Teil des Geraeteprotokolls, nur fuer Entwicklung.
+ *
+ * Gibt HTML direkt aus (kein Rueckgabewert) -- Aufrufer beendet danach.
+ *
+ * @param string $cspNonce $_cspNonce aus auth_bootstrap() (initialize.php) --
+ *        ohne Nonce blockt die CSP (script-src 'self' 'nonce-...', kein
+ *        'unsafe-inline') das eingebettete <script> stillschweigend: die
+ *        Seite laedt mit 200, aber keine Zone erscheint und kein Klick
+ *        funktioniert (am 2026-08-27 live auf akadbrain so gefunden).
+ */
+function board_render_debug_ui(string $token, int $favoriteCount, int $totalPages, string $cspNonce): void
+{
+    $zones = board_touch_zones($favoriteCount, $totalPages);
+    // Erstanzeige: reiner Lesezugriff, persistiert nichts. Klicks haengen
+    // &sim=1 an (s. web/board.php) -- nur DANN schreibt der Server die
+    // aufgeloeste Navigation in die Token-Zustandsdatei.
+    $imgSrc = 'board.php?' . http_build_query(['token' => $token, 'debug' => 'png']);
+    $touchSrc = $imgSrc . '&sim=1';
+    $zonesJson = json_encode($zones, JSON_THROW_ON_ERROR);
+    $imgSrcJson = json_encode($imgSrc, JSON_THROW_ON_ERROR);
+    $touchSrcJson = json_encode($touchSrc, JSON_THROW_ON_ERROR);
+    $nonce = htmlspecialchars($cspNonce, ENT_QUOTES, 'UTF-8');
+
+    header('Content-Type: text/html; charset=utf-8');
+    echo <<<HTML
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Board-Simulator</title>
+<style>
+  body { background: #222; color: #eee; font-family: system-ui, sans-serif; margin: 0; padding: 24px; }
+  h1 { font-size: 16px; font-weight: normal; color: #aaa; margin: 0 0 16px; }
+  #stage { position: relative; width: min(100%, 936px); margin: 0 auto; }
+  #stage img { display: block; width: 100%; height: auto; }
+  .zone {
+    position: absolute; box-sizing: border-box;
+    border: 1px dashed rgba(255,120,0,0.7); background: rgba(255,120,0,0.08);
+    color: rgba(255,180,80,0.9); font-size: 11px; font-family: monospace;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; user-select: none;
+  }
+  .zone:hover { background: rgba(255,120,0,0.25); }
+  #status { margin-top: 12px; color: #888; font-family: monospace; font-size: 13px; min-height: 1.2em; }
+</style>
+</head>
+<body>
+<h1>Board-Simulator -- Klick auf eine Zone sendet X-Device-Touch, wie die echte Firmware</h1>
+<div id="stage">
+  <img id="board" src="{$imgSrc}" alt="Board">
+</div>
+<div id="status"></div>
+<script nonce="{$nonce}">
+(function () {
+  const PANEL_W = 1872, PANEL_H = 1404;
+  const imgSrc = {$imgSrcJson};
+  const touchSrc = {$touchSrcJson};
+  const stage = document.getElementById('stage');
+  const img = document.getElementById('board');
+  const status = document.getElementById('status');
+  let objectUrl = null;
+
+  // totalPages haengt vom AKTIVEN Favoriten ab (eine Stoerung fuegt eine
+  // Seite hinzu, die Pille wird breiter/wandert nach links) -- die Zonen
+  // deshalb NICHT einmalig fest verdrahten, sondern nach jedem Touch aus dem
+  // X-Board-Touch-Zones-Header neu aufbauen (Nutzerbefund 2026-08-27, live
+  // auf akadbrain: nach einem Favoritenwechsel deckten die alten Zonen die
+  // tatsaechlich gerenderte Pille nicht mehr).
+  function renderZones(zones) {
+    stage.querySelectorAll('.zone').forEach(el => el.remove());
+    for (const z of zones) {
+      const el = document.createElement('div');
+      el.className = 'zone';
+      el.style.left = (z.x / PANEL_W * 100) + '%';
+      el.style.top = (z.y / PANEL_H * 100) + '%';
+      el.style.width = (z.w / PANEL_W * 100) + '%';
+      el.style.height = (z.h / PANEL_H * 100) + '%';
+      el.textContent = z.zone;
+      el.title = 'X-Device-Touch: ' + z.zone;
+      el.addEventListener('click', () => touch(z.zone));
+      stage.appendChild(el);
+    }
+  }
+
+  renderZones({$zonesJson});
+
+  async function touch(zone) {
+    status.textContent = 'X-Device-Touch: ' + zone + ' ...';
+    try {
+      const res = await fetch(touchSrc, { headers: { 'X-Device-Touch': zone } });
+      if (!res.ok) { status.textContent = 'Fehler: HTTP ' + res.status; return; }
+      const zonesHeader = res.headers.get('X-Board-Touch-Zones');
+      const blob = await res.blob();
+      const next = URL.createObjectURL(blob);
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      objectUrl = next;
+      img.src = next;
+      if (zonesHeader) renderZones(JSON.parse(zonesHeader));
+      status.textContent = 'X-Device-Touch: ' + zone + ' -> aktualisiert';
+    } catch (e) {
+      status.textContent = 'Fehler: ' + e;
+    }
+  }
+})();
+</script>
+</body>
+</html>
+HTML;
+}
+
+/**
  * Anzahl Seiten INKLUSIVE des Schlafschirms, der seit 2026-08-23 immer die
  * LETZTE Seite ist (Nutzerwunsch: "damit ich den Schirm auch absichtlich
  * aufrufen kann"). EINE Formel fuer board_render_svg() und web/board.php,
  * die $requestedPage schon vor dem Rendern gegen totalPages clampen muss.
  */
-function board_total_pages(int $totalDeparturePages, bool $hasDisruptions): int
+function board_total_pages(int $totalDeparturePages, bool $hasDisruptions, bool $hasCalendar = false, bool $hasMqtt = false): int
 {
-    return $totalDeparturePages + ($hasDisruptions ? 1 : 0) + 1;
+    return $totalDeparturePages + ($hasDisruptions ? 1 : 0) + ($hasCalendar ? 1 : 0) + ($hasMqtt ? 1 : 0) + 1;
 }
 
 /**
@@ -356,13 +549,21 @@ function board_render_svg(
     ?array $sun = null,
     ?array $sleepWeather = null,
     ?array $guestWifi = null,
-    bool $sleepShowPagination = true
+    bool $sleepShowPagination = true,
+    // Angehaengt statt einsortiert: alle Aufrufstellen uebergeben positionsbasiert.
+    // null = keine Kalenderseite (kein Cache vorhanden).
+    ?array $calendar = null,
+    // TASK-26: null = keine MQTT-Seite (kein Cache vorhanden, s. board_mqtt_load()).
+    ?array $mqtt = null
 ): string {
     $departurePages = board_paginate_departures($activeFavorite, 1);
     $totalDeparturePages = $departurePages['totalPages'];
     $hasDisruptions = $filteredAlerts !== [];
-    $totalContentPages = $totalDeparturePages + ($hasDisruptions ? 1 : 0);
-    $totalPages = board_total_pages($totalDeparturePages, $hasDisruptions);
+    $hasCalendar = $calendar !== null;
+    $hasMqtt = $mqtt !== null;
+    $totalContentPages = $totalDeparturePages + ($hasDisruptions ? 1 : 0) + ($hasCalendar ? 1 : 0) + ($hasMqtt ? 1 : 0);
+    $totalPages = board_total_pages($totalDeparturePages, $hasDisruptions, $hasCalendar, $hasMqtt);
+    $pageCategories = board_pagination_categories($totalDeparturePages, $hasDisruptions, $hasCalendar, $hasMqtt);
 
     $requestedPage = max(1, min($totalPages, $requestedPage));
 
@@ -370,23 +571,47 @@ function board_render_svg(
         $sleepWeather ??= ['today' => ['available' => false], 'tomorrow' => ['available' => false]];
         return board_sleep_render_svg(
             $sleepWeather['today'], $sleepWeather['tomorrow'], $sun, $guestWifi, $renderedAt,
-            $totalPages, $sleepShowPagination
+            $totalPages, $sleepShowPagination,
+            $touchBarFavoriteTitles, $activeFavoriteIndex, $pageCategories
         );
     }
 
     $defs = board_svg_defs();
-    $chrome = board_render_chrome_svg($renderedAt, $batteryPercent, $wifiBars);
     $touchBar = board_render_touch_bar_svg($touchBarFavoriteTitles, $activeFavoriteIndex);
-    $weatherSvg = board_render_weather_svg($weather, $firmwareBuild, $sun);
+
+    // Reihenfolge: Abfahrten -> Stoerungen -> Kalender -> MQTT -> Schlafschirm
+    // (der oben schon per Frueh-Ausstieg behandelt ist).
+    $disruptionsPage = $hasDisruptions ? $totalDeparturePages + 1 : null;
+    $calendarPage = $hasCalendar ? $totalDeparturePages + ($hasDisruptions ? 1 : 0) + 1 : null;
+    $istKalenderSeite = $requestedPage === $calendarPage;
+    $istMqttSeite = $hasMqtt
+        && $requestedPage > $totalDeparturePages
+        && $requestedPage !== $disruptionsPage
+        && $requestedPage !== $calendarPage;
+
+    // Kalender- UND MQTT-Seite nehmen die ganze Breite (Kalender-Entscheidung
+    // 2026-08-26, MQTT analog uebernommen): keine Wetterspalte, keine
+    // Spaltentrennlinie. Kopfzeile, Fusszeile, Paginierung und Touch-Leiste
+    // bleiben unveraendert -- die Pille MUSS an ihrer festen Stelle sitzen,
+    // die Firmware tippt nach Koordinaten.
+    $istVollbreiteSeite = $istKalenderSeite || $istMqttSeite;
+    $chrome = board_render_chrome_svg($renderedAt, $batteryPercent, $wifiBars, !$istVollbreiteSeite);
+    $weatherSvg = $istVollbreiteSeite ? '' : board_render_weather_svg($weather, $firmwareBuild, $sun);
 
     if ($requestedPage <= $totalDeparturePages) {
-        $items = board_paginate_departures($activeFavorite, $requestedPage)['items'];
+        $items = board_paginate_departures($activeFavorite, $requestedPage, $filteredAlerts)['items'];
         $mainSvg = board_render_departures_svg($items);
-    } else {
+    } elseif ($requestedPage === $disruptionsPage) {
         $mainSvg = board_render_disruptions_svg(board_layout_disruptions($filteredAlerts));
+    } elseif ($istKalenderSeite) {
+        $mainSvg = board_calendar_render_svg(board_calendar_layout($calendar));
+    } else {
+        // Nur erreichbar wenn $hasMqtt -- $requestedPage ist hier bereits
+        // gegen $totalContentPages geklemmt.
+        $mainSvg = board_mqtt_render_svg(board_mqtt_layout($mqtt));
     }
 
-    $standAndPagination = board_render_stand_and_pagination_svg($dataStand, $requestedPage, $totalPages);
+    $standAndPagination = board_render_stand_and_pagination_svg($dataStand, $requestedPage, $totalPages, true, $pageCategories);
 
     return <<<SVG
 <svg xmlns="http://www.w3.org/2000/svg" width="1872" height="1404" viewBox="0 0 1872 1404">
@@ -705,11 +930,19 @@ const BOARD_DEPARTURES_MAX_Y = 1250;
  */
 const BOARD_PAGINATION_SLOT_WIDTH  = 87; // 58 * 1.5 -- volle 50%, der Pfeil-Wegfall macht den Platz frei
 const BOARD_PAGINATION_SIDE_PADDING = 20; // Luft links/rechts der aeussersten Zahl
-const BOARD_PAGINATION_CIRCLE_RADIUS = 24; // 20 * 1.2 -- Obergrenze des 60px-Bands, s. Funktionskommentar
+// 20 (Nutzerwunsch 2026-08-29: mind. 10px Luft zur Trennlinie bei y=1310,
+// s. BOARD_PAGINATION_HEIGHT) -- war 24, das liesse bei der neuen, 8px
+// knapperen Pillenhoehe kaum noch Rand um die Icons.
+const BOARD_PAGINATION_CIRCLE_RADIUS = 20;
 const BOARD_PAGINATION_FONT_SIZE   = 30; // 24 * 1.25
 const BOARD_PAGINATION_RIGHT_EDGE  = 1083; // rechter Rand der Abfahrtenspalte
 const BOARD_PAGINATION_TOP         = 1252;
-const BOARD_PAGINATION_HEIGHT      = 56;
+// 48 (Nutzerbefund 2026-08-29: die Pille beruehrte optisch die volle
+// Trennlinie bei y=1310 -- Boden lag bei 1252+56=1308, nur 2px Abstand. War
+// 56; TOP bleibt fix, die Pille wird nur von unten gekuerzt. Neuer Boden
+// 1252+48=1300, exakt 10px zur Trennlinie. MUSS deckungsgleich mit
+// PAGINATION_ROW_BOTTOM in touch_zone.cpp bleiben (Firmware-Tippzone).
+const BOARD_PAGINATION_HEIGHT      = 48;
 
 /**
  * Cursor-Layout + Pagination der Abfahrtenliste eines einzelnen Favoriten
@@ -728,10 +961,20 @@ const BOARD_PAGINATION_HEIGHT      = 56;
  * gefunden, hier korrigiert).
  *
  * @param array{id: int, title: string, stations: list<array{diva: string, name: string, lines: list<array>}>} $favorite
+ * @param list<array{lines: list<string>}> $filteredAlerts bereits auf $favorite gefiltert
+ *        (board_filter_alerts_for_favorite()) -- markiert betroffene Zeilen mit
+ *        'disrupted' => true, damit die Zeile ein Warndreieck bekommt.
  * @return array{items: list<array>, totalPages: int}
  */
-function board_paginate_departures(array $favorite, int $page): array
+function board_paginate_departures(array $favorite, int $page, array $filteredAlerts = []): array
 {
+    $disruptedLines = [];
+    foreach ($filteredAlerts as $alert) {
+        foreach ($alert['lines'] ?? [] as $line) {
+            $disruptedLines[(string) $line] = true;
+        }
+    }
+
     $pages = [[]];
     $pageIndex = 0;
     $cursor = 90;
@@ -782,6 +1025,7 @@ function board_paginate_departures(array $favorite, int $page): array
                 'live_in' => $departures[0]['in'] ?? null,
                 'secondary_in' => $departures[1]['in'] ?? null,
                 'style' => $delayed ? 'delayed' : ($line['realtime'] ? 'normal' : 'gray'),
+                'disrupted' => isset($disruptedLines[$line['line']]),
                 'divider_y' => $r + 48,
             ];
 
@@ -870,6 +1114,13 @@ function board_render_departure_row(array $item): string
             $r + 9, $labelSize, htmlspecialchars($item['label'], ENT_XML1)
         );
     }
+    if ($item['disrupted'] ?? false) {
+        // Ecke oben rechts an der Linien-Badge (Box 20..88 x, r-34..r+34) --
+        // einziger Platz in der 96px-Zeile ohne Kollision mit Plattform- oder
+        // Zieltext (Nutzerwunsch 2026-08-26, Analog zum "⚠️"-Marker im Web,
+        // web/js/wl-monitor.js createAlertMarker()).
+        $out .= sprintf('<use href="#iconWarn" transform="translate(86,%d)"/>', $r - 26);
+    }
     $out .= sprintf(
         '<text x="110" y="%d" font-weight="bold" font-size="22" fill="%s">%s</text>',
         $r + 8, $fill, htmlspecialchars($item['platform'], ENT_XML1)
@@ -920,19 +1171,134 @@ function board_render_departure_row(array $item): string
 }
 
 /**
+ * Kategorie je Pagination-Slot fuer die Icon-Pille (Nutzerwunsch 2026-08-26:
+ * "Die Nummern bei der Pagination machen immer weniger Sinn.
+ * Monitor/Stoerung/Kalender/Wetter macht mehr Sinn"). Dieselbe Reihenfolge
+ * wie board_total_pages()/board_render_svg() (Abfahrten -> Stoerungen ->
+ * Kalender -> Schlafschirm), an einer Stelle gehalten, weil sie an drei
+ * unabhaengigen Dispatch-Stellen gebraucht wird (board_render_svg(),
+ * web/board.php Haupt- und ?part=monitor-Pfad).
+ *
+ * "Wetter" statt "Schlaf" fuer den letzten Slot: der Schlafschirm IST die
+ * Wetterseite (Heute/Morgen-Prognose), solange das Geraet noch wach ist --
+ * so hat der Nutzer die Seite auch benannt.
+ *
+ * 'mqtt' (TASK-26) reiht sich zwischen Kalender und Wetter ein -- Wetter/
+ * Schlafschirm bleibt strukturell IMMER die letzte Seite.
+ *
+ * @return array<int, string> Seitenzahl (1-indiziert) -> 'monitor'|'stoerung'|'kalender'|'mqtt'|'wetter'
+ */
+function board_pagination_categories(int $totalDeparturePages, bool $hasDisruptions, bool $hasCalendar, bool $hasMqtt = false): array
+{
+    $categories = [];
+    for ($p = 1; $p <= $totalDeparturePages; $p++) {
+        $categories[$p] = 'monitor';
+    }
+    $p = $totalDeparturePages;
+    if ($hasDisruptions) {
+        $categories[++$p] = 'stoerung';
+    }
+    if ($hasCalendar) {
+        $categories[++$p] = 'kalender';
+    }
+    if ($hasMqtt) {
+        $categories[++$p] = 'mqtt';
+    }
+    $categories[++$p] = 'wetter';
+
+    return $categories;
+}
+
+/**
+ * Handgezeichnetes Icon fuer einen Pagination-Slot, zentriert auf (0,0) --
+ * KEIN <use> auf ein defs-Symbol wie sonst ueblich (icon_unbekannt, iconWarn):
+ * die aktive Seite zeigt ihr Icon invertiert (weiss auf dem schwarzen Kreis,
+ * s. board_render_stand_and_pagination_svg()), ein fest eingefaerbtes
+ * defs-Symbol muesste dafuer dupliziert werden. $color wird direkt
+ * eingesetzt, dieselbe Form deckt beide Zustaende ab.
+ */
+function board_pagination_icon_svg(string $category, string $color): string
+{
+    return match ($category) {
+        // Bus-Piktogramm statt woertlich "Monitor" -- am 32px-Slot sofort als
+        // OePNV erkennbar, wo ein Bildschirm-Symbol nur ein Rechteck waere.
+        'monitor' => sprintf(
+            '<g fill="none" stroke="%1$s" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">'
+            . '<rect x="-13" y="-10" width="26" height="17" rx="4"/>'
+            . '<line x1="-13" y1="-1" x2="13" y2="-1"/>'
+            . '<circle cx="-7" cy="10" r="2.5" fill="%1$s" stroke="none"/>'
+            . '<circle cx="7" cy="10" r="2.5" fill="%1$s" stroke="none"/>'
+            . '</g>',
+            $color
+        ),
+        // Dasselbe Dreieck+"!" wie board_render_departure_row() (Wiedererkennung),
+        // hier aber ohne fixe Fuellung -- s. Funktionskommentar.
+        'stoerung' => sprintf(
+            '<polygon points="0,-13 13,10 -13,10" fill="none" stroke="%1$s" stroke-width="2.5" stroke-linejoin="round"/>'
+            . '<text x="0" y="8" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="14" fill="%1$s" text-anchor="middle">!</text>',
+            $color
+        ),
+        'kalender' => sprintf(
+            '<g fill="none" stroke="%1$s" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">'
+            . '<rect x="-13" y="-10" width="26" height="22" rx="3"/>'
+            . '<line x1="-13" y1="-3" x2="13" y2="-3"/>'
+            . '<line x1="-7" y1="-13" x2="-7" y2="-7"/>'
+            . '<line x1="7" y1="-13" x2="7" y2="-7"/>'
+            . '</g>',
+            $color
+        ),
+        // Sprechblase mit drei Punkten (TASK-26) -- Nachrichten-Metapher,
+        // sofort von Kalender/Wetter unterscheidbar.
+        'mqtt' => sprintf(
+            '<g fill="none" stroke="%1$s" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">'
+            . '<rect x="-13" y="-11" width="26" height="18" rx="6"/>'
+            . '<circle cx="-6" cy="-2" r="1.3" fill="%1$s" stroke="none"/>'
+            . '<circle cx="0" cy="-2" r="1.3" fill="%1$s" stroke="none"/>'
+            . '<circle cx="6" cy="-2" r="1.3" fill="%1$s" stroke="none"/>'
+            . '</g>'
+            . '<polygon points="-8,7 -2,7 -6,13" fill="%1$s"/>',
+            $color
+        ),
+        // Sonne statt Mond: der Schlafschirm zeigt die Wetterprognose, kein
+        // Schlaf-Piktogramm (s. Funktionskommentar board_pagination_categories()).
+        'wetter' => sprintf(
+            '<g stroke="%1$s" stroke-width="2.5" stroke-linecap="round">'
+            . '<circle cx="0" cy="0" r="7" fill="none"/>'
+            . '<line x1="0" y1="-13" x2="0" y2="-10"/>'
+            . '<line x1="0" y1="10" x2="0" y2="13"/>'
+            . '<line x1="-13" y1="0" x2="-10" y2="0"/>'
+            . '<line x1="10" y1="0" x2="13" y2="0"/>'
+            . '<line x1="-9.2" y1="-9.2" x2="-7.1" y2="-7.1"/>'
+            . '<line x1="7.1" y1="7.1" x2="9.2" y2="9.2"/>'
+            . '<line x1="-9.2" y1="9.2" x2="-7.1" y2="7.1"/>'
+            . '<line x1="7.1" y1="-7.1" x2="9.2" y2="-9.2"/>'
+            . '</g>',
+            $color
+        ),
+        default => '',
+    };
+}
+
+/**
  * "Stand HH:MM" (Zeitpunkt der WL-Datenabfrage) + kanonische Pagination am
  * unteren Ende der Abfahrtenspalte. Die Pille erscheint nur, wenn es mehr
  * als eine Seite gibt. Ein Pfeil ohne Ziel (erste/letzte Seite) wird
  * ausgegraut statt weggelassen, damit die Pille immer gleich breit bleibt.
  */
 /**
- * Seitenzahlen-Pille aus reinen Zahlen, OHNE Pfeile (Nutzerwunsch 2026-08-23:
- * "50% groesser, aber ohne weitere Pfeile, nur Seitennummern" -- seit der
- * Schlafschirm immer eine zusaetzliche letzte Seite ist, wirkte die Pille mit
- * Pfeilen an beiden Enden zu voll). Weiterhin tippbar: der linke/rechte
- * Pillenhalbraum sendet unsichtbar page_prev/page_next
+ * Seitenpille OHNE Pfeile (Nutzerwunsch 2026-08-23: "50% groesser, aber ohne
+ * weitere Pfeile, nur Seitennummern" -- seit der Schlafschirm immer eine
+ * zusaetzliche letzte Seite ist, wirkte die Pille mit Pfeilen an beiden Enden
+ * zu voll). Jeder Slot zeigt entweder ein Kategorie-Icon ($pageCategories,
+ * Nutzerwunsch 2026-08-26: "Monitor/Stoerung/Kalender/Wetter macht mehr
+ * Sinn" statt reiner Zahlen -- board_pagination_categories()) oder, ohne
+ * Kategorie, die alte Seitenzahl als Ziffer. Weiterhin tippbar: der linke/
+ * rechte Pillenhalbraum sendet unsichtbar page_prev/page_next
  * (mapPaginationTouch() in touch_zone.cpp) -- die physischen weissen Tasten
- * bleiben ohnehin der primaere Navigationsweg.
+ * bleiben ohnehin der primaere Navigationsweg. Die Slotbreite bleibt fix
+ * (87px, aus totalPages -- NICHT aus dem Inhalt!): die Firmware rechnet
+ * die Pillenbreite unabhaengig aus derselben Formel nach, ohne die Icons
+ * zu kennen -- variable Breiten wuerden die Touch-Zonen verschieben.
  *
  * Rechtsbuendig an x=1083 (rechter Rand der Abfahrtenspalte) statt wie
  * frueher linksbuendig ab x=793: totalPages ist seit dem Schlafschirm-Slot
@@ -950,7 +1316,11 @@ function board_render_stand_and_pagination_svg(
     DateTimeImmutable $dataStand,
     int $currentPage,
     int $totalPages,
-    bool $showPagination = true
+    bool $showPagination = true,
+    // Seitenzahl -> 'monitor'|'stoerung'|'kalender'|'wetter' (board_pagination_categories()).
+    // Leer = alte Ziffernpille (Faellt zurueck, kein Bruch fuer Aufrufer/Tests,
+    // die die Seitenstruktur nicht kennen -- s. Funktionskommentar unten).
+    array $pageCategories = []
 ): string {
     $standSvg = sprintf(
         '<text x="16" y="1286" font-family="Atkinson Hyperlegible Next" font-size="24" fill="black">Stand %s</text>',
@@ -981,8 +1351,17 @@ function board_render_stand_and_pagination_svg(
     $pagesSvg = '';
     for ($p = 1; $p <= $totalPages; $p++) {
         $x = $numberStartX + ($p - 1) * BOARD_PAGINATION_SLOT_WIDTH;
-        if ($p === $currentPage) {
+        $isActive = $p === $currentPage;
+        $color = $isActive ? 'white' : 'black';
+        $iconSvg = board_pagination_icon_svg($pageCategories[$p] ?? '', $color);
+
+        if ($isActive) {
             $pagesSvg .= sprintf('<circle cx="%d" cy="%d" r="%d" fill="black"/>', $x, $cy, BOARD_PAGINATION_CIRCLE_RADIUS);
+        }
+
+        if ($iconSvg !== '') {
+            $pagesSvg .= sprintf('<g transform="translate(%d,%d)">%s</g>', $x, $cy, $iconSvg);
+        } elseif ($isActive) {
             $pagesSvg .= sprintf(
                 '<text x="%d" y="%d" text-anchor="middle" font-weight="bold" font-size="%d" fill="white">%d</text>',
                 $x, $baselineY, BOARD_PAGINATION_FONT_SIZE, $p
