@@ -120,4 +120,24 @@ ENTSCHEIDUNG Graustufen (Nutzer 2026-08-29: 'bleib bei 1bpp'): Das E1003-Panel k
 Echtes 4bpp waere ein eigenes Vorhaben: 1,3 MB statt 328 KB pro Vollbild, Umbau von Packer/Diff/Protokoll UND Firmware-Anzeigepfad plus Reflash, dazu deutlich langsamerer Graustufen-Refresh. Bewusst NICHT gemacht.
 
 432 Tests gruen.
+
+Nachtrag 2026-08-29 (Sende-Seite): Kollege hatte per Perplexity ein
+Client-seitiges MQTT-Sende-Tool (Browser -> WebSocket -> Broker) gebaut,
+sollte unter wlmonitor.eriks.cloud/mqtt live gehen. Zwei Probleme beim
+Review gefunden: (1) Payload-Feldnamen "Titel"/"Text" statt der von
+board_mqtt_parse_payload() erwarteten "title"/"body" -- waere als
+Rohtext ohne Titel auf dem Board gelandet. (2) Broker-Passwort hartcodiert
+im Browser-JS, dazu ws:// von einer https-Seite aus (Mixed-Content-Block,
+haette nirgendwo funktioniert).
+
+Stattdessen web/mqtt/index.php: eigenstaendige PHP-Seite (kein Login, kein
+Menue-Eintrag, .no-ui-rules), die serverseitig auf akadbrain per
+mosquitto_pub an 127.0.0.1:1883 publiziert -- kein Browser-MQTT, kein
+wss/TLS noetig. Eigener Broker-User "sender" mit write-only ACL nur auf
+wlmonitor/board/message (/opt/homebrew/etc/mosquitto/aclfile auf
+akadbrain, acl_file-Zeile in mosquitto.conf ergaenzt, einmaliger
+Broker-Neustart). Verifiziert: sender kann senden, nicht lesen; der
+bestehende "wlmonitor"-Lese-User (mqtt_subscriber.py) bleibt unveraendert
+und empfaengt weiterhin normal. End-to-End live getestet (Formular ->
+PHP -> Broker -> data/mqtt_cache.json).
 <!-- SECTION:NOTES:END -->
