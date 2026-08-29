@@ -1,4 +1,5 @@
 include/config.h
+include/board_secrets.h
 .pio/
 
 # Kompiliertes Image brennt config.h-Secrets (WLAN-Passwort, API-Token) als

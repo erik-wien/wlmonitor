@@ -5,6 +5,22 @@
 
 void initDisplay();
 
+// Vollbild-Statusmeldung (weiss, zentrierter Text, Vollupdate) fuer Zustaende
+// ohne vorhandenen Server-Frame darunter -- Boot und WLAN-Setup-Portal
+// (Nutzerwunsch 2026-08-25: sichtbares Feedback, ob das Geraet gerade
+// bootet oder im Access-Point-Modus auf die Portal-Eingabe wartet, statt
+// eines stillen/stehenden Panels). line2 optional, leer = einzeilig.
+void showBootMessage(const char* line1, const char* line2 = "");
+
+// Vollbild-QR-Code (weiss, Vollupdate) fuer WLAN-Setup- und Admin-Modus-URLs
+// (Nutzerwunsch 2026-08-25) -- codiert qrPayload per qrcodegen (lib/qrcodegen,
+// Nayuki, MIT), heading und subtext (Klartext, kann von qrPayload abweichen,
+// z.B. "wlmonitor-setup" vs. "WIFI:T:nopass;S:wlmonitor-setup;;") stehen
+// druemherum. Scheitert die Codierung (zu lang), faellt es auf reinen Text
+// (subtext) ohne Code zurueck statt abzustuerzen.
+void showQrScreen(const char* heading, const char* subtext, const char* qrPayload,
+                  const char* hint = "");
+
 // Vollbild: packed ist 1bpp MSB-first, Zeilenbreite auf Vielfaches von 8
 // aufgerundet, 1=weiss/0=schwarz (Spec §6), w/h immer 1872x1404 bei Vollbild.
 void applyFullFrame(const uint8_t* packed, int w, int h);

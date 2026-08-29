@@ -10,6 +10,19 @@
 
 #define BOARD_HOST "wlmonitor.eriks.cloud"
 #define BOARD_PORT 443
+
+// Optionaler Compile-Zeit-Token aus include/board_secrets.h (gitignored, s.
+// board_secrets.example.h) -- Nutzerwunsch 2026-08-25: Token soll beim
+// Flashen automatisch gesetzt werden statt jedes Mal per WiFiManager-Portal
+// eingetippt zu werden. Fehlt die Datei (frisches Checkout), bleibt
+// BOARD_API_TOKEN leer und provisionAndConnect() ueberschreibt den
+// gespeicherten Token dann NICHT -- das Portal bleibt die einzige Quelle,
+// wie bisher.
+#if __has_include("board_secrets.h")
+#include "board_secrets.h"
+#else
+#define BOARD_API_TOKEN ""
+#endif
 // Nur noch der FALLBACK, wenn goToSleep() die lokale Uhrzeit nicht kennt
 // (WLAN/NTP fehlgeschlagen) -- der normale Zeitplan (1x/Stunde ab 06:00,
 // Nacht still) steckt seit 2026-08-23 in wake_schedule.h/.cpp
@@ -25,4 +38,4 @@
 // Panel gezeichnet, damit am echten Geraet sichtbar ist, ob wirklich der
 // aktuell geflashte Code laeuft (2026-08-21: Verwirrung durch e-Paper-
 // Ghosting/unsauberes Partial-Update machte das sonst unmoeglich zu sagen).
-#define FIRMWARE_BUILD 55
+#define FIRMWARE_BUILD 60

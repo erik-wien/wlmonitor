@@ -114,12 +114,12 @@ bool initTouch() {
     return true;
 }
 
-TouchZone pollTouch(int favoriteCount, int totalPages, int* outRawX, int* outRawY) {
-    if (s_touchAddr == 0) return TouchZone::None;
+TouchResult pollTouch(int favoriteCount, int totalPages, int* outRawX, int* outRawY) {
+    if (s_touchAddr == 0) return {};
 
     uint8_t status;
     if (!i2cReadReg16(s_touchAddr, GT911_REG_STATUS, &status, 1)) {
-        return TouchZone::None;
+        return {};
     }
     // Diagnose: jede Regung des Statusregisters melden. Bleibt das dauerhaft
     // 0x00, waehrend ein Finger auflegt, scannt der Controller nicht bzw.
@@ -131,7 +131,7 @@ TouchZone pollTouch(int favoriteCount, int totalPages, int* outRawX, int* outRaw
 
     if (!bufferReady) {
         // Kein neuer Datensatz -- INT wird nicht von uns gehalten.
-        return TouchZone::None;
+        return {};
     }
     if (touchCount == 0) {
         // "Puffer bereit, aber null Punkte" ist der Loslass-Fall. Auch DAS
@@ -141,7 +141,7 @@ TouchZone pollTouch(int favoriteCount, int totalPages, int* outRawX, int* outRaw
         // auf. Am Geraet gemessen (2026-08-21): "[sleep] GPIO2=L" +
         // "[wake] ext1-Maske=0x4 -> GPIO2", Zyklus ~9s statt 120s.
         i2cWriteReg16(s_touchAddr, GT911_REG_STATUS, 0x00);
-        return TouchZone::None;
+        return {};
     }
 
     // BUGFIX (2026-08-21): ein Touch-Punktdatensatz ist 8 Byte:
@@ -153,7 +153,7 @@ TouchZone pollTouch(int favoriteCount, int totalPages, int* outRawX, int* outRaw
     uint8_t point[8];
     if (!i2cReadReg16(s_touchAddr, GT911_REG_POINT0, point, sizeof(point))) {
         i2cWriteReg16(s_touchAddr, GT911_REG_STATUS, 0x00);
-        return TouchZone::None;
+        return {};
     }
     i2cWriteReg16(s_touchAddr, GT911_REG_STATUS, 0x00);
 

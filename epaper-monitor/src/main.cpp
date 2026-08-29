@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiManager.h>
+#include <WebServer.h>
 #include <Preferences.h>
 #include <esp_sleep.h>
 #include <esp_timer.h>
@@ -114,11 +115,155 @@ static void saveToken(const String& token) {
     prefs.end();
 }
 
+// Admin-Webserver: laenger Druck auf die linke Taste (KEY2, sonst "Seite
+// zurueck") waehrend das Geraet wach ist startet fuer 5 Minuten einen
+// lokalen HTTP-Server im BEREITS VERBUNDENEN Heim-WLAN -- Nutzerwunsch
+// 2026-08-25: Token aendern ohne jedes Mal das WiFiManager-Portal (das
+// zusaetzlich das WLAN neu verbindet) durchlaufen zu muessen. Bewusst ohne
+// Passwortschutz -- privates Heim-WLAN, Trigger erfordert physischen
+// Zugriff aufs Geraet.
+static WebServer* adminServer = nullptr;
+static bool adminTokenSaved = false;
+
+static void handleAdminRoot() {
+    adminServer->send(200, "text/html",
+        "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head>"
+        "<body style='font-family:sans-serif;max-width:480px;margin:2em auto;padding:0 1em'>"
+        "<h2>WLmonitor Board -- Admin</h2>"
+        "<form method='POST' action='/save'>"
+        "<label>API-Token (profil.php)</label><br>"
+        "<input name='token' style='width:100%;box-sizing:border-box;font-size:1rem' autofocus><br><br>"
+        "<button type='submit' style='font-size:1rem;padding:0.5em 1em'>Speichern</button>"
+        "</form></body></html>");
+}
+
+static void handleAdminSave() {
+    String newToken = adminServer->arg("token");
+    newToken.trim();
+    if (newToken.length() == 0) {
+        adminServer->send(400, "text/html", "<body>Leerer Token.</body>");
+        return;
+    }
+
+    // Live gegen board.php pruefen statt blind zu speichern (Nutzerfrage
+    // 2026-08-25: "wird der Token geprueft?") -- ein Tippfehler fiele sonst
+    // erst NACH dem Neustart als "Token ungueltig"-Banner auf, statt sofort
+    // im Browser. Nur eine bestaetigte Ablehnung (401) blockiert das
+    // Speichern; bei Netzwerk-Unsicherheit (Timeout, 503, ...) lieber
+    // trotzdem speichern, als den Nutzer ohne triftigen Grund auszubremsen.
+    // Der Abruf blockiert bis zu 8s -- ohne diese Meldung stuende auf dem
+    // Panel weiter der Admin-QR, als waere nichts passiert.
+    showBootMessage("Token wird geprueft ...", "Einen Moment, bitte nichts druecken.");
+
+    BoardFetchResult probe;
+    fetchBoard(newToken.c_str(), nullptr, nullptr, 0, 0, 8000, probe);
+
+    if (probe.outcome == BoardFetchOutcome::Unauthorized) {
+        // Zurueck auf den Admin-Schirm: der Server laeuft weiter, der Nutzer
+        // soll den QR erneut scannen bzw. die Seite neu laden koennen.
+        char again[64];
+        snprintf(again, sizeof(again), "http://%s/", WiFi.localIP().toString().c_str());
+        char againText[128];
+        snprintf(againText, sizeof(againText),
+                 "Nicht gespeichert. QR scannen oder %s erneut oeffnen", again);
+        showQrScreen("Token wurde abgelehnt", againText, again,
+                     "Der Server hat den Token nicht akzeptiert. Neuen Token in profil.php erzeugen.");
+        adminServer->send(200, "text/html",
+            "<!DOCTYPE html><html><body style='font-family:sans-serif;max-width:480px;margin:2em auto'>"
+            "<h2>Token ungueltig.</h2><p>board.php hat den Token abgelehnt (401) -- nicht gespeichert. "
+            "<a href='/'>Nochmal versuchen</a></p></body></html>");
+        return;
+    }
+
+    saveToken(newToken);
+    adminTokenSaved = true;
+    const char* verified = (probe.outcome == BoardFetchOutcome::Success)
+        ? "Gegen board.php geprueft -- funktioniert."
+        : "Konnte nicht eindeutig geprueft werden (Netzwerk) -- trotzdem gespeichert.";
+    adminServer->send(200, "text/html",
+        String("<!DOCTYPE html><html><body style='font-family:sans-serif;max-width:480px;margin:2em auto'>"
+               "<h2>Gespeichert.</h2><p>") + verified + "</p><p>Geraet startet jetzt neu.</p></body></html>");
+
+    // Dasselbe auch aufs Panel (Nutzerbefund 2026-08-25: "das sieht man im
+    // Browser, aber nicht am Display") -- sonst steht dort weiter der
+    // Admin-QR, obwohl der Server gleich weg ist und neu gestartet wird.
+    showBootMessage("Token gespeichert", "Geraet startet neu -- bitte kurz warten.");
+}
+
+static void runAdminServer() {
+    Serial.println("[admin] langer Druck erkannt, starte lokalen Webserver");
+    WebServer server(80);
+    adminServer = &server;
+    adminTokenSaved = false;
+
+    server.on("/", HTTP_GET, handleAdminRoot);
+    server.on("/save", HTTP_POST, handleAdminSave);
+    server.begin();
+
+    char url[64];
+    snprintf(url, sizeof(url), "http://%s/", WiFi.localIP().toString().c_str());
+    char subtext[128];
+    snprintf(subtext, sizeof(subtext),
+             "QR-Code scannen -- oder am Handy/PC %s oeffnen", url);
+    showQrScreen("Einstellungen aendern", subtext, url,
+                 "Geraet muss im selben WLAN sein. Endet nach 5 Minuten von selbst.");
+    Serial.printf("[admin] laeuft auf %s\n", url);
+
+    const uint32_t ADMIN_TIMEOUT_MS = 5UL * 60UL * 1000UL;
+    uint32_t start = millis();
+    while (millis() - start < ADMIN_TIMEOUT_MS && !adminTokenSaved) {
+        server.handleClient();
+        delay(10);
+    }
+    if (adminTokenSaved) {
+        delay(500); // Antwort noch ausliefern lassen, bevor der Server stoppt.
+    }
+
+    server.stop();
+    adminServer = nullptr;
+    Serial.println("[admin] beendet");
+
+    if (adminTokenSaved) {
+        ESP.restart(); // Einfachster Weg zu einem sauberen Zustand mit dem neuen Token.
+    }
+}
+
+// WiFiManager ruft das nur auf, wenn tatsaechlich der Access-Point-Modus
+// startet (kein gespeichertes WLAN oder Reset per Tastendruck) -- bei
+// erfolgreichem Auto-Connect mit gespeicherten Daten bleibt die
+// Boot-Meldung von provisionAndConnect() stehen, kein zusaetzlicher Refresh
+// (Nutzerwunsch 2026-08-25).
+static void onConfigPortalStarted(WiFiManager* wm) {
+    // Offener Access Point (kein Passwort an wm.autoConnect() uebergeben) --
+    // "T:nopass" im WIFI-QR-Format, sonst wuerden Handys ein Passwort
+    // erwarten und die Verbindung ablehnen.
+    showQrScreen("WLAN einrichten",
+                 "1. QR scannen -- verbindet mit dem offenen WLAN 'wlmonitor-setup'",
+                 "WIFI:T:nopass;S:wlmonitor-setup;;",
+                 "2. Die Seite oeffnet sich meist von selbst. Sonst http://192.168.4.1/ aufrufen.");
+}
+
 static bool provisionAndConnect(String& outToken) {
+    // Compile-Zeit-Token aus board_secrets.h (falls vorhanden) erzwingen --
+    // ueberschreibt einen evtl. abweichenden gespeicherten Wert bei JEDEM
+    // Boot, damit das Portal fuer den Token-Wert nicht mehr noetig ist
+    // (Nutzerwunsch 2026-08-25). Leerer BOARD_API_TOKEN (keine
+    // board_secrets.h) laesst den gespeicherten Wert unangetastet.
+    if (strlen(BOARD_API_TOKEN) > 0) {
+        saveToken(BOARD_API_TOKEN);
+    }
+
+    // Sprechender DHCP/mDNS-Hostname statt des ESP32-Standardnamens
+    // ("esp32s3-C003D8") -- Nutzerwunsch 2026-08-25. Muss VOR dem Verbinden
+    // gesetzt werden (WiFi.setHostname() wirkt erst beim naechsten
+    // WiFi.begin(), das wm.autoConnect() intern ausloest).
+    WiFi.setHostname("wlmonitor-eink");
+
     WiFiManager wm;
     String previousToken = loadToken();
     WiFiManagerParameter tokenParam("token", "API-Token (profil.php)", previousToken.c_str(), 128);
     wm.addParameter(&tokenParam);
+    wm.setAPCallback(onConfigPortalStarted);
 
     if (isWakeButtonHeld(WAKE_BUTTON_LONG_PRESS_MS)) {
         wm.resetSettings(); // langer Tastendruck -> zurueck in den Access-Point-Modus (Spec §10)
@@ -345,22 +490,69 @@ static void runActiveSession(const String& token) {
     bool buttonDown = false;
     uint32_t lastRefresh = millis(); // naechster automatischer Refresh erst in REFRESH_INTERVAL_MS
 
+    // Die linke Taste (KEY2) wird KOMPLETT hier behandelt, nicht mehr ueber
+    // readPageButtons(): kurz = "Seite zurueck" (erst beim LOSLASSEN, sonst
+    // blaettert jeder Admin-Versuch auf dem Weg noch eine Seite zurueck),
+    // lang (3s) = Admin-Modus (Nutzerwunsch 2026-08-25). Deshalb liest sie
+    // den rohen Pin-Zustand statt der edge-getriggerten readPageButtons().
+    uint32_t key2DownSince = 0;
+    bool key2ConsumedByAdmin = false;
+    const uint32_t ADMIN_TRIGGER_HOLD_MS = 3000;
+
     while (millis() - lastActivity < ACTIVE_IDLE_TIMEOUT_MS) {
         const char* touchValue = nullptr;
         bool forceFull = false;
+        // Puffer fuer "page_<N>" (TouchZone::Page, TASK-25) -- der Wert ist
+        // dynamisch, touchZoneToHeaderValue() kann dafuer keinen festen
+        // const char* liefern. Lebt bis fetchAndRender() weiter unten in
+        // diesem Schleifendurchlauf, das reicht.
+        char pageTouchBuf[16];
+
+        if (readRawButtonStates().key2Low) {
+            if (key2DownSince == 0) {
+                key2DownSince = millis();
+            } else if (!key2ConsumedByAdmin && millis() - key2DownSince >= ADMIN_TRIGGER_HOLD_MS) {
+                key2ConsumedByAdmin = true; // kein "Seite zurueck" mehr beim Loslassen
+                beepConfirm();              // 3s sind um -- Finger darf runter
+                runAdminServer();
+                fetchAndRender(token, nullptr, true); // Panel zeigte "Admin-Modus" -- echtes Board zurueckholen.
+                lastRefresh = millis();
+                lastActivity = millis();
+                continue;
+            }
+        } else {
+            if (key2DownSince != 0 && !key2ConsumedByAdmin) {
+                touchValue = "page_prev"; // kurzer Druck, jetzt losgelassen
+                beepRecognized();
+            }
+            key2DownSince = 0;
+            key2ConsumedByAdmin = false;
+        }
 
         int touchX = 0, touchY = 0;
-        TouchZone zone = pollTouch(rtcLastFavoriteCount, rtcLastTotalPages, &touchX, &touchY);
-        if (zone != TouchZone::None) {
+        TouchResult touch = pollTouch(rtcLastFavoriteCount, rtcLastTotalPages, &touchX, &touchY);
+        if (touchValue != nullptr) {
+            // Schon von der linken Taste belegt (kurzer Druck, oben erkannt) --
+            // Touch/andere Tasten in diesem Durchlauf nicht mehr auswerten.
+        } else if (touch.zone != TouchZone::None) {
             touchReleaseStreak = 0;
             if (!touchDown) {
-                touchValue = touchZoneToHeaderValue(zone);
+                if (touch.zone == TouchZone::Page) {
+                    // Absolute Pagination-Pille (TASK-25) -- Fav0/1/2 haben
+                    // einen festen Header-Wert, die Zielseite hier nicht.
+                    snprintf(pageTouchBuf, sizeof(pageTouchBuf), "page_%d", touch.page);
+                    touchValue = pageTouchBuf;
+                } else {
+                    touchValue = touchZoneToHeaderValue(touch.zone);
+                }
                 beepRecognized();
                 drawTouchBlob(touchX, touchY);
                 touchDown = true;
             }
         } else if (const char* btn = readPageButtons()) {
-            if (!buttonDown) {
+            // "page_prev" (linke Taste) wird oben eigenstaendig behandelt --
+            // hier nur die mittlere Taste ("page_next") durchlassen.
+            if (!buttonDown && strcmp(btn, "page_prev") != 0) {
                 touchValue = btn;
                 beepRecognized();
                 buttonDown = true;
@@ -440,11 +632,33 @@ void setup() {
     Serial.printf("[boot] wokenByTimer=%d (cause=%d)\n", wokenByTimer, (int) esp_sleep_get_wakeup_cause());
 
     initDisplay();
+    // Nur beim "echten" Boot (Kaltstart/manuelles Wecken), nicht beim
+    // stuendlichen automatischen Timer-Wecken -- das soll laut Nutzervorgabe
+    // 2026-08-23 schnell und ohne zusaetzliches Vollupdate/Geflacker bleiben,
+    // s. Kommentar bei "automatisches Wecken" weiter unten.
+    if (!wokenByTimer) {
+        showBootMessage("Startet ...", "Verbindet sich mit dem WLAN und holt die Abfahrten.");
+    }
     initTouch(); // Rueckgabewert bewusst ignoriert -- fehlender Touch ist nicht fatal, s. touch.h
     applyPanelTemperature(readAmbientTemperature());
 
     String token;
     if (!provisionAndConnect(token)) {
+        // Hier steht noch "Startet ..." (kein zuvor gerendertes Abfahrtenbild
+        // zum Schuetzen) -- der 3-Fehlversuche-Schwellwert von
+        // nextErrorState() ist fuer den Fall gedacht, ein gueltiges Board
+        // nicht wegen eines einzelnen WLAN-Hakelers zu ueberschreiben; beim
+        // Boot gilt das nicht, also sofortige Rueckmeldung statt bis zu drei
+        // stumme Zyklen (Nutzerbefund 2026-08-25: "kann sich offensichtlich
+        // nicht verbinden, ich sehe aber keine Fehlermeldung").
+        if (!wokenByTimer) {
+            // Nennt auch den Ausweg: ohne diesen Hinweis ist der Bildschirm
+            // eine Sackgasse -- der Admin-Modus braucht WLAN, ist hier also
+            // gerade nicht erreichbar, und dass die gruene Taste beim Booten
+            // ins WLAN-Setup fuehrt, steht sonst nirgends am Geraet.
+            showBootMessage("Keine WLAN-Verbindung",
+                            "Versucht es automatisch erneut. Zum Neu-Einrichten: gruene Taste beim Start 3 Sek. halten.");
+        }
         ErrorState st = nextErrorState(FetchOutcome::NetworkUnavailable, rtcConsecutiveFailures);
         rtcConsecutiveFailures = st.consecutiveFailures;
         if (st.banner != ErrorBanner::None) {

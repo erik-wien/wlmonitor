@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <cstring>
 #include "TFT_eSPI.h"
+#include "qrcodegen.h"
 // FreeSansBold9pt7b kommt bereits ueber TFT_eSPI.h -> Fonts/GFXFF/gfxfont.h
 // (LOAD_GFXFF in Setup522 bindet alle Standard-Free-Fonts automatisch ein,
 // s. Doppel-Definitionsfehler beim Versuch, sie hier nochmal zu includieren).
@@ -31,6 +32,64 @@ static const int WIFI_ICON_H = 28;
 
 void initDisplay() {
     epaper.begin();
+}
+
+void showBootMessage(const char* line1, const char* line2) {
+    epaper.fillScreen(TFT_WHITE);
+    epaper.setTextColor(TFT_BLACK, TFT_WHITE);
+    epaper.setFreeFont(&FreeSansBold24pt7b);
+    epaper.setCursor(120, 620);
+    epaper.print(line1);
+    if (line2 != nullptr && line2[0] != '\0') {
+        epaper.setFreeFont(&FreeSans18pt7b);
+        epaper.setCursor(120, 700);
+        epaper.print(line2);
+    }
+    epaper.update();
+}
+
+void showQrScreen(const char* heading, const char* subtext, const char* qrPayload,
+                  const char* hint) {
+    epaper.fillScreen(TFT_WHITE);
+    epaper.setTextColor(TFT_BLACK, TFT_WHITE);
+    epaper.setFreeFont(&FreeSansBold18pt7b);
+    epaper.setCursor(60, 90);
+    epaper.print(heading);
+
+    uint8_t tempBuffer[qrcodegen_BUFFER_LEN_MAX];
+    uint8_t qrcode[qrcodegen_BUFFER_LEN_MAX];
+    bool ok = qrcodegen_encodeText(qrPayload, tempBuffer, qrcode, qrcodegen_Ecc_MEDIUM,
+                                    qrcodegen_VERSION_MIN, qrcodegen_VERSION_MAX,
+                                    qrcodegen_Mask_AUTO, true);
+
+    int textY = 200;
+    if (ok) {
+        int size = qrcodegen_getSize(qrcode);
+        int scale = 500 / size;
+        if (scale < 4) scale = 4;
+        int qrPixels = size * scale;
+        int x0 = (1872 - qrPixels) / 2;
+        int y0 = 160;
+        for (int y = 0; y < size; y++) {
+            for (int x = 0; x < size; x++) {
+                if (qrcodegen_getModule(qrcode, x, y)) {
+                    epaper.fillRect(x0 + x * scale, y0 + y * scale, scale, scale, TFT_BLACK);
+                }
+            }
+        }
+        textY = y0 + qrPixels + 60;
+    }
+
+    epaper.setFreeFont(&FreeSans12pt7b);
+    epaper.setCursor(60, textY);
+    epaper.print(subtext);
+
+    if (hint != nullptr && hint[0] != '\0') {
+        epaper.setCursor(60, textY + 46);
+        epaper.print(hint);
+    }
+
+    epaper.update();
 }
 
 // Rohzugriff auf den internen 1bpp-Sprite-Puffer -- fuer den Geraete-

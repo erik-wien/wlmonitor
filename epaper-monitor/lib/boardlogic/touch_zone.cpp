@@ -20,7 +20,10 @@ const int PANEL_WIDTH = 1872;
 // totalPages nie mehr 1 und oft 3-5, eine linksbuendige Pille waere ueber die
 // Spaltentrennlinie hinausgewachsen.
 const int PAGINATION_ROW_TOP = 1252;
-const int PAGINATION_ROW_BOTTOM = 1308; // exklusiv (Top + Height)
+// 1300 (Nutzerbefund 2026-08-29: Pille beruehrte optisch die Trennlinie bei
+// y=1310, nur 2px Abstand -- war 1308/HEIGHT=56, jetzt HEIGHT=48 fuer 10px
+// Luft, s. BOARD_PAGINATION_HEIGHT in inc/board_template.php).
+const int PAGINATION_ROW_BOTTOM = 1300; // exklusiv (Top + Height)
 const int PAGINATION_RIGHT_EDGE = 1083;
 const int PAGINATION_SLOT_WIDTH = 87;
 const int PAGINATION_SIDE_PADDING = 20;
@@ -43,33 +46,38 @@ TouchZone mapFavoriteTouch(int x, int favoriteCount) {
     return TouchZone::None;
 }
 
-TouchZone mapPaginationTouch(int x, int totalPages) {
+TouchResult mapPaginationTouch(int x, int totalPages) {
     // Praktisch nie <=1 (der Schlafschirm-Slot macht totalPages >= 2) -- als
     // Schutz stehen gelassen, exakt wie im PHP-Gegenstueck.
-    if (totalPages <= 1) return TouchZone::None;
+    if (totalPages <= 1) return {};
 
     int pillWidth = totalPages * PAGINATION_SLOT_WIDTH + PAGINATION_SIDE_PADDING;
     int pillStartX = PAGINATION_RIGHT_EDGE - pillWidth;
 
-    if (x < pillStartX || x >= PAGINATION_RIGHT_EDGE) return TouchZone::None;
+    if (x < pillStartX || x >= PAGINATION_RIGHT_EDGE) return {};
 
-    // Keine Pfeile mehr sichtbar (Nutzerwunsch 2026-08-23) -- der linke/
-    // rechte Pillenhalbraum bleibt trotzdem als unsichtbare Zone aktiv,
-    // die physischen weissen Tasten sind ohnehin der primaere Navigationsweg.
-    int mid = pillStartX + pillWidth / 2;
-    return (x < mid) ? TouchZone::PagePrev : TouchZone::PageNext;
+    // Absolut statt links/rechts (TASK-25, Nutzerwunsch 2026-08-27: "Vor/
+    // zurueck ist ein Anachronismus"): jeder Slot IST die Zielseite. Der
+    // letzte Slot schluckt den rechten Padding-Streifen (Klemmung auf
+    // totalPages-1) -- deckungsgleich mit board_touch_zones() in
+    // inc/board_template.php, die aus demselben Grund ihre letzte Zone bis
+    // PAGINATION_RIGHT_EDGE statt nur bis zum rechnerischen Slotende zeichnet.
+    int slot = (x - pillStartX) / PAGINATION_SLOT_WIDTH;
+    if (slot < 0) slot = 0;
+    if (slot >= totalPages) slot = totalPages - 1;
+    return { TouchZone::Page, slot + 1 };
 }
 
 } // namespace
 
-TouchZone mapTouchToZone(int x, int y, int favoriteCount, int totalPages) {
+TouchResult mapTouchToZone(int x, int y, int favoriteCount, int totalPages) {
     if (y >= FAVORITE_ROW_TOP && y < FAVORITE_ROW_BOTTOM) {
-        return mapFavoriteTouch(x, favoriteCount);
+        return { mapFavoriteTouch(x, favoriteCount), 0 };
     }
     if (y >= PAGINATION_ROW_TOP && y < PAGINATION_ROW_BOTTOM) {
         return mapPaginationTouch(x, totalPages);
     }
-    return TouchZone::None;
+    return {};
 }
 
 const char* touchZoneToHeaderValue(TouchZone zone) {
@@ -77,8 +85,8 @@ const char* touchZoneToHeaderValue(TouchZone zone) {
         case TouchZone::Fav0: return "fav0";
         case TouchZone::Fav1: return "fav1";
         case TouchZone::Fav2: return "fav2";
-        case TouchZone::PagePrev: return "page_prev";
-        case TouchZone::PageNext: return "page_next";
+        // TouchZone::Page hat keinen festen Wert -- der Aufrufer formatiert
+        // "page_<N>" selbst aus TouchResult::page (main.cpp).
         default: return nullptr;
     }
 }
