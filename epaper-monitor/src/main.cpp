@@ -18,6 +18,16 @@
 #include "error_state.h"
 #include "wake_schedule.h"
 
+// Default-Stack von loopTask ist 8192 Byte (arduino-esp32 cores/esp32/main.cpp) --
+// zu knapp fuer WiFiManagers eigenen AP-Portal-Pfad (DNSServer + WebServer
+// intern), wenn die gespeicherte AP nicht erreichbar ist: gemessener Absturz
+// "stack overflow in task loopTask" genau in startConfigPortal() (2026-09-03,
+// Boot-Loop am echten Geraet). Offizieller Override-Mechanismus des Cores
+// (schwach definierte Funktion), kein Framework-Patch noetig.
+size_t getArduinoLoopTaskStackSize(void) {
+    return 16384;
+}
+
 // Ueberlebt Tiefschlaf (RTC-Speicher, ESP32-intern -- keine externe RTC
 // noetig, s. Spec §10 und Global Constraints).
 RTC_DATA_ATTR int rtcConsecutiveFailures = 0;
