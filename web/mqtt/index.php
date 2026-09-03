@@ -4,11 +4,11 @@ declare(strict_types=1);
 /**
  * web/mqtt/index.php
  *
- * Eigenstaendiges Mini-Tool, bewusst NICHT mit dem restlichen wlmonitor
- * verlinkt (kein Menue-Eintrag, kein Login, kein initialize.php) -- nutzt
- * aber dieselbe Server-Infrastruktur: publiziert lokal (127.0.0.1:1883) an
- * den bestehenden MQTT-Broker, den auch scripts/akadbrain/mqtt_subscriber.py
- * liest, und landet damit auf der Board-Nachrichtenseite (inc/board_mqtt.php).
+ * Mini-Tool, bewusst NICHT mit dem restlichen wlmonitor verlinkt (kein
+ * Menue-Eintrag) -- nutzt aber dieselbe Server-Infrastruktur: publiziert
+ * lokal (127.0.0.1:1883) an den bestehenden MQTT-Broker, den auch
+ * scripts/akadbrain/mqtt_subscriber.py liest, und landet damit auf der
+ * Board-Nachrichtenseite (inc/board_mqtt.php).
  *
  * Absichtlich serverseitig statt Browser-MQTT: der Broker spricht nur
  * unverschluesseltes ws://, eine per HTTPS ausgelieferte Seite duerfte das
@@ -20,17 +20,42 @@ declare(strict_types=1);
  * /opt/homebrew/etc/mosquitto/aclfile auf akadbrain) -- getrennt vom
  * "wlmonitor"-User des Readers, damit ein Leck dieser Seite nicht den
  * Lesezugriff mit ausliefert.
+ *
+ * Nutzerentscheidung 2026-09-01: Login-Pflicht (auth_require()), aber KEINE
+ * Rolleneinschraenkung -- jeder eingeloggte User darf senden. Deshalb ganz
+ * normal initialize.php (Session/CSRF/DB), trotzdem kein Menue-Eintrag und
+ * keine Chrome\Header::render()-Einbindung -- die Seite bleibt optisch
+ * eigenstaendig, nur der Zugriff ist jetzt an die Session gebunden.
+ *
+ * TASK-27 (2026-09-03): User/Passwort kommen jetzt aus wl_board_settings
+ * (board_settings_load(), Admin-Seite board_settings.php) statt aus einer
+ * hartcodierten Konstante. Uebergang: ist mqtt_sender_password in der DB noch
+ * leer (Migration frisch eingespielt, noch nichts gespeichert), faellt es auf
+ * das alte hartcodierte Passwort zurueck, bis ein Admin einmal ueber die
+ * neue Seite ein echtes Passwort setzt (das rotiert dann gleichzeitig den
+ * Broker, s. board_settings_sync_mqtt_broker_password()).
  */
+
+require_once __DIR__ . '/../../inc/initialize.php';
+require_once __DIR__ . '/../../inc/board_settings.php';
+auth_require();
 
 const MQTT_HOST = '127.0.0.1';
 const MQTT_PORT = 1883;
-const MQTT_USER = 'sender';
-const MQTT_PASSWORD = 'f49d486303c764f6c749b279f0122804';
 const MQTT_TOPIC = 'wlmonitor/board/message';
 const MQTT_PUB_BIN = '/opt/homebrew/bin/mosquitto_pub';
+// Uebergangs-Fallback, s. Docblock oben -- wird geloescht, sobald jede
+// Instanz einmal ueber board_settings.php ein echtes Passwort gesetzt hat.
+const MQTT_PASSWORD_FALLBACK = 'f49d486303c764f6c749b279f0122804';
 
 const MAX_TITEL_CHARS = 200;
 const MAX_TEXT_CHARS = 500;
+
+$boardSettings = board_settings_load($con);
+$mqttUser = $boardSettings['mqtt_sender_user'];
+$mqttPassword = $boardSettings['mqtt_sender_password'] !== ''
+    ? $boardSettings['mqtt_sender_password']
+    : MQTT_PASSWORD_FALLBACK;
 
 $status = null;
 $error = null;
@@ -39,7 +64,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $titel = mb_substr(trim((string)($_POST['titel'] ?? '')), 0, MAX_TITEL_CHARS);
     $text = mb_substr(trim((string)($_POST['text'] ?? '')), 0, MAX_TEXT_CHARS);
 
-    if ($titel === '' && $text === '') {
+    if (!csrf_verify()) {
+        $error = 'Sicherheits-Token abgelaufen -- Seite neu laden und nochmal versuchen.';
+    } elseif ($titel === '' && $text === '') {
         $error = 'Titel oder Text ausfüllen.';
     } else {
         $payload = json_encode(['title' => $titel, 'body' => $text], JSON_UNESCAPED_UNICODE);
@@ -48,8 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             escapeshellarg(MQTT_PUB_BIN),
             escapeshellarg(MQTT_HOST),
             MQTT_PORT,
-            escapeshellarg(MQTT_USER),
-            escapeshellarg(MQTT_PASSWORD),
+            escapeshellarg($mqttUser),
+            escapeshellarg($mqttPassword),
             escapeshellarg(MQTT_TOPIC),
             escapeshellarg($payload)
         );
@@ -121,6 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="msg err"><?= htmlspecialchars($error, ENT_QUOTES) ?></div>
   <?php endif; ?>
   <form method="post">
+    <?= csrf_input() ?>
     <div class="field">
       <label for="titel">Titel</label>
       <input type="text" id="titel" name="titel" autocomplete="off" maxlength="<?= MAX_TITEL_CHARS ?>" value="<?= htmlspecialchars($titel ?? '', ENT_QUOTES) ?>">

@@ -4,58 +4,38 @@
 // Gaeste-WLAN fuer den Schlafschirm (Nutzerwunsch 2026-08-23): SSID und
 // Passwort als QR-Code, damit Besuch sich ohne Abtippen verbinden kann.
 //
-// Die Zugangsdaten liegen BEWUSST in data/ und nicht im Repo (Nutzerentscheid
-// 2026-08-23): data/ ist von deploy.py ausgenommen und in .gitignore, ein
-// WLAN-Passwort landet damit weder in der Versionsgeschichte noch in einem
-// Deploy-Artefakt. Preis dafuer: die Datei wird pro Instanz von Hand gepflegt,
-// Vorlage ist data/guest_wifi.example.json.
+// TASK-27 (2026-09-03): Zugangsdaten kommen jetzt aus wl_board_settings
+// (board_settings_load()) statt aus data/guest_wifi.json -- ueber die neue
+// Admin-Seite board_settings.php pflegbar statt von Hand auf dem Server.
 declare(strict_types=1);
 
-/** Voreingestellter Ablageort, relativ zum Repo-/Instanzwurzelverzeichnis. */
-function board_guest_wifi_path(): string
-{
-    return __DIR__ . '/../data/guest_wifi.json';
-}
-
 /**
- * Laedt die Zugangsdaten. Liefert null, wenn die Datei fehlt, unlesbar ist,
- * kein gueltiges JSON enthaelt oder keine SSID nennt -- der Schlafschirm
- * laesst den QR-Block dann einfach weg, statt einen kaputten Code zu zeigen.
+ * Baut die Zugangsdaten aus dem Ergebnis von board_settings_load(). Liefert
+ * null bei leerer SSID -- der Schlafschirm laesst den QR-Block dann einfach
+ * weg, statt einen kaputten Code zu zeigen (gleiches Verhalten wie zuvor bei
+ * fehlender data/guest_wifi.json).
  *
  * Ein leeres Passwort ist zulaessig (offenes Netz, encryption "nopass").
  *
+ * @param array{wifi_ssid: string, wifi_password: string, wifi_encryption: string, wifi_hidden: bool} $settings
  * @return array{ssid: string, password: string, encryption: string, hidden: bool}|null
  */
-function board_guest_wifi_load(?string $path = null): ?array
+function board_guest_wifi_load(array $settings): ?array
 {
-    $path ??= board_guest_wifi_path();
-
-    if (!is_file($path) || !is_readable($path)) {
+    if ($settings['wifi_ssid'] === '') {
         return null;
     }
 
-    $raw = file_get_contents($path);
-    if ($raw === false) {
-        return null;
-    }
-
-    $cfg = json_decode($raw, true);
-    if (!is_array($cfg) || !isset($cfg['ssid']) || !is_string($cfg['ssid']) || $cfg['ssid'] === '') {
-        return null;
-    }
-
-    $encryption = isset($cfg['encryption']) && is_string($cfg['encryption'])
-        ? strtoupper($cfg['encryption'])
-        : 'WPA';
+    $encryption = strtoupper($settings['wifi_encryption']);
     if (!in_array($encryption, ['WPA', 'WEP', 'NOPASS'], true)) {
         $encryption = 'WPA';
     }
 
     return [
-        'ssid'       => $cfg['ssid'],
-        'password'   => isset($cfg['password']) && is_string($cfg['password']) ? $cfg['password'] : '',
+        'ssid'       => $settings['wifi_ssid'],
+        'password'   => $settings['wifi_password'],
         'encryption' => $encryption,
-        'hidden'     => (bool) ($cfg['hidden'] ?? false),
+        'hidden'     => $settings['wifi_hidden'],
     ];
 }
 

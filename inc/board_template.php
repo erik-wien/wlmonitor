@@ -214,7 +214,8 @@ function board_battery_fill_width(int $percent): int
 /**
  * Kopfzeile aus Spec (Stand 2026-08-16): Logo (schwarz/weiss), zentrierte
  * Server-Renderzeit, Akku+WLAN in einer Zeile rechtsbuendig auf x=1856,
- * plus beide Trennlinien (vertikale Spaltenlinie, Fusszeilen-Trennlinie).
+ * plus die vertikale Spaltenlinie. Die Fusszeilen-Trennlinie zwischen Pille
+ * und Touch-Leiste ist entfallen (Nutzerentscheidung 2026-09-01: ueberfluessig).
  * "Stand HH:MM" und die Touch-Leiste sind NICHT Teil dieser Funktion
  * (Task 6b bzw. Task 3b).
  */
@@ -225,17 +226,22 @@ function board_render_chrome_svg(
     // Die Kalenderseite nutzt die volle Breite (Nutzerentscheidung 2026-08-26)
     // und braucht die Spaltentrennlinie deshalb nicht. Kopf- und Fusszeile
     // bleiben identisch -- nur der senkrechte Strich entfaellt.
-    bool $withColumnDivider = true
+    bool $withColumnDivider = true,
+    // TASK-27: admin-konfigurierbar (wl_board_settings). Defaults = bisherige
+    // hartcodierte Werte, damit bestehende Aufrufer unveraendert bleiben.
+    int $batteryChargingThreshold = 95,
+    int $batteryFullThreshold = 92
 ): string {
     $wifiBars = max(0, min(3, $wifiBars));
     $percent = max(0, min(100, $batteryPercent));
-    // Ab 95% ist am Ladekabel in Wahrheit "laedt gerade" -- Blitz statt
-    // Prozentzahl. 92-94% sind laut Nutzerkalibrierung schon echte 100%
-    // (lineares Mapping unterschaetzt nahe der Vollladung), zeigen also
-    // "100 %" UND vollen Balken statt des rohen Werts (Nutzerkalibrierung
-    // 2026-08-22, board_battery_display_percent()).
-    $isCharging = board_battery_is_charging($percent);
-    $displayPercent = board_battery_display_percent($percent);
+    // Ab $batteryChargingThreshold ist am Ladekabel in Wahrheit "laedt
+    // gerade" -- Blitz statt Prozentzahl. $batteryFullThreshold bis knapp
+    // darunter ist laut Nutzerkalibrierung schon echte 100% (lineares
+    // Mapping unterschaetzt nahe der Vollladung), zeigt also "100 %" UND
+    // vollen Balken statt des rohen Werts (Nutzerkalibrierung 2026-08-22,
+    // board_battery_display_percent()).
+    $isCharging = board_battery_is_charging($percent, $batteryChargingThreshold);
+    $displayPercent = board_battery_display_percent($percent, $batteryFullThreshold, $batteryChargingThreshold);
     $fillWidth = board_battery_fill_width($displayPercent);
     $percentSvg = $isCharging
         ? '<polygon points="1849,38 1839,52 1846,52 1843,64 1856,48 1848,48 1851,38" fill="black"/>'
@@ -279,7 +285,7 @@ function board_render_chrome_svg(
   {$percentSvg}
 </g>
 
-{$dividerSvg}<line x1="0" y1="1310" x2="1872" y2="1310" stroke="black" stroke-width="2"/>
+{$dividerSvg}
 SVG;
 }
 
@@ -554,7 +560,11 @@ function board_render_svg(
     // null = keine Kalenderseite (kein Cache vorhanden).
     ?array $calendar = null,
     // TASK-26: null = keine MQTT-Seite (kein Cache vorhanden, s. board_mqtt_load()).
-    ?array $mqtt = null
+    ?array $mqtt = null,
+    // TASK-27: admin-konfigurierbar (wl_board_settings). Defaults = bisherige
+    // hartcodierte Werte, s. board_render_chrome_svg().
+    int $batteryChargingThreshold = 95,
+    int $batteryFullThreshold = 92
 ): string {
     $departurePages = board_paginate_departures($activeFavorite, 1);
     $totalDeparturePages = $departurePages['totalPages'];
@@ -595,7 +605,10 @@ function board_render_svg(
     // bleiben unveraendert -- die Pille MUSS an ihrer festen Stelle sitzen,
     // die Firmware tippt nach Koordinaten.
     $istVollbreiteSeite = $istKalenderSeite || $istMqttSeite;
-    $chrome = board_render_chrome_svg($renderedAt, $batteryPercent, $wifiBars, !$istVollbreiteSeite);
+    $chrome = board_render_chrome_svg(
+        $renderedAt, $batteryPercent, $wifiBars, !$istVollbreiteSeite,
+        $batteryChargingThreshold, $batteryFullThreshold
+    );
     $weatherSvg = $istVollbreiteSeite ? '' : board_render_weather_svg($weather, $firmwareBuild, $sun);
 
     if ($requestedPage <= $totalDeparturePages) {
@@ -608,7 +621,7 @@ function board_render_svg(
     } else {
         // Nur erreichbar wenn $hasMqtt -- $requestedPage ist hier bereits
         // gegen $totalContentPages geklemmt.
-        $mainSvg = board_mqtt_render_svg(board_mqtt_layout($mqtt));
+        $mainSvg = board_mqtt_render_svg(board_mqtt_layout($mqtt), count($mqtt['messages']));
     }
 
     $standAndPagination = board_render_stand_and_pagination_svg($dataStand, $requestedPage, $totalPages, true, $pageCategories);

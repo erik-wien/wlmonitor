@@ -296,6 +296,24 @@ class BoardMqttTest extends TestCase
         $this->assertStringContainsString('Keine Nachrichten', $svg);
     }
 
+    public function test_render_svg_shows_message_count_header_when_count_given(): void
+    {
+        // Nutzerwunsch 2026-09-01: Anzahl der Nachrichten im Seitenkopf.
+        // Optionaler Parameter statt Teil von $items, damit board_mqtt_layout()s
+        // indexbasiert gepruefte Rueckgabe unveraendert bleibt (s. Kommentar an
+        // board_mqtt_render_svg()).
+        $svg = board_mqtt_render_svg([], 6);
+
+        $this->assertStringContainsString('Nachrichten (6)', $svg);
+    }
+
+    public function test_render_svg_omits_header_when_count_not_given(): void
+    {
+        $svg = board_mqtt_render_svg($this->cardItem());
+
+        $this->assertStringNotContainsString('Nachrichten (', $svg);
+    }
+
     public function test_render_svg_title_is_bold_body_is_regular(): void
     {
         $svg = board_mqtt_render_svg($this->cardItem());

@@ -502,10 +502,25 @@ function board_mqtt_shadow_pattern_svg(): string
     );
 }
 
-function board_mqtt_render_svg(array $items): string
+/**
+ * @param list<array> $items von board_mqtt_layout()
+ * @param int|null $count Gesamtzahl der Nachrichten fuer den Seitenkopf
+ *        (Nutzerwunsch 2026-09-01); optional statt in $items gemischt, damit
+ *        board_mqtt_layout()s Rueckgabe (Karten/Notiz-Items, von vielen Tests
+ *        indexbasiert geprueft) unveraendert bleibt. null = kein Kopf (z.B.
+ *        isolierte Render-Tests einzelner Karten).
+ */
+function board_mqtt_render_svg(array $items, ?int $count = null): string
 {
     $e = static fn (string $s): string => htmlspecialchars($s, ENT_XML1);
     $out = board_mqtt_shadow_pattern_svg() . '<g font-family="Atkinson Hyperlegible Next">';
+
+    if ($count !== null) {
+        $out .= sprintf(
+            '<text x="%d" y="130" font-weight="bold" font-size="28">%s</text>',
+            BOARD_MQTT_GRID_X, $e(sprintf('Nachrichten (%d)', $count))
+        );
+    }
 
     foreach ($items as $item) {
         if ($item['type'] === 'note') {

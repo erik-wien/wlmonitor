@@ -31,4 +31,3 @@ web/jardyx-favicon.svg
 
 # SMTP-Zugangsdaten, nur auf dem Server (auth TASK-6) — nie ins Repo
 mail.ini
-data/guest_wifi.json

@@ -1,0 +1,207 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * web/board_settings.php — Board-Einstellungen (TASK-27): Gaeste-WLAN,
+ * Akku-Kalibrierung, MQTT-Sender-Credentials. Nur fuer Admins (Suite-Policy
+ * §1.2, admin_require()) -- betrifft ein einzelnes geteiltes physisches
+ * Geraet, keine Pro-User-Einstellung, deshalb "Administration ▾" statt
+ * Usermenue (s. inc/layout.php adminItems).
+ *
+ * Drei getrennte POST-Actions statt einem Sammelformular (Muster aus
+ * profil.php: change_theme/change_departures) -- jeder Bereich hat eigene
+ * Validierung und soll unabhaengig speicherbar sein.
+ *
+ * Passwortfelder zeigen den Bestandswert NIE im Formular (auch nicht
+ * verschleiert) -- leer lassen heisst "unveraendert", ein Wert eintragen
+ * ersetzt ihn. Kein Passwortwert geht ins auth_log (appendLog()-Aufrufe
+ * nennen nur, DASS sich etwas geaendert hat).
+ */
+require_once(__DIR__ . '/../inc/initialize.php');
+require_once(__DIR__ . '/../inc/board_settings.php');
+require_once(__DIR__ . '/../inc/layout.php');
+auth_require();
+admin_require();
+
+$wifiError = null;
+$batteryError = null;
+$mqttError = null;
+// Erfolg wird per PRG-Redirect (?saved=…) zurueckgemeldet und HIER gerendert.
+// addAlert() waere falsch: diese Seite rendert $_SESSION['alerts'] nicht und
+// leert sie auch nicht -- die Meldung poppte erst spaeter kontextlos auf einer
+// anderen Seite auf (Audit 2026-09-03).
+$savedLabels = [
+    'wifi'    => 'Gäste-WLAN gespeichert.',
+    'battery' => 'Akku-Kalibrierung gespeichert.',
+    'mqtt'    => 'MQTT-Sender-Zugangsdaten gespeichert.',
+];
+$saved = $savedLabels[(string) ($_GET['saved'] ?? '')] ?? null;
+
+// Eingaben ueberleben einen Validierungsfehler (sonst tippt der Admin alles neu).
+$form = [];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+
+    if (!csrf_verify()) {
+        // Vorher fiel das still durch: die Seite rendert wie ein frischer GET,
+        // der Admin sieht weder Fehler noch Bestaetigung und haelt es fuer
+        // gespeichert. Fail-closed war es schon, nur eben unsichtbar.
+        $msg = 'Sicherheits-Token abgelaufen -- Seite neu laden und nochmal versuchen.';
+        $wifiError = $action === 'save_wifi' ? $msg : null;
+        $batteryError = $action === 'save_battery' ? $msg : null;
+        $mqttError = $action === 'save_mqtt_sender' ? $msg : null;
+    } elseif ($action === 'save_wifi') {
+        $form = [
+            'wifi_ssid'       => trim((string) ($_POST['wifi_ssid'] ?? '')),
+            'wifi_encryption' => (string) ($_POST['wifi_encryption'] ?? 'WPA'),
+            'wifi_hidden'     => ($_POST['wifi_hidden'] ?? '') === '1',
+        ];
+        $wifiError = board_settings_save_wifi(
+            $con,
+            $form['wifi_ssid'],
+            (string) ($_POST['wifi_password'] ?? ''),
+            $form['wifi_encryption'],
+            $form['wifi_hidden']
+        );
+        if ($wifiError === null) {
+            appendLog($con, 'admin', 'Board-Einstellungen: Gaeste-WLAN geaendert.');
+            header('Location: board_settings.php?saved=wifi#wifi'); exit;
+        }
+    } elseif ($action === 'save_battery') {
+        $form = [
+            'battery_charging_threshold' => (int) ($_POST['battery_charging_threshold'] ?? 0),
+            'battery_full_threshold'     => (int) ($_POST['battery_full_threshold'] ?? 0),
+        ];
+        $batteryError = board_settings_save_battery(
+            $con,
+            $form['battery_charging_threshold'],
+            $form['battery_full_threshold']
+        );
+        if ($batteryError === null) {
+            appendLog($con, 'admin', 'Board-Einstellungen: Akku-Kalibrierung geaendert.');
+            header('Location: board_settings.php?saved=battery#battery'); exit;
+        }
+    } elseif ($action === 'save_mqtt_sender') {
+        $form = ['mqtt_sender_user' => trim((string) ($_POST['mqtt_sender_user'] ?? ''))];
+        $mqttError = board_settings_save_mqtt_sender(
+            $con,
+            $form['mqtt_sender_user'],
+            (string) ($_POST['mqtt_sender_password'] ?? '')
+        );
+        if ($mqttError === null) {
+            appendLog($con, 'admin', 'Board-Einstellungen: MQTT-Sender-Zugangsdaten geaendert.');
+            header('Location: board_settings.php?saved=mqtt#mqtt'); exit;
+        }
+    }
+}
+
+// Nach einem Fehler die abgelehnten Eingaben zeigen, sonst den DB-Stand.
+$settings = array_merge(board_settings_load($con), $form);
+$csrfToken = csrf_token();
+$e = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+?>
+<?php render_header(); ?>
+
+<main id="main-content" tabindex="-1">
+<div class="container admin-page">
+
+  <?php if ($saved !== null): ?>
+    <div class="app-alert app-alert-success" role="status"><?= $e($saved) ?></div>
+  <?php endif; ?>
+
+  <div class="app-card" id="wifi">
+    <div class="app-card-header">Gäste-WLAN</div>
+    <div class="app-card-body">
+      <p class="form-text">Erscheint als QR-Code auf dem Schlafschirm des Boards. Leere SSID blendet den QR-Block aus.</p>
+      <?php if ($wifiError !== null): ?>
+        <div class="app-alert app-alert-danger py-2" role="alert"><?= $e($wifiError) ?></div>
+      <?php endif; ?>
+      <form method="post" action="board_settings.php#wifi">
+        <input type="hidden" name="csrf_token" value="<?= $e($csrfToken) ?>">
+        <input type="hidden" name="action" value="save_wifi">
+        <div class="form-group">
+          <label class="form-label" for="wifi_ssid">SSID</label>
+          <input type="text" class="form-control" id="wifi_ssid" name="wifi_ssid"
+                 value="<?= $e($settings['wifi_ssid']) ?>" maxlength="64">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="wifi_password">Passwort</label>
+          <input type="text" class="form-control" id="wifi_password" name="wifi_password"
+                 autocomplete="off" placeholder="unverändert lassen = leer senden" maxlength="128">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="wifi_encryption">Verschlüsselung</label>
+          <select class="form-control" id="wifi_encryption" name="wifi_encryption">
+            <?php foreach (['WPA', 'WEP', 'NOPASS'] as $enc): ?>
+              <option value="<?= $e($enc) ?>" <?= $settings['wifi_encryption'] === $enc ? 'selected' : '' ?>><?= $e($enc) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="form-group form-check">
+          <input type="checkbox" class="form-check-input" id="wifi_hidden" name="wifi_hidden" value="1"
+                 <?= $settings['wifi_hidden'] ? 'checked' : '' ?>>
+          <label class="form-check-label" for="wifi_hidden">Verstecktes Netz</label>
+        </div>
+        <button type="submit" class="btn btn-outline-danger">Speichern</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="app-card" id="battery">
+    <div class="app-card-header">Akku-Kalibrierung</div>
+    <div class="app-card-body">
+      <p class="form-text">Ab dem Lade-Schwellwert zeigt das Board ein Blitz-Symbol statt einer Prozentzahl. Zwischen "voll" und "lädt" wird 100&nbsp;% angezeigt.</p>
+      <?php if ($batteryError !== null): ?>
+        <div class="app-alert app-alert-danger py-2" role="alert"><?= $e($batteryError) ?></div>
+      <?php endif; ?>
+      <form method="post" action="board_settings.php#battery">
+        <input type="hidden" name="csrf_token" value="<?= $e($csrfToken) ?>">
+        <input type="hidden" name="action" value="save_battery">
+        <div class="form-group">
+          <label class="form-label" for="battery_full_threshold">"Voll"-Schwellwert (%)</label>
+          <input type="number" class="form-control" id="battery_full_threshold" name="battery_full_threshold"
+                 min="1" max="100" value="<?= (int) $settings['battery_full_threshold'] ?>">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="battery_charging_threshold">Lade-Schwellwert (%)</label>
+          <input type="number" class="form-control" id="battery_charging_threshold" name="battery_charging_threshold"
+                 min="1" max="100" value="<?= (int) $settings['battery_charging_threshold'] ?>">
+        </div>
+        <button type="submit" class="btn btn-outline-danger">Speichern</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="app-card" id="mqtt">
+    <div class="app-card-header">MQTT-Sender-Zugangsdaten</div>
+    <div class="app-card-body">
+      <p class="form-text">
+        Zugangsdaten für <code>/mqtt/</code> (Nachricht ans Board senden). Ein neues Passwort wird sofort auch am
+        Broker gesetzt -- schlägt das fehl, wird nichts gespeichert, damit DB und Broker nicht auseinanderlaufen.
+      </p>
+      <?php if ($mqttError !== null): ?>
+        <div class="app-alert app-alert-danger py-2" role="alert"><?= $e($mqttError) ?></div>
+      <?php endif; ?>
+      <form method="post" action="board_settings.php#mqtt">
+        <input type="hidden" name="csrf_token" value="<?= $e($csrfToken) ?>">
+        <input type="hidden" name="action" value="save_mqtt_sender">
+        <div class="form-group">
+          <label class="form-label" for="mqtt_sender_user">Benutzername</label>
+          <input type="text" class="form-control" id="mqtt_sender_user" name="mqtt_sender_user"
+                 value="<?= $e($settings['mqtt_sender_user']) ?>" maxlength="64">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="mqtt_sender_password">Passwort</label>
+          <input type="text" class="form-control" id="mqtt_sender_password" name="mqtt_sender_password"
+                 autocomplete="off" placeholder="unverändert lassen = leer senden" maxlength="128">
+        </div>
+        <button type="submit" class="btn btn-outline-danger">Speichern</button>
+      </form>
+    </div>
+  </div>
+
+</div>
+</main>
+
+<?php render_footer(); ?>

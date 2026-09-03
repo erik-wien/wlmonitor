@@ -80,6 +80,7 @@ require_once __DIR__ . '/../inc/board_sleep.php';
 require_once __DIR__ . '/../inc/board_guest_wifi.php';
 require_once __DIR__ . '/../inc/board_calendar.php';
 require_once __DIR__ . '/../inc/board_mqtt.php';
+require_once __DIR__ . '/../inc/board_settings.php';
 
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
@@ -199,6 +200,10 @@ try {
             + ($hasCalendar ? 1 : 0)
             + 1;
 
+    // TASK-27: einmal pro Request geladen, speist Gaeste-WLAN + Akku-
+    // Kalibrierung weiter unten (wie $weather/$mqtt/$calendar bereits).
+    $boardSettings = board_settings_load($con);
+
     $batteryMv = $_SERVER['HTTP_X_DEVICE_BATTERY_MV'] ?? null;
     $batteryPercent = is_numeric($batteryMv) ? board_battery_percent_from_mv((int) $batteryMv) : 0;
     $rssi = $_SERVER['HTTP_X_DEVICE_RSSI'] ?? null;
@@ -244,7 +249,10 @@ try {
         } elseif ($requestedPage === $calendarPage) {
             $mainOnlySvg = board_calendar_render_svg(board_calendar_layout($calendar));
         } else {
-            $mainOnlySvg = board_mqtt_render_svg(board_mqtt_layout($mqtt));
+            // $count wie im echten Rendering (inc/board_template.php) -- ohne
+            // ihn zeigte der Debug-Schnitt die Seite OHNE "Nachrichten (N)"
+            // und taugte damit nicht mehr zum Vergleich (Audit 2026-09-03).
+            $mainOnlySvg = board_mqtt_render_svg(board_mqtt_layout($mqtt), count($mqtt['messages']));
         }
         $pageCategories = board_pagination_categories($totalDeparturePages, $filteredAlerts !== [], $hasCalendar, $hasMqtt);
         $standSvg = board_render_stand_and_pagination_svg($dataStand, $requestedPage, $totalPages, true, $pageCategories);
@@ -288,10 +296,12 @@ SVG;
             $firmwareBuild,
             weather_sun_times($renderedAt),
             weather_select_two_days(is_array($weatherCache) ? $weatherCache : null, $renderedAt),
-            board_guest_wifi_load(),
+            board_guest_wifi_load($boardSettings),
             !$forceSleepScreen,
             $calendar,
-            $mqtt
+            $mqtt,
+            $boardSettings['battery_charging_threshold'],
+            $boardSettings['battery_full_threshold']
         );
     }
 

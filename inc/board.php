@@ -315,10 +315,15 @@ function board_battery_percent_from_mv(int $mv): int
  * "laedt gerade", kein plausibler Ladestand. Schwellwert fuer die
  * Entladeseite (0%/fast leer) noch nicht kalibriert --
  * board_battery_percent_from_mv() bleibt dort unveraendert.
+ *
+ * $chargingThreshold ist seit TASK-27 ueber die Board-Einstellungen
+ * (wl_board_settings, board_settings_load()) admin-konfigurierbar -- der
+ * Default bleibt der bisherige hartcodierte Wert, damit bestehende Aufrufer
+ * ohne den Parameter unveraendert funktionieren.
  */
-function board_battery_is_charging(int $percent): bool
+function board_battery_is_charging(int $percent, int $chargingThreshold = 95): bool
 {
-    return $percent >= 95;
+    return $percent >= $chargingThreshold;
 }
 
 /**
@@ -328,10 +333,13 @@ function board_battery_is_charging(int $percent): bool
  * waere >=95%, s. board_battery_is_charging()). Nur fuer die ANZEIGE
  * (Text + Balkenfuellung); board_battery_percent_from_mv() selbst bleibt
  * der rohe Messwert.
+ *
+ * $fullThreshold/$chargingThreshold s. board_battery_is_charging() -- der
+ * "voll"-Bereich ist [$fullThreshold, $chargingThreshold).
  */
-function board_battery_display_percent(int $percent): int
+function board_battery_display_percent(int $percent, int $fullThreshold = 92, int $chargingThreshold = 95): int
 {
-    return ($percent >= 92 && $percent < 95) ? 100 : $percent;
+    return ($percent >= $fullThreshold && $percent < $chargingThreshold) ? 100 : $percent;
 }
 
 /**

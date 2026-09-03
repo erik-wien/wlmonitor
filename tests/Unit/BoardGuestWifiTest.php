@@ -1,9 +1,10 @@
 <?php
 // tests/Unit/BoardGuestWifiTest.php
 //
-// Gaeste-WLAN fuer den Schlafschirm (Nutzerwunsch 2026-08-23). Die
-// Zugangsdaten liegen in data/guest_wifi.json -- ausserhalb von Git und
-// ausserhalb des Deploys.
+// Gaeste-WLAN fuer den Schlafschirm (Nutzerwunsch 2026-08-23). Zugangsdaten
+// kommen seit TASK-27 aus wl_board_settings (board_settings_load()), nicht
+// mehr aus data/guest_wifi.json -- board_guest_wifi_load() ist deshalb eine
+// reine Array-Transformation ohne Datei-I/O.
 
 namespace WLMonitor\Tests\Unit;
 
@@ -11,47 +12,27 @@ use PHPUnit\Framework\TestCase;
 
 class BoardGuestWifiTest extends TestCase
 {
-    private string $tmp;
-
-    protected function setUp(): void
+    /** @return array{wifi_ssid: string, wifi_password: string, wifi_encryption: string, wifi_hidden: bool} */
+    private function settings(array $overrides = []): array
     {
-        $this->tmp = sys_get_temp_dir() . '/wl_guest_wifi_' . bin2hex(random_bytes(6)) . '.json';
-    }
-
-    protected function tearDown(): void
-    {
-        if (is_file($this->tmp)) {
-            unlink($this->tmp);
-        }
-    }
-
-    private function write(array $data): string
-    {
-        file_put_contents($this->tmp, json_encode($data));
-        return $this->tmp;
+        return array_merge([
+            'wifi_ssid' => '',
+            'wifi_password' => '',
+            'wifi_encryption' => 'WPA',
+            'wifi_hidden' => false,
+        ], $overrides);
     }
 
     // --- Laden ---------------------------------------------------------------
 
-    public function test_missing_file_yields_null_so_the_qr_block_is_skipped(): void
+    public function test_empty_ssid_yields_null_so_the_qr_block_is_skipped(): void
     {
-        $this->assertNull(board_guest_wifi_load('/nicht/vorhanden.json'));
-    }
-
-    public function test_invalid_json_yields_null(): void
-    {
-        file_put_contents($this->tmp, '{kaputt');
-        $this->assertNull(board_guest_wifi_load($this->tmp));
-    }
-
-    public function test_missing_ssid_yields_null(): void
-    {
-        $this->assertNull(board_guest_wifi_load($this->write(['password' => 'geheim'])));
+        $this->assertNull(board_guest_wifi_load($this->settings()));
     }
 
     public function test_defaults_are_filled_in(): void
     {
-        $wifi = board_guest_wifi_load($this->write(['ssid' => 'Gaeste', 'password' => 'geheim']));
+        $wifi = board_guest_wifi_load($this->settings(['wifi_ssid' => 'Gaeste', 'wifi_password' => 'geheim']));
 
         $this->assertSame('Gaeste', $wifi['ssid']);
         $this->assertSame('WPA', $wifi['encryption'], 'ohne Angabe WPA annehmen');
@@ -60,7 +41,10 @@ class BoardGuestWifiTest extends TestCase
 
     public function test_unknown_encryption_falls_back_to_wpa(): void
     {
-        $wifi = board_guest_wifi_load($this->write(['ssid' => 'Gaeste', 'encryption' => 'WPA4711']));
+        // Verteidigung gegen unerwartete DB-Werte -- board_settings_save_wifi()
+        // weist ungueltige Verschluesselungsarten schon beim Speichern zurueck,
+        // aber der Loader soll trotzdem nicht mit einem kaputten QR-Code enden.
+        $wifi = board_guest_wifi_load($this->settings(['wifi_ssid' => 'Gaeste', 'wifi_encryption' => 'WPA4711']));
         $this->assertSame('WPA', $wifi['encryption']);
     }
 

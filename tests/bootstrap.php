@@ -32,6 +32,7 @@ require_once __DIR__ . '/../inc/board_sleep.php';
 require_once __DIR__ . '/../inc/board_guest_wifi.php';
 require_once __DIR__ . '/../inc/board_calendar.php';
 require_once __DIR__ . '/../inc/board_mqtt.php';
+require_once __DIR__ . '/../inc/board_settings.php';
 
 if (!file_exists(__DIR__ . '/../data')) {
     mkdir(__DIR__ . '/../data', 0755, true);

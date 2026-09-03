@@ -60,6 +60,29 @@ function render_header(bool $showSearch = false): void
     // ersetzt die frühere handgepflegte Liste (TASK-19).
     $appsMenu = \Erikr\Chrome\AppsMenu::build('wlmonitor', APP_ENV);
 
+    // App-eigene Navigation (Suite-Policy §1.1). web/mqtt/ ist bewusst kein
+    // eigenes PHP-Feature dieser Codebasis im Sinne von index.php/api.php --
+    // eigene Login-Pruefung (auth_require(), Nutzerentscheidung 2026-09-01),
+    // eigenes CSS, kein Chrome\Header::render() dort drin. Der Menuepunkt
+    // gilt fuer alle EINGELOGGTEN User, nicht nur Admins (sonst waere er ein
+    // adminItems-Eintrag).
+    //
+    // Chrome\Header filtert NICHT nach Rolle ("apps already role-filter these
+    // before passing them in") -- ungefiltert erschienen beide Menues auch auf
+    // den oeffentlichen Seiten (help.php, login.php) fuer Ausgeloggte
+    // (Audit 2026-09-03). Kein Rechtebruch (auth_require()/admin_require()
+    // halten), aber sichtbar sein darf es trotzdem nicht.
+    $appMenu = $loggedIn
+        ? [['href' => 'mqtt/', 'label' => 'eInk Display']]
+        : [];
+
+    // Board-Einstellungen betreffen ein einzelnes geteiltes physisches Geraet,
+    // keine Pro-User-Vorliebe -- gehoeren deshalb neben "Verwaltung" in die
+    // Administration-Dropdown, nicht ins Usermenue (Suite-Policy §1.2).
+    $adminItems = ($loggedIn && $isAdmin)
+        ? [['href' => 'board_settings.php', 'label' => 'Board-Einstellungen']]
+        : [];
+
     $themeAttr = $theme !== 'auto'
         ? ' data-theme="' . htmlspecialchars($theme, ENT_QUOTES) . '"'
         : '';
@@ -100,6 +123,7 @@ function render_header(bool $showSearch = false): void
         'base'          => '',
         'cspNonce'      => $csp,
         'csrfToken'     => function_exists('csrf_token') ? csrf_token() : '',
+        'appMenu'       => $appMenu,
         'appsMenu'      => $appsMenu,
         'leftExtra'     => $leftExtra,
         'spritePath'    => __DIR__ . '/../web/css/icons.svg',
@@ -118,10 +142,8 @@ function render_header(bool $showSearch = false): void
         // profil.php, …), so the defaults would render domain-root-absolute
         // ('/status.php') — inconsistent with the rest of the menu and wrong
         // if the app is ever not served at its (sub)domain root. Same fix
-        // zeiterfassung applied (inc/_header.php). adminItems is
-        // intentionally NOT set — wlmonitor has no App-Admin-Aktionen beyond
-        // admin.php, which already renders as "Verwaltung" in the
-        // Administration-Dropdown for isAdmin users without passing adminItems.
+        // zeiterfassung applied (inc/_header.php).
+        'adminItems'    => $adminItems,
         'statusHref'    => 'status.php',
         'profilHref'    => 'profil.php',
         'activityHref'  => 'aktivitaet.php',

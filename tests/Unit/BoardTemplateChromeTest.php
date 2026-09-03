@@ -51,7 +51,7 @@ class BoardTemplateChromeTest extends TestCase
 
         $this->assertStringContainsString('y1="90" x2="1872" y2="90"', $svg, 'Kopfzeilen-Trennlinie');
         $this->assertStringContainsString('x1="1113" y1="90" x2="1113" y2="1310"', $svg, 'vertikale Spaltenlinie');
-        $this->assertStringContainsString('y1="1310" x2="1872" y2="1310"', $svg, 'Fusszeilen-Trennlinie (gehoert jetzt der Touch-Leiste, Task 3b)');
+        $this->assertStringNotContainsString('x1="0" y1="1310" x2="1872" y2="1310"', $svg, 'Fusszeilen-Trennlinie zwischen Pille und Touch-Leiste entfaellt (Nutzerentscheidung 2026-09-01)');
         $this->assertStringContainsString('translate(24,12) scale(0.5025)', $svg, 'Logo-Transform');
         $this->assertStringContainsString('x="936" y="55"', $svg, 'zentrierte Server-Renderzeit');
         $this->assertStringContainsString('>19:14<', $svg);
@@ -101,6 +101,34 @@ class BoardTemplateChromeTest extends TestCase
         $this->assertFalse(board_battery_is_charging(94));
         $this->assertFalse(board_battery_is_charging(50));
         $this->assertFalse(board_battery_is_charging(0));
+    }
+
+    // --- Konfigurierbare Schwellwerte (TASK-27, wl_board_settings) -----------
+
+    public function test_battery_is_charging_respects_custom_threshold(): void
+    {
+        $this->assertTrue(board_battery_is_charging(90, 90));
+        $this->assertFalse(board_battery_is_charging(89, 90));
+        // Default bleibt 95, wenn nicht uebergeben.
+        $this->assertFalse(board_battery_is_charging(90));
+    }
+
+    public function test_battery_display_percent_respects_custom_thresholds(): void
+    {
+        $this->assertSame(100, board_battery_display_percent(85, 80, 90));
+        $this->assertSame(79, board_battery_display_percent(79, 80, 90));
+        $this->assertSame(90, board_battery_display_percent(90, 80, 90), 'ab chargingThreshold zeigt is_charging() den Blitz, nicht display_percent()');
+    }
+
+    public function test_chrome_uses_custom_battery_thresholds(): void
+    {
+        // 88% ist mit den Standard-Schwellwerten (92/95) weder "voll" noch
+        // "laedt", mit 85/90 als Custom-Werten aber "voll" (Blitz waere erst
+        // ab 90).
+        $svg = board_render_chrome_svg(new DateTimeImmutable(), 88, 3, true, 90, 85);
+
+        $this->assertStringContainsString('>100 %<', $svg);
+        $this->assertStringNotContainsString('<polygon', $svg, 'unter dem Custom-Lade-Schwellwert 90, kein Blitz');
     }
 
     public function test_chrome_shows_lightning_bolt_instead_of_percent_when_charging(): void
