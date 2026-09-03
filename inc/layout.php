@@ -72,14 +72,16 @@ function render_header(bool $showSearch = false): void
     // den oeffentlichen Seiten (help.php, login.php) fuer Ausgeloggte
     // (Audit 2026-09-03). Kein Rechtebruch (auth_require()/admin_require()
     // halten), aber sichtbar sein darf es trotzdem nicht.
-    $appMenu = $loggedIn
+    // Zusaetzlich an BOARD_FEATURE_AVAILABLE gebunden: auf jardyx.com gibt es
+    // weder Broker noch Display (s. initialize.php).
+    $appMenu = ($loggedIn && BOARD_FEATURE_AVAILABLE)
         ? [['href' => 'mqtt/', 'label' => 'eInk Display']]
         : [];
 
     // Board-Einstellungen betreffen ein einzelnes geteiltes physisches Geraet,
     // keine Pro-User-Vorliebe -- gehoeren deshalb neben "Verwaltung" in die
     // Administration-Dropdown, nicht ins Usermenue (Suite-Policy §1.2).
-    $adminItems = ($loggedIn && $isAdmin)
+    $adminItems = ($loggedIn && $isAdmin && BOARD_FEATURE_AVAILABLE)
         ? [['href' => 'board_settings.php', 'label' => 'Board-Einstellungen']]
         : [];
 

@@ -38,6 +38,17 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../inc/initialize.php';
 require_once __DIR__ . '/../../inc/board_settings.php';
+
+// Nur dort, wo das Display und sein Broker ueberhaupt existieren (eriks.cloud
+// auf akadbrain, s. BOARD_FEATURE_AVAILABLE). Auf jardyx.com laeuft kein
+// mosquitto -- die Seite koennte dort ausschliesslich "Senden fehlgeschlagen"
+// melden. Das Ausblenden des Menuepunkts allein reicht nicht: die URL ist
+// erratbar (Nutzervorgabe 2026-09-03).
+if (!BOARD_FEATURE_AVAILABLE) {
+    http_response_code(404);
+    exit;
+}
+
 auth_require();
 
 const MQTT_HOST = '127.0.0.1';

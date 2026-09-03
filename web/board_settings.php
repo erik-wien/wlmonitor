@@ -20,6 +20,16 @@ declare(strict_types=1);
 require_once(__DIR__ . '/../inc/initialize.php');
 require_once(__DIR__ . '/../inc/board_settings.php');
 require_once(__DIR__ . '/../inc/layout.php');
+
+// Konfiguriert ein Geraet, das nur an dieser einen Instanz haengt
+// (s. BOARD_FEATURE_AVAILABLE in initialize.php). Auf jardyx.com waere die
+// Seite gegenstandslos -- und wuerde Gaeste-WLAN- und Broker-Zugangsdaten in
+// eine Datenbank schreiben, aus der sie dort niemand liest.
+if (!BOARD_FEATURE_AVAILABLE) {
+    http_response_code(404);
+    exit;
+}
+
 auth_require();
 admin_require();
 

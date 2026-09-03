@@ -26,6 +26,28 @@ $_cfg = wl_yaml_load(__DIR__ . '/../config.yaml');
 define('APP_ENV',  $_cfg['app']['env'] ?? 'dev');
 define('APP_CODE', $_cfg['APP_CODE'] ?? 'wlm');
 
+/**
+ * Das E-Paper-Display (reTerminal E1003) haengt an EINER Instanz: eriks.cloud
+ * auf akadbrain. Nur dort steht der MQTT-Broker, den web/mqtt/ zum Senden
+ * braucht (mosquitto auf 127.0.0.1) und den scripts/akadbrain/mqtt_subscriber.py
+ * liest; nur dort liegen data/board_state/ und der Wetter-Cache des Boards.
+ *
+ * Auf world4you (wlmonitor.jardyx.com) gibt es davon NICHTS -- ein
+ * "eInk Display"-Menuepunkt fuehrte dort auf eine Seite, die grundsaetzlich
+ * "Senden fehlgeschlagen" meldet, und "Board-Einstellungen" wuerde ein
+ * Geraet konfigurieren, das diese Instanz nie ausliefert (Nutzervorgabe
+ * 2026-09-03: "eInk Display gibts nur auf eriks.cloud, nicht jardyx").
+ *
+ * APP_ENV ist exakt der Deploy-Target-Name (mcp/generate.py: env = target).
+ * Bewusst als Positivliste: eine neue Umgebung bekommt das Feature nur,
+ * wenn sie hier eingetragen wird -- nicht automatisch.
+ */
+function wl_board_feature_available(string $env): bool
+{
+    return in_array($env, ['akadbrain', 'local'], true);
+}
+define('BOARD_FEATURE_AVAILABLE', wl_board_feature_available(APP_ENV));
+
 define('SCRIPT_PATH',    '/home/.sites/765/site679/web/jardyx.com/wlmonitor/');
 define('CURRENT_PATH',   __FILE__);
 define('APIKEY',         'tVqqssNTeDyFb35');
