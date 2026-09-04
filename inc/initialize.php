@@ -53,7 +53,7 @@ define('CURRENT_PATH',   __FILE__);
 define('APIKEY',         'tVqqssNTeDyFb35');
 define('MAX_DEPARTURES', 2);
 define('APP_VERSION',    '3.0');
-define('APP_BUILD',      77);
+define('APP_BUILD',      78);
 
 $_db = $_cfg['db'];
 define('DATABASE_HOST',     $_db['host']);
@@ -98,7 +98,15 @@ date_default_timezone_set('Europe/Vienna');
 function createDBConnection(): mysqli {
     mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
     $con = mysqli_connect(DATABASE_HOST, DATABASE_USER, DATABASE_PASS, DATABASE_NAME);
-    mysqli_set_charset($con, 'utf8');
+    // utf8mb4, nicht utf8: MySQLs "utf8" ist 3-Byte und kann keine
+    // 4-Byte-Zeichen -- also keine Emoji. wlmonitor war 2026-09-04 die
+    // EINZIGE App der Suite, die noch auf utf8 stand (suche, zeiterfassung,
+    // Energie, biblio, last.fm, simplechat: laengst utf8mb4), obwohl alle
+    // Tabellen bereits utf8mb4 sind. Aufgefallen an einem echten
+    // Kalendernamen ("🔜 Eriks Termine"), den MariaDB mit "Incorrect string
+    // value" abwies. Da nur die VERBINDUNG umgestellt wird und keine Spalte,
+    // entfaellt das ueblich heikle Thema (Index-Schluessellaengen).
+    mysqli_set_charset($con, 'utf8mb4');
     return $con;
 }
 

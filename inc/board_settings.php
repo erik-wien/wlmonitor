@@ -332,12 +332,15 @@ function board_settings_save_mqtt_sender(mysqli $con, string $user, string $pass
  * Datei, aus der calsync.swift die Auswahl liest -- und zugleich die EINZIGE
  * Quelle dafuer.
  *
- * Bewusst NICHT zusaetzlich in wl_board_settings: die Verbindung steht in
- * initialize.php auf Zeichensatz "utf8" (3 Byte), womit sich 4-Byte-Zeichen
- * gar nicht speichern lassen -- und genau die stecken in den Kalendertiteln
- * hier ("🔜 Eriks Termine"). Am 2026-09-04 am echten Namen nachgewiesen:
- * MariaDB weist ihn mit "Incorrect string value" ab. Eine zweite Ablage
- * waere ausserdem doppelter Zustand, der auseinanderlaufen kann.
+ * Bewusst NICHT zusaetzlich in wl_board_settings: calsync.swift kann kein
+ * MySQL, es MUSS also ohnehin diese Datei lesen. Eine DB-Spalte daneben waere
+ * doppelter Zustand, der auseinanderlaeuft, sobald einer der beiden Wege
+ * einmal fehlschlaegt -- ohne dass irgendetwas davon auffiele.
+ *
+ * (Ursprünglich sprach ein zweiter Grund dagegen: die Verbindung stand auf
+ * Zeichensatz "utf8" (3 Byte) und wies die Emoji in den Kalendertiteln mit
+ * "Incorrect string value" ab. Das ist seit der Umstellung auf utf8mb4
+ * erledigt -- der Grund oben traegt aber weiterhin.)
  *
  * Ablageort neben dem Cache in data/calendar/: dort schreibt der Webserver
  * ohnehin, und data/ ist vom Deploy ausgenommen, ueberlebt also ein Update.

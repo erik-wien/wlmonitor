@@ -196,9 +196,9 @@ class BoardSettingsTest extends IntegrationTestCase
 
     public function test_calendar_selection_round_trips_through_the_file(): void
     {
-        // Emoji im Titel sind der Normalfall ("🔜 Eriks Termine") -- und der
-        // Grund, warum die Auswahl NICHT in der DB liegt: die Verbindung steht
-        // auf Zeichensatz "utf8" (3 Byte) und weist 4-Byte-Zeichen ab.
+        // Emoji im Titel sind der Normalfall ("🔜 Eriks Termine"). Die Auswahl
+        // liegt in einer Datei, weil calsync.swift kein MySQL kann -- eine
+        // DB-Spalte daneben waere doppelter Zustand.
         $err = \board_settings_save_calendars(['🔜 Eriks Termine', 'Birthdays']);
 
         $this->assertNull($err);
