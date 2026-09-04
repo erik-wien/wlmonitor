@@ -739,6 +739,53 @@ function board_wrap_text(string $text, int $maxCharsPerLine): array
 }
 
 /**
+ * Wie board_wrap_text(), aber mit RESPEKT vor gesetzten Zeilenumbruechen.
+ *
+ * board_wrap_text() zerlegt mit /\s+/, und fuer das ist "\n" gewoehnlicher
+ * Leerraum -- eine getippte Einkaufsliste kam als ein Fliesstextklumpen
+ * heraus (Nutzerbefund 2026-09-04). Hier wird zuerst an den Umbruechen
+ * getrennt und JEDER Absatz einzeln umgebrochen.
+ *
+ * Bewusst NICHT board_wrap_text() selbst geaendert: Wetter- und
+ * Stoerungstexte kommen von der ORF-Seite und tragen Umbrueche aus deren
+ * Satz, nicht aus einer Absicht des Verfassers -- dort ist das Einebnen
+ * richtig.
+ *
+ * Leerzeilen bleiben erhalten: wer eine setzt, will eine Trennung sehen.
+ * Mehrere aufeinander folgende werden zu einer, sonst frisst ein
+ * versehentlicher Doppelumbruch die halbe Karte.
+ *
+ * @return list<string>
+ */
+function board_wrap_text_multiline(string $text, int $maxCharsPerLine): array
+{
+    $absaetze = preg_split('/\R/u', trim($text)) ?: [];
+    $lines = [];
+    $letzteWarLeer = false;
+
+    foreach ($absaetze as $absatz) {
+        if (trim($absatz) === '') {
+            if (!$letzteWarLeer && $lines !== []) {
+                $lines[] = '';
+                $letzteWarLeer = true;
+            }
+            continue;
+        }
+        foreach (board_wrap_text($absatz, $maxCharsPerLine) as $zeile) {
+            $lines[] = $zeile;
+        }
+        $letzteWarLeer = false;
+    }
+
+    // Eine Leerzeile am Ende waere nur Luft ueber dem Zeitstempel.
+    while ($lines !== [] && end($lines) === '') {
+        array_pop($lines);
+    }
+
+    return $lines;
+}
+
+/**
  * Wetterkarte aus Spec §9: Icon, Temperatur "von-bis", Stations-Messwerte,
  * Ueberschrift "Heute", Fliesstext mit manuellem Zeilenumbruch, Statuszeile.
  * $weather ist die Rueckgabe von weather_select_display() (inc/weather.php)

@@ -315,7 +315,17 @@ const BOARD_MQTT_TITLE_MAX_CHARS = 30;
 const BOARD_MQTT_AGE_SIZE = 36;
 const BOARD_MQTT_BODY_SIZE = 54;
 const BOARD_MQTT_BODY_MAX_CHARS = 30;
-const BOARD_MQTT_MAX_BODY_LINES = 5;
+/**
+ * 8 statt 5 (Nutzerbefund 2026-09-04: "eine Nachricht mit einer Liste"). Bei
+ * 5 wurde jede Einkaufsliste ab dem sechsten Punkt mit "…" abgeschnitten,
+ * seit getippte Zeilenumbrueche erhalten bleiben.
+ *
+ * Nach oben begrenzt das der Platz, nicht der Geschmack: eine 8-zeilige Karte
+ * ist 261 + 7*69 = 744px hoch, darunter passt in der 1100px-Spalte noch genau
+ * eine kurze zweite (744 + 48 + 261 = 1053). Bei 9 Zeilen waere jede lange
+ * Nachricht allein in ihrer Spalte.
+ */
+const BOARD_MQTT_MAX_BODY_LINES = 8;
 const BOARD_MQTT_BODY_LEAD = 69;
 
 // Baselines als feste Versaetze statt Boxmodell (wie im Rest der Codebasis,
@@ -371,7 +381,9 @@ function board_mqtt_layout(array $selected): array
     $gesetzt = 0;
 
     foreach ($nachrichten as $i => $msg) {
-        $zeilen = board_wrap_text($msg['body'], BOARD_MQTT_BODY_MAX_CHARS);
+        // multiline: getippte Zeilenumbrueche bleiben erhalten (Listen!),
+        // s. board_wrap_text_multiline().
+        $zeilen = board_wrap_text_multiline($msg['body'], BOARD_MQTT_BODY_MAX_CHARS);
         if (count($zeilen) > BOARD_MQTT_MAX_BODY_LINES) {
             $zeilen = array_slice($zeilen, 0, BOARD_MQTT_MAX_BODY_LINES);
             $letzte = BOARD_MQTT_MAX_BODY_LINES - 1;

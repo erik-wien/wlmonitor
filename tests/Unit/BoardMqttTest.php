@@ -588,4 +588,64 @@ class BoardMqttTest extends TestCase
         // den Header dann gar nicht erst.
         $this->assertSame('', board_mqtt_delete_zones_header(board_mqtt_layout(['messages' => []])));
     }
+
+    // --- Getippte Zeilenumbrueche (Nutzerbefund 2026-09-04) -----------------
+
+    public function test_typed_line_breaks_become_separate_lines(): void
+    {
+        // Vorher zerlegte board_wrap_text() mit /\s+/, und fuer das ist "\n"
+        // gewoehnlicher Leerraum -- die Liste kam als ein Klumpen heraus.
+        $items = board_mqtt_layout(['messages' => [
+            ['title' => 'Einkauf', 'body' => "Milch\nBrot\nButter", 'age' => ''],
+        ]]);
+
+        $this->assertSame(['Milch', 'Brot', 'Butter'], $items[0]['lines']);
+    }
+
+    public function test_windows_and_mac_line_endings_count_too(): void
+    {
+        $items = board_mqtt_layout(['messages' => [
+            ['title' => 'T', 'body' => "eins\r\nzwei\rdrei", 'age' => ''],
+        ]]);
+
+        $this->assertSame(['eins', 'zwei', 'drei'], $items[0]['lines']);
+    }
+
+    public function test_a_long_typed_line_still_wraps(): void
+    {
+        // Umbruch UND Wortumbruch muessen zusammenspielen: die zweite Zeile
+        // ist laenger als BOARD_MQTT_BODY_MAX_CHARS.
+        $lang = 'Butter Brot Milch Kaese Wurst Apfel Birne Nudeln';
+        $items = board_mqtt_layout(['messages' => [
+            ['title' => 'T', 'body' => "Kurz\n" . $lang, 'age' => ''],
+        ]]);
+
+        $this->assertSame('Kurz', $items[0]['lines'][0]);
+        $this->assertGreaterThan(2, count($items[0]['lines']), 'die lange Zeile wurde zusaetzlich umgebrochen');
+        foreach ($items[0]['lines'] as $zeile) {
+            $this->assertLessThanOrEqual(BOARD_MQTT_BODY_MAX_CHARS, mb_strlen($zeile));
+        }
+    }
+
+    public function test_blank_lines_separate_but_do_not_pile_up(): void
+    {
+        // Eine Leerzeile ist Absicht und bleibt. Mehrere hintereinander
+        // fraessen die halbe Karte, ohne mehr zu sagen.
+        $items = board_mqtt_layout(['messages' => [
+            ['title' => 'T', 'body' => "oben\n\n\n\nunten\n\n", 'age' => ''],
+        ]]);
+
+        $this->assertSame(['oben', '', 'unten'], $items[0]['lines']);
+    }
+
+    public function test_a_typed_list_fits_without_being_cut_at_five(): void
+    {
+        // Der eigentliche Nutzerfall: eine achtteilige Einkaufsliste.
+        $liste = "Milch\nBrot\nButter\nKaese\nWurst\nApfel\nBirne\nNudeln";
+        $items = board_mqtt_layout(['messages' => [['title' => 'Einkauf', 'body' => $liste, 'age' => '']]]);
+
+        $this->assertCount(8, $items[0]['lines']);
+        $this->assertSame('Nudeln', $items[0]['lines'][7]);
+        $this->assertStringNotContainsString('…', implode('', $items[0]['lines']));
+    }
 }
