@@ -185,11 +185,40 @@ function board_settings_mqtt_broker_reachable(): bool
     return is_executable(BOARD_SETTINGS_MQTT_PASSWD_BIN) && is_writable(BOARD_SETTINGS_MQTT_PASSWD_FILE);
 }
 
+/** SIGHUP an mosquitto -- s. board_settings_reload_mqtt_broker(). */
+const BOARD_SETTINGS_PKILL_BIN = '/usr/bin/pkill';
+
+/**
+ * Faehrt mosquitto dazu, password_file neu einzulesen.
+ *
+ * NICHT optional: mosquitto liest die Datei NUR beim Start und bei SIGHUP,
+ * nicht bei jeder Anmeldung. Am 2026-09-04 an der Produktion nachgemessen --
+ * nach dem Schreiben der Datei wies der laufende Broker das neue Passwort mit
+ * "Connection Refused: not authorised" ab, bis SIGHUP kam. Ohne diesen Aufruf
+ * haette die Admin-Seite bei jedem Passwortwechsel das Senden lahmgelegt:
+ * Datei und DB neu, Broker im Speicher alt -- und die Fehlermeldung in
+ * /mqtt/ lautet nur "Broker nicht erreichbar", nennt also nicht die Ursache.
+ *
+ * Zulaessig, weil php-fpm und mosquitto auf akadbrain beide als derselbe
+ * Benutzer laufen (verifiziert); sonst schlueg das Signal mit EPERM fehl.
+ */
+function board_settings_reload_mqtt_broker(): bool
+{
+    $cmd = sprintf('%s -HUP -x mosquitto 2>&1', escapeshellarg(BOARD_SETTINGS_PKILL_BIN));
+    exec($cmd, $output, $exitCode);
+
+    if ($exitCode !== 0) {
+        error_log('board_settings: mosquitto konnte nicht zum Neuladen bewegt werden (SIGHUP fehlgeschlagen) -- '
+            . 'der Broker nutzt weiter das ALTE Passwort, Senden schlaegt bis zu einem Neustart fehl.');
+    }
+    return $exitCode === 0;
+}
+
 /**
  * Aendert das Passwort des uebergebenen Users direkt in der Mosquitto-
  * Passwortdatei (dieselbe exec()-Technik wie web/mqtt/index.php fuer
- * mosquitto_pub -- kein neuer Rechte-Sprung). mosquitto liest password_file
- * automatisch neu ein (kein Broker-Neustart noetig, anders als acl_file).
+ * mosquitto_pub -- kein neuer Rechte-Sprung) und laesst den Broker die Datei
+ * anschliessend neu einlesen.
  */
 function board_settings_sync_mqtt_broker_password(string $user, string $password): bool
 {
@@ -202,7 +231,13 @@ function board_settings_sync_mqtt_broker_password(string $user, string $password
     );
     exec($cmd, $output, $exitCode);
 
-    return $exitCode === 0;
+    if ($exitCode !== 0) {
+        return false;
+    }
+    // Erst nach erfolgreichem Schreiben neu laden -- ein SIGHUP auf eine
+    // unveraenderte Datei waere sinnlos, aber harmlos; umgekehrt waere ein
+    // Schreiben ohne Reload genau der Ausfall, den diese Zeile verhindert.
+    return board_settings_reload_mqtt_broker();
 }
 
 /**
@@ -222,8 +257,12 @@ function board_settings_delete_mqtt_broker_user(string $user): bool
 
     if ($exitCode !== 0) {
         error_log('board_settings: altes MQTT-Konto "' . $user . '" konnte nicht entfernt werden.');
+        return false;
     }
-    return $exitCode === 0;
+    // Auch das Loeschen braucht den Reload: ohne ihn bliebe das entfernte
+    // Konto im Speicher des laufenden Brokers gueltig -- der "Widerruf" waere
+    // bis zum naechsten Neustart wirkungslos.
+    return board_settings_reload_mqtt_broker();
 }
 
 /**

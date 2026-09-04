@@ -27,13 +27,14 @@ declare(strict_types=1);
  * keine Chrome\Header::render()-Einbindung -- die Seite bleibt optisch
  * eigenstaendig, nur der Zugriff ist jetzt an die Session gebunden.
  *
- * TASK-27 (2026-09-03): User/Passwort kommen jetzt aus wl_board_settings
+ * TASK-27 (2026-09-03): User/Passwort kommen aus wl_board_settings
  * (board_settings_load(), Admin-Seite board_settings.php) statt aus einer
- * hartcodierten Konstante. Uebergang: ist mqtt_sender_password in der DB noch
- * leer (Migration frisch eingespielt, noch nichts gespeichert), faellt es auf
- * das alte hartcodierte Passwort zurueck, bis ein Admin einmal ueber die
- * neue Seite ein echtes Passwort setzt (das rotiert dann gleichzeitig den
- * Broker, s. board_settings_sync_mqtt_broker_password()).
+ * hartcodierten Konstante. Der Uebergangs-Fallback auf das alte, im Repo und
+ * in der Git-Historie stehende Passwort ist am 2026-09-04 entfallen: das
+ * Passwort wurde rotiert (Broker + DB), das alte wird vom Broker seither
+ * abgelehnt -- verifiziert. Ohne Eintrag in der DB gibt es jetzt bewusst
+ * KEINEN Ausweichwert mehr; Senden schlaegt dann fehl, statt still auf ein
+ * bekanntes Passwort zurueckzufallen.
  */
 
 require_once __DIR__ . '/../../inc/initialize.php';
@@ -55,27 +56,29 @@ const MQTT_HOST = '127.0.0.1';
 const MQTT_PORT = 1883;
 const MQTT_TOPIC = 'wlmonitor/board/message';
 const MQTT_PUB_BIN = '/opt/homebrew/bin/mosquitto_pub';
-// Uebergangs-Fallback, s. Docblock oben -- wird geloescht, sobald jede
-// Instanz einmal ueber board_settings.php ein echtes Passwort gesetzt hat.
-const MQTT_PASSWORD_FALLBACK = 'f49d486303c764f6c749b279f0122804';
 
 const MAX_TITEL_CHARS = 200;
 const MAX_TEXT_CHARS = 500;
 
 $boardSettings = board_settings_load($con);
 $mqttUser = $boardSettings['mqtt_sender_user'];
-$mqttPassword = $boardSettings['mqtt_sender_password'] !== ''
-    ? $boardSettings['mqtt_sender_password']
-    : MQTT_PASSWORD_FALLBACK;
+$mqttPassword = $boardSettings['mqtt_sender_password'];
 
 $status = null;
 $error = null;
+
+// Ohne hinterlegtes Passwort gar nicht erst senden: mosquitto_pub liefe sonst
+// in ein "not authorised" und die Seite meldete "Broker nicht erreichbar" --
+// eine Fehlermeldung, die in die falsche Richtung zeigt.
+$fehltZugang = $mqttPassword === '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $titel = mb_substr(trim((string)($_POST['titel'] ?? '')), 0, MAX_TITEL_CHARS);
     $text = mb_substr(trim((string)($_POST['text'] ?? '')), 0, MAX_TEXT_CHARS);
 
-    if (!csrf_verify()) {
+    if ($fehltZugang) {
+        $error = 'Keine MQTT-Zugangsdaten hinterlegt — unter „Board-Einstellungen" ein Passwort setzen.';
+    } elseif (!csrf_verify()) {
         $error = 'Sicherheits-Token abgelaufen -- Seite neu laden und nochmal versuchen.';
     } elseif ($titel === '' && $text === '') {
         $error = 'Titel oder Text ausfüllen.';

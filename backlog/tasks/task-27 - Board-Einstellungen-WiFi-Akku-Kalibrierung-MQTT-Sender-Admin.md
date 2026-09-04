@@ -4,7 +4,7 @@ title: 'Board-Einstellungen: WiFi, Akku-Kalibrierung, MQTT-Sender (Admin)'
 status: Done
 assignee: []
 created_date: '2026-09-01 07:39'
-updated_date: '2026-09-03 18:03'
+updated_date: '2026-09-04 05:44'
 labels: []
 dependencies: []
 priority: medium
@@ -198,4 +198,11 @@ Audit-Nachlauf 2026-09-03 (Befunde behoben, 466 Tests gruen):
 - Die Passwortfeld-Assertions in BoardSettingsPageTest waren Scheinsicherheit (Regex konnte bei leerer Testspalte nie matchen) -- jetzt strukturell: das Feld darf gar kein value=-Attribut tragen.
 
 OFFEN (bewusst nicht geaendert): eriks.cloud (ohne www) und suche.eriks.cloud liefern die App aus, stehen aber nicht in AUTH_SSO_ALLOWED_HOSTS -- Erweiterung einer Open-Redirect-Allowlist ist eine Sicherheitsentscheidung fuer den Nutzer. MQTT_PASSWORD_FALLBACK steht weiterhin im Repo und in der Git-Historie.
+
+Nachtrag 2026-09-04 -- die beiden zuvor als OFFEN vermerkten Punkte sind erledigt:
+
+- AUTH_SSO_ALLOWED_HOSTS: 'eriks.cloud' und 'suche.eriks.cloud' ergaenzt. Per nginx auf akadbrain verifiziert, dass beide DERSELBE vhost wie www.eriks.cloud sind ('server_name eriks.cloud www.eriks.cloud suche.eriks.cloud') -- also dieselbe App, keine Ausweitung auf einen fremden Host.
+- MQTT_PASSWORD_FALLBACK entfernt. Das Passwort wurde vorher rotiert (Broker + DB), das alte wird vom Broker seither abgelehnt (gegengeprueft). Ohne DB-Eintrag gibt es jetzt bewusst KEINEN Ausweichwert mehr: die Seite meldet 'Keine MQTT-Zugangsdaten hinterlegt' statt still auf ein im Repo bekanntes Passwort zurueckzufallen.
+
+DABEI EINEN ECHTEN BUG GEFUNDEN (Annahme im Code war falsch): mosquitto liest password_file NUR beim Start und bei SIGHUP, nicht bei jeder Anmeldung -- der Kommentar an board_settings_sync_mqtt_broker_password() behauptete das Gegenteil. Beim Rotieren wies der laufende Broker das neue Passwort mit 'Connection Refused: not authorised' ab, bis SIGHUP kam. Die Admin-Seite haette also bei JEDEM Passwortwechsel das Senden lahmgelegt, mit der irrefuehrenden Meldung 'Broker nicht erreichbar'. Behoben durch board_settings_reload_mqtt_broker() (pkill -HUP -x mosquitto), aufgerufen nach dem Schreiben UND nach dem Loeschen eines Kontos (ohne Reload bliebe ein 'widerrufenes' Konto im Speicher gueltig). Zulaessig, weil php-fpm und mosquitto auf akadbrain als derselbe Benutzer laufen -- am Server verifiziert, inklusive Test, dass PHP das Signal tatsaechlich senden darf.
 <!-- SECTION:NOTES:END -->
