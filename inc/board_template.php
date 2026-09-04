@@ -334,8 +334,13 @@ function board_render_touch_bar_svg(array $favoriteTitles, int $activeIndex, int
         $x = $left + $i * ($buttonWidth + $gap);
         $active = $i === $activeIndex;
         $out .= sprintf(
-            '<rect x="%d" y="%d" width="%d" height="%d" rx="10" %s/>',
-            $x, $y, $buttonWidth, BOARD_NAV_ROW_HEIGHT,
+            // rx = halbe Hoehe -> echte Pillenform mit Halbkreisen an den Enden
+            // (Nutzerwunsch 2026-09-04), wie die Seitenpille links daneben.
+            // Die Tippzone bleibt das volle Rechteck: die abgerundeten Ecken
+            // sind nur ein paar Pixel, und ein Tipp knapp daneben soll weiter
+            // gelten statt ins Leere zu laufen.
+            '<rect x="%d" y="%d" width="%d" height="%d" rx="%d" %s/>',
+            $x, $y, $buttonWidth, BOARD_NAV_ROW_HEIGHT, intdiv(BOARD_NAV_ROW_HEIGHT, 2),
             $active ? 'fill="black"' : 'fill="white" stroke="black" stroke-width="3"'
         );
         $out .= sprintf(

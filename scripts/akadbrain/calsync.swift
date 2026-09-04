@@ -1,6 +1,6 @@
 // scripts/akadbrain/calsync.swift
 //
-// Liest die ausgewaehlten Kalender von heute und morgen aus EventKit und schreibt
+// Liest die ausgewaehlten Kalender der naechsten Tage aus EventKit und schreibt
 // sie als JSON nach data/calendar/<userId>.json -- dieselbe Rolle wie
 // scripts/weather_fetch_cron.php beim Wetter: eine Quelle ausserhalb der App
 // wird in einen Cache gelegt, den web/board.php dann nur noch liest.
@@ -120,10 +120,17 @@ if !fehlend.isEmpty {
 var kalender = Calendar(identifier: .gregorian)
 kalender.timeZone = TimeZone(identifier: "Europe/Vienna") ?? .current
 
-let heuteStart  = kalender.startOfDay(for: Date())
-let uebermorgen = kalender.date(byAdding: .day, value: 2, to: heuteStart)!
+// Sieben Tage statt zwei (Nutzerwunsch 2026-09-04: "nicht nur die Termine
+// morgen, sondern einfach die naechsten, like Morgen, Sonntag, Montag").
+// Das Board zeigt so viele davon, wie auf die Seite passen -- die Auswahl
+// trifft der Renderer, nicht dieser Leser. Sieben deckt eine Woche ab und
+// bleibt billig: EventKit liefert die fertig aufgeloesten Einzeltermine.
+let VORSCHAU_TAGE = 7
 
-let pred = store.predicateForEvents(withStart: heuteStart, end: uebermorgen, calendars: ausgewaehlt)
+let heuteStart = kalender.startOfDay(for: Date())
+let fensterEnde = kalender.date(byAdding: .day, value: VORSCHAU_TAGE, to: heuteStart)!
+
+let pred = store.predicateForEvents(withStart: heuteStart, end: fensterEnde, calendars: ausgewaehlt)
 let roh = store.events(matching: pred).filter { ev in
     if ev.status == .canceled { return false }
     // Abgelehnte Einladungen gehoeren nicht aufs Board.
@@ -161,7 +168,7 @@ struct Nutzlast: Encodable {
 }
 
 var tage: [Tag] = []
-for versatz in 0...1 {
+for versatz in 0..<VORSCHAU_TAGE {
     let tagStart = kalender.date(byAdding: .day, value: versatz, to: heuteStart)!
     let tagEnde  = kalender.date(byAdding: .day, value: 1, to: tagStart)!
 

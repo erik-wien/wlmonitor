@@ -15,9 +15,9 @@ class BoardTemplateTouchBarTest extends TestCase
     {
         $svg = board_render_touch_bar_svg(['Arbeit', 'Nach Hause', 'Westbahnhof'], 1);
 
-        $this->assertStringContainsString('x="16" y="1320" width="602" height="74" rx="10" fill="white" stroke="black" stroke-width="3"', $svg, 'Button 1 inaktiv');
-        $this->assertStringContainsString('x="634" y="1320" width="602" height="74" rx="10" fill="black"', $svg, 'Button 2 aktiv (Index 1)');
-        $this->assertStringContainsString('x="1252" y="1320" width="602" height="74" rx="10" fill="white" stroke="black" stroke-width="3"', $svg, 'Button 3 inaktiv');
+        $this->assertStringContainsString('x="16" y="1320" width="602" height="74" rx="37" fill="white" stroke="black" stroke-width="3"', $svg, 'Button 1 inaktiv (rx=37: Pillenform, Nutzerwunsch 2026-09-04)');
+        $this->assertStringContainsString('x="634" y="1320" width="602" height="74" rx="37" fill="black"', $svg, 'Button 2 aktiv (Index 1)');
+        $this->assertStringContainsString('x="1252" y="1320" width="602" height="74" rx="37" fill="white" stroke="black" stroke-width="3"', $svg, 'Button 3 inaktiv');
         $this->assertStringContainsString('fill="white">Nach Hause<', $svg, 'aktives Label weiss');
         $this->assertStringContainsString('fill="black">Arbeit<', $svg);
         $this->assertStringContainsString('fill="black">Westbahnhof<', $svg);

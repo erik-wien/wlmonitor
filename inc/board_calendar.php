@@ -2,7 +2,9 @@
 // inc/board_calendar.php
 //
 // Kalenderseite des E-Paper-Boards (Nutzerwunsch 2026-08-26): eigene Seite mit
-// den Terminen von heute und morgen, zwischen Stoerungsseite und Schlafschirm.
+// den naechsten Terminen, zwischen Stoerungsseite und Schlafschirm. Seit
+// 2026-09-04 nicht mehr nur heute+morgen, sondern die kommenden Tage
+// ("Morgen, Sonntag, Montag") -- so viele, wie auf die Seite passen.
 //
 // Datenherkunft: scripts/akadbrain/calsync.swift liest EventKit lokal auf dem
 // Server und schreibt data/calendar/<userId>.json -- dieselbe Rolle wie der
@@ -77,20 +79,45 @@ function board_calendar_parse_time(mixed $wert): ?string
 /** Kuerzer als beim Wetter (6h): eine Prognose stimmt nach sechs Stunden noch
  *  ungefaehr, ein Terminplan nicht. */
 const BOARD_CALENDAR_STALE_SECONDS = 3 * 3600;
+/** Wieviele Tage der Cache hoechstens hergibt (calsync.swift: VORSCHAU_TAGE).
+ *  Wieviele davon aufs Bild kommen, entscheidet das Layout. */
+const BOARD_CALENDAR_PREVIEW_DAYS = 7;
 
 /**
- * Baut aus dem Cache die Anzeige-Sicht fuer JETZT -- immer genau zwei Tage.
+ * Ueberschrift eines Tages: HEUTE/MORGEN, danach der Wochentag (SONNTAG,
+ * MONTAG, ...). Ab einer Woche Abstand waere der Wochentag mehrdeutig --
+ * dann steht das Datum dabei.
+ *
+ * Bewusst hier ausformuliert statt ueber strftime()/IntlDateFormatter: die
+ * Locale des Servers ist nicht garantiert deutsch, und ein englisches
+ * "SUNDAY" mitten auf dem Board waere ein stiller Fehler, den niemand im
+ * Test bemerkt.
+ */
+function board_calendar_day_label(DateTimeImmutable $tag, DateTimeImmutable $heute): string
+{
+    $versatz = (int) $heute->diff($tag->setTime(0, 0))->format('%r%a');
+    if ($versatz === 0) return 'HEUTE';
+    if ($versatz === 1) return 'MORGEN';
+
+    $namen = ['SONNTAG', 'MONTAG', 'DIENSTAG', 'MITTWOCH', 'DONNERSTAG', 'FREITAG', 'SAMSTAG'];
+    $name = $namen[(int) $tag->format('w')];
+
+    return $versatz >= 7 ? $name . ' ' . $tag->format('j.n.') : $name;
+}
+
+/**
+ * Baut aus dem Cache die Anzeige-Sicht fuer JETZT: heute, morgen und die
+ * naechsten Tage mit Terminen (bis BOARD_CALENDAR_PREVIEW_DAYS).
  *
  * Die Tage werden ueber das absolute Datum GESUCHT, nicht uebernommen: ein
- * Lauf um 23:50 wird um 00:30 gelesen. Ein mitgeschriebenes
- * "heute" waere dann gelogen. Der Server entscheidet gegen seine eigene Uhr.
+ * Lauf um 23:50 wird um 00:30 gelesen. Ein mitgeschriebenes "heute" waere
+ * dann gelogen. Der Server entscheidet gegen seine eigene Uhr.
  */
 function board_calendar_select_display(array $cache, DateTimeImmutable $now): array
 {
     $wien = new DateTimeZone('Europe/Vienna');
     $jetzt = $now->setTimezone($wien);
     $heute = $jetzt->setTime(0, 0);
-    $morgen = $heute->modify('+1 day');
 
     $empfangen = board_calendar_parse_time($cache['received_at'] ?? null);
     $empfangenAt = null;
@@ -121,14 +148,28 @@ function board_calendar_select_display(array $cache, DateTimeImmutable $now): ar
         $statusText = 'Kalender ' . $empfangenAt->format('H:i');
     }
 
+    // Nicht mehr fest HEUTE/MORGEN, sondern die naechsten Tage mit
+    // Wochentagsnamen (Nutzerwunsch 2026-09-04: "einfach die naechsten, like
+    // Morgen, Sonntag, Montag"). Wieviele davon tatsaechlich aufs Bild kommen,
+    // entscheidet das Layout -- hier werden nur alle angeboten, die der Cache
+    // hergibt.
     $tage = [];
-    foreach ([['HEUTE', $heute], ['MORGEN', $morgen]] as [$label, $tagStart]) {
+    for ($versatz = 0; $versatz < BOARD_CALENDAR_PREVIEW_DAYS; $versatz++) {
+        $tagStart = $heute->modify('+' . $versatz . ' day');
         $schluessel = $tagStart->format('Y-m-d');
         $vorhanden = array_key_exists($schluessel, $blocks);
         $termine = $vorhanden ? board_calendar_normalize_events($blocks[$schluessel], $wien) : [];
 
+        // Tage ohne Termine hinter dem uebermorgigen weglassen: eine Spalte
+        // voller "Keine Termine" verdraengt echte Eintraege spaeterer Tage.
+        // Heute und morgen bleiben IMMER stehen -- dort ist die Auskunft
+        // "nichts los" selbst die Information.
+        if ($versatz > 1 && $termine === []) {
+            continue;
+        }
+
         $tage[] = [
-            'label'  => $label,
+            'label'  => board_calendar_day_label($tagStart, $heute),
             'date'   => $tagStart,
             // Drei Zustaende, die sonst alle gleich aussaehen: gar keine Daten,
             // Daten aber freier Tag, oder Block fehlt (Push deckte ihn nicht ab).
@@ -310,7 +351,16 @@ function board_calendar_layout(array $selected): array
     return [];
 }
 
-/** @return array{items: list<array>, overflow: bool} */
+/**
+ * @return array{items: list<array>, overflow: bool}
+ *
+ * Spaltenaufteilung (Nutzervorgabe 2026-09-04): LINKS ausschliesslich HEUTE,
+ * RECHTS morgen und die weiteren Tage, bis die Spalte voll ist. Heute behaelt
+ * damit immer seinen festen Platz -- man schaut auf dieselbe Stelle, egal wie
+ * viele Termine die Folgetage haben. Eine ueber beide Spalten fliessende
+ * Liste waere unruhiger: heute ruckte je nach Terminlage mal hierhin, mal
+ * dorthin.
+ */
 function board_calendar_layout_with(array $selected, array $m): array
 {
     $items = [
@@ -318,10 +368,27 @@ function board_calendar_layout_with(array $selected, array $m): array
         ['type' => 'col_divider'],
     ];
     $overflow = false;
+    $spaltenOben = 90; // unterhalb der Kopfzeilen-Trennlinie
 
     foreach ($selected['days'] as $index => $tag) {
-        $spalte = BOARD_CALENDAR_COLUMNS[$index] ?? BOARD_CALENDAR_COLUMNS[0];
-        $headerBaseline = 90 + $m['day_gap_before'] + $m['day_baseline_drop'];
+        // Tag 0 (heute) allein links, alles Weitere rechts untereinander.
+        $spalteIdx = $index === 0 ? 0 : 1;
+        $spalte = BOARD_CALENDAR_COLUMNS[$spalteIdx];
+        $ersterInSpalte = $index <= 1;
+
+        if ($ersterInSpalte) {
+            $y = $spaltenOben;
+        }
+
+        $headerBaseline = $y + ($ersterInSpalte ? $m['day_gap_before'] : intdiv($m['day_gap_before'], 2))
+                        + $m['day_baseline_drop'];
+
+        // Passt der Tageskopf samt erster Zeile nicht mehr, endet die rechte
+        // Spalte hier -- ein Kopf ohne Inhalt waere die schlechteste Variante.
+        if ($headerBaseline + $m['day_to_first_row'] > BOARD_DEPARTURES_MAX_Y) {
+            $overflow = true;
+            break;
+        }
 
         $items[] = [
             'type' => 'day_header',
@@ -365,6 +432,11 @@ function board_calendar_layout_with(array $selected, array $m): array
                     'size' => $m['title_size'],
                 ];
                 $overflow = true;
+                // Links abgeschnitten heisst nur: heute hat viel vor. Rechts
+                // abgeschnitten heisst: kein Platz mehr fuer weitere Tage.
+                if ($spalteIdx === 1) {
+                    break 2;
+                }
                 break;
             }
 
