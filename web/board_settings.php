@@ -104,10 +104,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Kein Eintrag angekreuzt -> leeres Array; board_settings_save_calendars()
         // entfernt dann die Auswahldatei, calsync faellt auf seine eingebaute
         // Liste zurueck (eine leere Auswahl darf das Board nicht stumm stellen).
-        $gewaehlt = array_values(array_filter(
+        // Angekreuzte Kalender mit ihrem Kuerzel verbinden. Das Kuerzelfeld
+        // kommt fuer JEDEN Kalender mit, auch fuer nicht angekreuzte -- so
+        // bleibt ein einmal vergebenes "(E)" erhalten, wenn man den Kalender
+        // kurz abwaehlt und wieder anhakt.
+        $angekreuzt = array_values(array_filter(
             (array) ($_POST['calendars'] ?? []),
             static fn ($n): bool => is_string($n) && trim($n) !== ''
         ));
+        $marken = (array) ($_POST['marker'] ?? []);
+        $gewaehlt = [];
+        foreach ($angekreuzt as $name) {
+            $gewaehlt[trim($name)] = is_string($marken[$name] ?? null) ? trim($marken[$name]) : '';
+        }
         $calendarError = board_settings_save_calendars($gewaehlt);
         if ($calendarError === null) {
             appendLog($con, 'admin', 'Board-Einstellungen: Kalenderauswahl geaendert (' . count($gewaehlt) . ' Kalender).');
@@ -224,13 +233,25 @@ $e = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
         <form method="post" action="board_settings.php#kalender">
           <input type="hidden" name="csrf_token" value="<?= $e($csrfToken) ?>">
           <input type="hidden" name="action" value="save_calendars">
-          <?php $gewaehlt = board_settings_read_calendar_selection(); ?>
+          <?php $gewaehlt = board_calendar_selection(); ?>
+          <p class="form-text">
+            Das <strong>Kürzel</strong> steht auf dem Board vor jedem Termin dieses Kalenders &mdash;
+            so ist zu sehen, wem er gehört (z.&nbsp;B. <code>(E)</code>, <code>(A)</code>).
+            Leer lassen heißt: keine Markierung. Emoji eignen sich dafür nicht, das Panel kennt
+            nur Schwarz und Weiß.
+          </p>
           <?php foreach ($verfuegbar as $i => $name): ?>
-            <div class="form-group form-check">
-              <input type="checkbox" class="form-check-input" id="cal<?= (int) $i ?>"
-                     name="calendars[]" value="<?= $e($name) ?>"
-                     <?= in_array($name, $gewaehlt, true) ? 'checked' : '' ?>>
-              <label class="form-check-label" for="cal<?= (int) $i ?>"><?= $e($name) ?></label>
+            <div class="form-group">
+              <div class="form-check">
+                <input type="checkbox" class="form-check-input" id="cal<?= (int) $i ?>"
+                       name="calendars[]" value="<?= $e($name) ?>"
+                       <?= array_key_exists($name, $gewaehlt) ? 'checked' : '' ?>>
+                <label class="form-check-label" for="cal<?= (int) $i ?>"><?= $e($name) ?></label>
+              </div>
+              <input type="text" class="form-control" style="max-width:8rem"
+                     name="marker[<?= $e($name) ?>]" maxlength="6" placeholder="Kürzel"
+                     aria-label="Kürzel für <?= $e($name) ?>"
+                     value="<?= $e($gewaehlt[$name] ?? '') ?>">
             </div>
           <?php endforeach; ?>
           <p class="form-text">

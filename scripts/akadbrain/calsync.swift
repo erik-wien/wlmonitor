@@ -83,12 +83,23 @@ let standardKalender = [
 func ladeAuswahl(nebenCache ziel: String) -> [String]? {
     let pfad = URL(fileURLWithPath: ziel).deletingLastPathComponent()
         .appendingPathComponent("selection.json")
-    guard let daten = try? Data(contentsOf: pfad),
-          let namen = try? JSONDecoder().decode([String].self, from: daten) else {
+    guard let daten = try? Data(contentsOf: pfad) else { return nil }
+
+    // Zwei Formen zugelassen: das aktuelle Objekt {"Kalender": "(E)"} -- die
+    // Kuerzel interessieren nur das Board, hier zaehlen die Schluessel -- und
+    // das fruehere reine Array. Beides zu koennen kostet drei Zeilen und
+    // erspart einen Neubau, falls die Datei mal aelter ist als das Binary.
+    var namen: [String]
+    if let objekt = try? JSONDecoder().decode([String: String].self, from: daten) {
+        namen = Array(objekt.keys)
+    } else if let liste = try? JSONDecoder().decode([String].self, from: daten) {
+        namen = liste
+    } else {
         return nil
     }
+
     let sauber = namen.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-    return sauber.isEmpty ? nil : sauber
+    return sauber.isEmpty ? nil : sauber.sorted()
 }
 
 let gewuenschteKalender: [String] = {
@@ -176,6 +187,11 @@ struct Termin: Encodable {
     let all_day: Bool
     let start: String?
     let end: String?
+    // Aus WELCHEM Kalender der Termin stammt. Das Board leitet daraus das
+    // Kuerzel ab ("(E)" / "(A)"), damit auf einen Blick klar ist, wem der
+    // Termin gehoert (Nutzerwunsch 2026-09-04). Emoji im Kalendernamen
+    // taugten dafuer nicht: auf dem 1-Bit-Panel werden sie zu Kluempchen.
+    let calendar: String
 }
 struct Tag: Encodable {
     let date: String
@@ -219,7 +235,8 @@ for versatz in 0..<VORSCHAU_TAGE {
                 title: (ev.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
                 all_day: ev.isAllDay,
                 start: ev.startDate.map { iso.string(from: $0) },
-                end: ev.endDate.map { iso.string(from: $0) }
+                end: ev.endDate.map { iso.string(from: $0) },
+                calendar: ev.calendar?.title ?? ""
             )
         }
     ))

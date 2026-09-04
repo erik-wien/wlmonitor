@@ -351,24 +351,39 @@ function board_settings_calendar_selection_path(): string
 }
 
 /**
- * Aktuell hinterlegte Auswahl. Leer = keine eigene Auswahl; calsync bleibt
- * dann bei CALSYNC_CALENDARS bzw. seiner eingebauten Liste.
+ * Aktuell hinterlegte Auswahl: Kalendername -> Kuerzel ("(E)", "(A)", ...).
+ * Leeres Kuerzel = Kalender ausgewaehlt, aber ohne Markierung am Termin.
+ * Leeres Array = keine eigene Auswahl; calsync bleibt dann bei
+ * CALSYNC_CALENDARS bzw. seiner eingebauten Liste.
  *
- * @return list<string>
+ * Nimmt auch das fruehere reine Array entgegen (dann ohne Kuerzel), damit
+ * eine aeltere Datei nicht zu einer leeren Auswahl fuehrt.
+ *
+ * @return array<string, string>
  */
-function board_settings_read_calendar_selection(): array
+function board_calendar_selection(): array
 {
     $pfad = board_settings_calendar_selection_path();
     if (!is_file($pfad)) {
         return [];
     }
-    $namen = json_decode((string) @file_get_contents($pfad), true);
-    if (!is_array($namen)) {
+    $roh = json_decode((string) @file_get_contents($pfad), true);
+    if (!is_array($roh)) {
         return [];
     }
-    $namen = array_map('trim', array_filter($namen, 'is_string'));
 
-    return array_values(array_filter($namen, static fn (string $n): bool => $n !== ''));
+    $auswahl = [];
+    foreach ($roh as $schluessel => $wert) {
+        // Altes Format: [0 => "Name"]. Neues: ["Name" => "(E)"].
+        $name = is_int($schluessel) ? (is_string($wert) ? $wert : '') : (string) $schluessel;
+        $kuerzel = is_int($schluessel) ? '' : (is_string($wert) ? $wert : '');
+        $name = trim($name);
+        if ($name !== '') {
+            $auswahl[$name] = trim($kuerzel);
+        }
+    }
+
+    return $auswahl;
 }
 
 /**
@@ -380,19 +395,32 @@ function board_settings_read_calendar_selection(): array
  * auf seine eingebaute Liste zurueck; eine leere Liste wuerde sonst "gar keine
  * Kalender" bedeuten und das Board stumm stellen.
  *
- * @param list<string> $namen
+ * @param array<string, string> $auswahl Kalendername -> Kuerzel
  * @return string|null Fehlermeldung, oder null bei Erfolg.
  */
-function board_settings_save_calendars(array $namen): ?string
+function board_settings_save_calendars(array $auswahl): ?string
 {
-    $namen = array_values(array_filter(array_map('trim', $namen), static fn (string $n): bool => $n !== ''));
-    if (count($namen) > 50) {
+    $sauber = [];
+    foreach ($auswahl as $name => $kuerzel) {
+        $name = trim((string) $name);
+        if ($name === '') {
+            continue;
+        }
+        $kuerzel = trim((string) $kuerzel);
+        // Kurz halten: das Kuerzel steht VOR dem Titel und frisst sonst die
+        // Zeilenbreite, die fuer den Termin gedacht ist.
+        if (mb_strlen($kuerzel) > 6) {
+            return 'Kuerzel darf hoechstens 6 Zeichen lang sein (z. B. "(E)").';
+        }
+        $sauber[$name] = $kuerzel;
+    }
+    if (count($sauber) > 50) {
         return 'Zu viele Kalender ausgewaehlt.';
     }
 
     $pfad = board_settings_calendar_selection_path();
 
-    if ($namen === []) {
+    if ($sauber === []) {
         if (is_file($pfad) && !@unlink($pfad)) {
             error_log('board_settings: Kalenderauswahl nicht entfernbar: ' . $pfad);
             return 'Auswahl konnte nicht zurueckgesetzt werden.';
@@ -406,7 +434,7 @@ function board_settings_save_calendars(array $namen): ?string
     }
 
     $tmp = $pfad . '.tmp';
-    $json = json_encode($namen, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $json = json_encode($sauber, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($json === false || @file_put_contents($tmp, $json) === false || !@rename($tmp, $pfad)) {
         @unlink($tmp);
         error_log('board_settings: Kalenderauswahl nicht schreibbar: ' . $pfad);

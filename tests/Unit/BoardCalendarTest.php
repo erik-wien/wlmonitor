@@ -138,6 +138,49 @@ class BoardCalendarTest extends TestCase
         $this->assertNotEmpty($sicht['days'][0]['events']);
     }
 
+    // --- Kuerzel je Kalender ---------------------------------------------------
+
+    public function test_marker_is_prefixed_to_the_title(): void
+    {
+        // Nutzerwunsch 2026-09-04: auf dem Board muss zu sehen sein, WEM der
+        // Termin gehoert. Der Kalendername steht dort nirgends, Emoji taugen
+        // auf dem 1-Bit-Panel nicht -- also "(E)"/"(A)" vor den Titel.
+        $tz = new \DateTimeZone('Europe/Vienna');
+        $roh = [
+            ['title' => 'Zahnarzt', 'all_day' => false, 'calendar' => '🔜 Eriks Termine',
+             'start' => '2026-09-04T10:00:00+02:00', 'end' => '2026-09-04T11:00:00+02:00'],
+            ['title' => 'Sport', 'all_day' => false, 'calendar' => '🅰️ Armins Termine',
+             'start' => '2026-09-04T12:00:00+02:00', 'end' => '2026-09-04T13:00:00+02:00'],
+        ];
+        $out = board_calendar_normalize_events($roh, $tz, ['🔜 Eriks Termine' => '(E)', '🅰️ Armins Termine' => '(A)']);
+
+        $this->assertSame('(E) Zahnarzt', $out[0]['title']);
+        $this->assertSame('(A) Sport', $out[1]['title']);
+    }
+
+    public function test_without_a_marker_the_title_stays_untouched(): void
+    {
+        // Bei einem einzigen Kalender waere eine Markierung an jeder Zeile
+        // bloss Rauschen.
+        $tz = new \DateTimeZone('Europe/Vienna');
+        $roh = [['title' => 'Zahnarzt', 'all_day' => false, 'calendar' => 'Gemeinsam',
+                 'start' => '2026-09-04T10:00:00+02:00', 'end' => '2026-09-04T11:00:00+02:00']];
+
+        $this->assertSame('Zahnarzt', board_calendar_normalize_events($roh, $tz, ['Gemeinsam' => ''])[0]['title']);
+        $this->assertSame('Zahnarzt', board_calendar_normalize_events($roh, $tz, [])[0]['title']);
+    }
+
+    public function test_unknown_calendar_gets_no_marker_instead_of_a_warning(): void
+    {
+        // Termin aus einem Kalender, fuer den kein Kuerzel hinterlegt ist --
+        // etwa direkt nach dem Umbenennen. Darf nichts kaputtmachen.
+        $tz = new \DateTimeZone('Europe/Vienna');
+        $roh = [['title' => 'Termin', 'all_day' => false, 'calendar' => 'Unbekannt',
+                 'start' => '2026-09-04T10:00:00+02:00', 'end' => '2026-09-04T11:00:00+02:00']];
+
+        $this->assertSame('Termin', board_calendar_normalize_events($roh, $tz, ['Anderer' => '(X)'])[0]['title']);
+    }
+
     // --- Layout ----------------------------------------------------------------
 
     public function test_today_stays_left_and_further_days_stack_on_the_right(): void

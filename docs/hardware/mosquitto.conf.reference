@@ -1,0 +1,51 @@
+# REFERENZKOPIE der Broker-Konfiguration von akadbrain
+# (/opt/homebrew/etc/mosquitto/mosquitto.conf), Stand 2026-09-04.
+#
+# Wird NICHT deployt -- die Datei liegt ausserhalb des Repos auf dem Server.
+# Hier nur, damit die Entscheidungen nachvollziehbar bleiben und ein
+# Wiederaufbau nicht raten muss. Bei Aenderungen am Server bitte
+# nachziehen.
+#
+# wlmonitor MQTT broker -- nur ueber localhost + Tailscale + LAN erreichbar (nicht
+# oeffentlich; der Cloudflare-Tunnel proxied nur HTTP/HTTPS, MQTT bleibt
+# aussen vor). Authentifizierung erzwungen, kein anonymous.
+
+persistence true
+persistence_location /opt/homebrew/var/mosquitto/
+
+log_dest file /opt/homebrew/var/log/mosquitto/mosquitto.log
+log_type error
+log_type warning
+log_type notice
+
+# Tailscale-Listener am 2026-09-04 ENTFERNT (war: 100.82.138.121).
+# Grund: mosquitto beendet sich, wenn EIN Listener nicht binden kann. Beim
+# Systemstart am 04.09. war der Broker 21 Sekunden nach dem Boot tot --
+# "Can't assign requested address", weil Tailscale die Adresse noch nicht
+# (bzw. gar nicht) bereitgestellt hatte. Ein Wettrennen beim Booten, das den
+# Broker jedes Mal umbringen kann.
+# Belegt vor dem Entfernen: im gesamten Log (ab 29.08.) kam KEINE einzige
+# Verbindung ueber 100.x -- nur 127.0.0.1 (Subscriber, web/mqtt/) und LAN
+# (iPhone). Der Listener war also ungenutzt.
+# EINE Bindung an 0.0.0.0 statt drei adressgebundene Listener
+# (Nutzerentscheidung 2026-09-04).
+#
+# Warum: mosquitto beendet sich, wenn EIN Listener nicht binden kann. Am
+# 04.09. war der Broker 21 Sekunden nach dem Systemstart tot -- "Can't assign
+# requested address", weil Tailscale seine Adresse (100.82.138.121) noch nicht
+# bereitgestellt hatte. Ein Wettrennen beim Booten, das jederzeit wiederkommt,
+# solange eine feste Adresse verlangt wird. Ohne Adressbindung ist es
+# strukturell unmoeglich.
+#
+# Erreichbarkeit bleibt identisch (localhost, LAN ueber en0/en1, Tailnet).
+# Sicherheit haengt hier NICHT an der Bindung: die macOS-Firewall ist aus,
+# und der LAN-Listener war ohnehin fuer das ganze Heimnetz offen. Es schuetzen
+# Router/NAT nach aussen (Port 1883 ist nicht weitergeleitet; der
+# Cloudflare-Tunnel reicht nur HTTP/HTTPS durch) sowie allow_anonymous false
+# und die ACL unten.
+listener 1883 0.0.0.0
+
+allow_anonymous false
+password_file /opt/homebrew/etc/mosquitto/passwd
+
+acl_file /opt/homebrew/etc/mosquitto/aclfile

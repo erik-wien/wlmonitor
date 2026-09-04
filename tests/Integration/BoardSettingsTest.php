@@ -199,36 +199,44 @@ class BoardSettingsTest extends IntegrationTestCase
         // Emoji im Titel sind der Normalfall ("🔜 Eriks Termine"). Die Auswahl
         // liegt in einer Datei, weil calsync.swift kein MySQL kann -- eine
         // DB-Spalte daneben waere doppelter Zustand.
-        $err = \board_settings_save_calendars(['🔜 Eriks Termine', 'Birthdays']);
+        $err = \board_settings_save_calendars(['🔜 Eriks Termine' => '(E)', 'Birthdays' => '']);
 
         $this->assertNull($err);
-        $this->assertSame(['🔜 Eriks Termine', 'Birthdays'], \board_settings_read_calendar_selection());
+        $this->assertSame(['🔜 Eriks Termine' => '(E)', 'Birthdays' => ''], \board_calendar_selection());
 
         $pfad = \board_settings_calendar_selection_path();
         $this->assertFileExists($pfad);
-        $this->assertSame(['🔜 Eriks Termine', 'Birthdays'], json_decode((string) file_get_contents($pfad), true));
+        $this->assertSame(['🔜 Eriks Termine' => '(E)', 'Birthdays' => ''], json_decode((string) file_get_contents($pfad), true));
     }
 
     public function test_empty_selection_removes_the_file_so_calsync_keeps_its_defaults(): void
     {
         // Nichts angekreuzt darf NICHT "gar keine Kalender" heissen -- sonst
         // stuende das Board nach einem Fehlgriff stumm da.
-        \board_settings_save_calendars(['Birthdays']);
+        \board_settings_save_calendars(['Birthdays' => '']);
         $this->assertFileExists(\board_settings_calendar_selection_path());
 
         $err = \board_settings_save_calendars([]);
 
         $this->assertNull($err);
         $this->assertFileDoesNotExist(\board_settings_calendar_selection_path());
-        $this->assertSame([], \board_settings_read_calendar_selection());
+        $this->assertSame([], \board_calendar_selection());
     }
 
     public function test_calendar_names_with_any_character_survive(): void
     {
         // JSON statt Trennzeichen: ein "|" im Titel war frueher ein Problem,
         // jetzt nicht mehr.
-        \board_settings_save_calendars(['Kaputt|Name', 'Komma, Punkt']);
-        $this->assertSame(['Kaputt|Name', 'Komma, Punkt'], \board_settings_read_calendar_selection());
+        \board_settings_save_calendars(['Kaputt|Name' => '(K)', 'Komma, Punkt' => '']);
+        $this->assertSame(['Kaputt|Name' => '(K)', 'Komma, Punkt' => ''], \board_calendar_selection());
+    }
+
+    public function test_overlong_marker_is_rejected(): void
+    {
+        // Das Kuerzel steht VOR dem Titel und frisst sonst die Zeilenbreite,
+        // die fuer den Termin gedacht ist.
+        $err = \board_settings_save_calendars(['Birthdays' => 'viel zu lang']);
+        $this->assertNotNull($err);
     }
 
     public function test_available_calendars_come_from_the_calsync_cache(): void

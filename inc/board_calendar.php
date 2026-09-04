@@ -129,6 +129,9 @@ function board_calendar_select_display(array $cache, DateTimeImmutable $now): ar
         }
     }
 
+    // Kalendername -> Kuerzel, aus der Auswahl der Admin-Seite.
+    $kuerzel = function_exists('board_calendar_selection') ? board_calendar_selection() : [];
+
     $blocks = [];
     foreach (($cache['days'] ?? []) as $tag) {
         if (is_array($tag) && is_string($tag['date'] ?? null)) {
@@ -158,7 +161,7 @@ function board_calendar_select_display(array $cache, DateTimeImmutable $now): ar
         $tagStart = $heute->modify('+' . $versatz . ' day');
         $schluessel = $tagStart->format('Y-m-d');
         $vorhanden = array_key_exists($schluessel, $blocks);
-        $termine = $vorhanden ? board_calendar_normalize_events($blocks[$schluessel], $wien) : [];
+        $termine = $vorhanden ? board_calendar_normalize_events($blocks[$schluessel], $wien, $kuerzel) : [];
 
         // Tage ohne Termine hinter dem uebermorgigen weglassen: eine Spalte
         // voller "Keine Termine" verdraengt echte Eintraege spaeterer Tage.
@@ -203,7 +206,10 @@ function board_calendar_format_stand(DateTimeImmutable $empfangen, DateTimeImmut
  * Hier greifen die Schutzgrenzen: Titel gekappt, Anzahl begrenzt, unlesbare
  * Zeitangaben zu null statt zu einer Ausnahme.
  */
-function board_calendar_normalize_events(array $roh, DateTimeZone $tz): array
+/**
+ * @param array<string, string> $kuerzel Kalendername -> Markierung ("(E)")
+ */
+function board_calendar_normalize_events(array $roh, DateTimeZone $tz, array $kuerzel = []): array
 {
     $out = [];
     foreach ($roh as $ev) {
@@ -236,9 +242,25 @@ function board_calendar_normalize_events(array $roh, DateTimeZone $tz): array
 
         $titel = is_string($ev['title'] ?? null) ? trim($ev['title']) : '';
         $titel = mb_substr($titel, 0, BOARD_CALENDAR_MAX_TITLE_CHARS);
+        if ($titel === '') {
+            $titel = '(ohne Titel)';
+        }
+
+        // Markierung, WEM der Termin gehoert (Nutzerwunsch 2026-09-04): der
+        // Kalendername allein steht nirgends auf dem Board, und Emoji als
+        // Kennzeichen scheiden aus -- auf dem 1-Bit-Panel werden sie zu
+        // Kluempchen. Also ein kurzes "(E)"/"(A)" vor den Titel.
+        //
+        // Nur wenn ein Kuerzel hinterlegt ist: bei einem einzigen Kalender
+        // waere die Markierung an jeder Zeile bloss Rauschen.
+        $ausKalender = is_string($ev['calendar'] ?? null) ? trim($ev['calendar']) : '';
+        $marke = $ausKalender !== '' ? trim((string) ($kuerzel[$ausKalender] ?? '')) : '';
+        if ($marke !== '') {
+            $titel = $marke . ' ' . $titel;
+        }
 
         $out[] = [
-            'title'   => $titel === '' ? '(ohne Titel)' : $titel,
+            'title'   => $titel,
             'all_day' => $ganztaegig,
             'start'   => $start,
             'end'     => $ende,
