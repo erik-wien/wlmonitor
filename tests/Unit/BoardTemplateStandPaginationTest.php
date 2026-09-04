@@ -29,31 +29,32 @@ class BoardTemplateStandPaginationTest extends TestCase
 
     public function test_middle_page_shows_active_circle_and_no_arrows(): void
     {
-        // totalPages=3: pillWidth=3*87+20=281, pillStartX=1083-281=802,
-        // numberStartX=802+10+43=855, Slots bei 855/942/1029.
+        // Seit 2026-09-04 linksbuendig in der Favoritenzeile:
+        // totalPages=3: pillWidth=3*100+20=320, pillStartX=16,
+        // numberStartX=16+10+50=76, Slots bei 76/176/276.
         $svg = board_render_stand_and_pagination_svg(new DateTimeImmutable('19:13'), 2, 3);
 
-        $this->assertStringContainsString('x="802" y="1252" width="281" height="48" rx="24"', $svg);
+        $this->assertStringContainsString('x="16" y="1320" width="320" height="74" rx="37"', $svg);
         $this->assertStringNotContainsString('←', $svg, 'keine Pfeile mehr (Nutzerwunsch 2026-08-23)');
         $this->assertStringNotContainsString('→', $svg);
-        $this->assertStringContainsString('<circle cx="942" cy="1276" r="20" fill="black"/>', $svg);
+        $this->assertStringContainsString('<circle cx="176" cy="1357" r="30" fill="black"/>', $svg);
         $this->assertStringContainsString('fill="white">2<', $svg, 'aktive Seite weiss auf dem Kreis');
-        $this->assertStringContainsString('x="855" y="1285" text-anchor="middle" font-size="30" fill="black">1<', $svg);
-        $this->assertStringContainsString('x="1029" y="1285" text-anchor="middle" font-size="30" fill="black">3<', $svg);
+        $this->assertStringContainsString('x="76" y="1370" text-anchor="middle" font-size="38" fill="black">1<', $svg);
+        $this->assertStringContainsString('x="276" y="1370" text-anchor="middle" font-size="38" fill="black">3<', $svg);
     }
 
     public function test_first_page_marks_the_first_number_active(): void
     {
         $svg = board_render_stand_and_pagination_svg(new DateTimeImmutable('19:13'), 1, 3);
-        $this->assertStringContainsString('<circle cx="855" cy="1276" r="20" fill="black"/>', $svg);
-        $this->assertStringContainsString('x="855" y="1285" text-anchor="middle" font-weight="bold" font-size="30" fill="white">1<', $svg);
+        $this->assertStringContainsString('<circle cx="76" cy="1357" r="30" fill="black"/>', $svg);
+        $this->assertStringContainsString('x="76" y="1370" text-anchor="middle" font-weight="bold" font-size="38" fill="white">1<', $svg);
     }
 
     public function test_last_page_marks_the_last_number_active(): void
     {
         $svg = board_render_stand_and_pagination_svg(new DateTimeImmutable('19:13'), 3, 3);
-        $this->assertStringContainsString('<circle cx="1029" cy="1276" r="20" fill="black"/>', $svg);
-        $this->assertStringContainsString('x="1029" y="1285" text-anchor="middle" font-weight="bold" font-size="30" fill="white">3<', $svg);
+        $this->assertStringContainsString('<circle cx="276" cy="1357" r="30" fill="black"/>', $svg);
+        $this->assertStringContainsString('x="276" y="1370" text-anchor="middle" font-weight="bold" font-size="38" fill="white">3<', $svg);
     }
 
     // --- Icon-Pille (Nutzerwunsch 2026-08-26: "Monitor/Stoerung/Kalender/
@@ -96,7 +97,7 @@ class BoardTemplateStandPaginationTest extends TestCase
     public function test_categories_replace_digits_with_icons(): void
     {
         // totalPages=4: pillWidth=4*87+20=368, pillStartX=1083-368=715,
-        // numberStartX=715+10+43=768, Slots bei 768/855/942/1029.
+        // numberStartX=16+10+50=76, Slots bei 76/176/276/376.
         $categories = board_pagination_categories(1, true, true); // 1:monitor 2:stoerung 3:kalender 4:wetter
         $svg = board_render_stand_and_pagination_svg(new DateTimeImmutable('19:13'), 1, 4, true, $categories);
 
@@ -105,10 +106,10 @@ class BoardTemplateStandPaginationTest extends TestCase
         $this->assertStringNotContainsString('>2<', $svg);
         $this->assertStringNotContainsString('>3<', $svg);
         $this->assertStringNotContainsString('>4<', $svg);
-        $this->assertStringContainsString('<g transform="translate(768,1276)">', $svg, 'Slot 1 (monitor)');
-        $this->assertStringContainsString('<g transform="translate(855,1276)">', $svg, 'Slot 2 (stoerung)');
-        $this->assertStringContainsString('<g transform="translate(942,1276)">', $svg, 'Slot 3 (kalender)');
-        $this->assertStringContainsString('<g transform="translate(1029,1276)">', $svg, 'Slot 4 (wetter)');
+        $this->assertStringContainsString('<g transform="translate(76,1357) scale(1.5)">', $svg, 'Slot 1 (monitor)');
+        $this->assertStringContainsString('<g transform="translate(176,1357) scale(1.5)">', $svg, 'Slot 2 (stoerung)');
+        $this->assertStringContainsString('<g transform="translate(276,1357) scale(1.5)">', $svg, 'Slot 3 (kalender)');
+        $this->assertStringContainsString('<g transform="translate(376,1357) scale(1.5)">', $svg, 'Slot 4 (wetter)');
     }
 
     public function test_active_slot_icon_is_white_inactive_is_black(): void
@@ -128,6 +129,6 @@ class BoardTemplateStandPaginationTest extends TestCase
         // Kein Eintrag fuer Seite 2 in der Map -- muss wie ohne Kategorien
         // ueberhaupt rendern (Ziffer), nicht leer bleiben oder crashen.
         $svg = board_render_stand_and_pagination_svg(new DateTimeImmutable('19:13'), 1, 2, true, [1 => 'monitor']);
-        $this->assertStringContainsString('x="1029" y="1285" text-anchor="middle" font-size="30" fill="black">2<', $svg);
+        $this->assertStringContainsString('x="176" y="1370" text-anchor="middle" font-size="38" fill="black">2<', $svg);
     }
 }

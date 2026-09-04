@@ -357,7 +357,7 @@ function board_sleep_render_svg(
     );
 
     $touchBar = ($showPagination && $touchBarFavoriteTitles !== [])
-        ? board_render_touch_bar_svg($touchBarFavoriteTitles, $activeFavoriteIndex)
+        ? board_render_touch_bar_svg($touchBarFavoriteTitles, $activeFavoriteIndex, $totalPages)
         : '';
 
     return <<<SVG

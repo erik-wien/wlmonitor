@@ -13,27 +13,42 @@ const int FAVORITE_GAP = 16;
 const int PANEL_WIDTH = 1872;
 
 // Deckungsgleich mit den BOARD_PAGINATION_*-Konstanten in
-// inc/board_template.php (Nutzerwunsch 2026-08-23: "50% groesser, ohne
-// Pfeile, nur Seitennummern"). Die Pille ist RECHTSBUENDIG an
-// PAGINATION_RIGHT_EDGE verankert und waechst bei mehr Seiten nach LINKS --
-// seit der Schlafschirm immer eine zusaetzliche letzte Seite ist, ist
-// totalPages nie mehr 1 und oft 3-5, eine linksbuendige Pille waere ueber die
-// Spaltentrennlinie hinausgewachsen.
-const int PAGINATION_ROW_TOP = 1252;
-// 1300 (Nutzerbefund 2026-08-29: Pille beruehrte optisch die Trennlinie bei
-// y=1310, nur 2px Abstand -- war 1308/HEIGHT=56, jetzt HEIGHT=48 fuer 10px
-// Luft, s. BOARD_PAGINATION_HEIGHT in inc/board_template.php).
-const int PAGINATION_ROW_BOTTOM = 1300; // exklusiv (Top + Height)
-const int PAGINATION_RIGHT_EDGE = 1083;
-const int PAGINATION_SLOT_WIDTH = 87;
+// inc/board_template.php.
+//
+// Seit 2026-09-04 steht die Pille LINKS IN DER FAVORITENZEILE (Nutzerwunsch:
+// "die ganze Hauptnavigation in einer Zeile"). Damit:
+//   - gleiche Zeile wie die Favoriten (kein eigenes Band mehr darueber),
+//   - LINKSbuendig ab PAGINATION_LEFT_EDGE, waechst nach RECHTS
+//     (vorher rechtsbuendig auf x=1083 verankert, nach links wachsend),
+//   - Slots/Kreis groesser, weil die Zeile 74 statt 48 Pixel hoch ist.
+// Die Favoriten fangen erst hinter der Pille an -- s. mapFavoriteTouch().
+const int PAGINATION_LEFT_EDGE = FAVORITE_MARGIN;
+const int PAGINATION_SLOT_WIDTH = 100;   // war 87
 const int PAGINATION_SIDE_PADDING = 20;
 
-TouchZone mapFavoriteTouch(int x, int favoriteCount) {
+// Breite der Pille. Muss mit board_pagination_pill_width() in
+// inc/board_template.php uebereinstimmen -- die Favoritenzonen haengen daran.
+int paginationPillWidth(int totalPages) {
+    if (totalPages <= 1) return 0;  // keine Pille -> Favoriten volle Breite
+    return totalPages * PAGINATION_SLOT_WIDTH + PAGINATION_SIDE_PADDING;
+}
+
+TouchZone mapFavoriteTouch(int x, int favoriteCount, int totalPages) {
     if (favoriteCount <= 0) return TouchZone::None;
 
-    int buttonWidth = (PANEL_WIDTH - 2 * FAVORITE_MARGIN - (favoriteCount - 1) * FAVORITE_GAP) / favoriteCount;
+    // Die Pille belegt den linken Teil derselben Zeile. Ihr Platz wird auch
+    // dann freigehalten, wenn sie gerade nicht gezeichnet wird (echter
+    // Schlafschirm) -- sonst waeren Bild und Zonen verschoben. Deckungsgleich
+    // mit board_render_touch_bar_svg().
+    int left = FAVORITE_MARGIN + paginationPillWidth(totalPages);
+    if (totalPages > 1) left += FAVORITE_GAP;
+
+    int verfuegbar = PANEL_WIDTH - FAVORITE_MARGIN - left - (favoriteCount - 1) * FAVORITE_GAP;
+    int buttonWidth = verfuegbar / favoriteCount;
+    if (buttonWidth <= 0) return TouchZone::None;
+
     for (int i = 0; i < favoriteCount; i++) {
-        int xStart = FAVORITE_MARGIN + i * (buttonWidth + FAVORITE_GAP);
+        int xStart = left + i * (buttonWidth + FAVORITE_GAP);
         int xEnd = xStart + buttonWidth;
         if (x >= xStart && x < xEnd) {
             switch (i) {
@@ -51,17 +66,17 @@ TouchResult mapPaginationTouch(int x, int totalPages) {
     // Schutz stehen gelassen, exakt wie im PHP-Gegenstueck.
     if (totalPages <= 1) return {};
 
-    int pillWidth = totalPages * PAGINATION_SLOT_WIDTH + PAGINATION_SIDE_PADDING;
-    int pillStartX = PAGINATION_RIGHT_EDGE - pillWidth;
+    int pillStartX = PAGINATION_LEFT_EDGE;
+    int pillEndX = pillStartX + paginationPillWidth(totalPages);
 
-    if (x < pillStartX || x >= PAGINATION_RIGHT_EDGE) return {};
+    if (x < pillStartX || x >= pillEndX) return {};
 
     // Absolut statt links/rechts (TASK-25, Nutzerwunsch 2026-08-27: "Vor/
     // zurueck ist ein Anachronismus"): jeder Slot IST die Zielseite. Der
     // letzte Slot schluckt den rechten Padding-Streifen (Klemmung auf
     // totalPages-1) -- deckungsgleich mit board_touch_zones() in
     // inc/board_template.php, die aus demselben Grund ihre letzte Zone bis
-    // PAGINATION_RIGHT_EDGE statt nur bis zum rechnerischen Slotende zeichnet.
+    // zum Pillenende statt nur bis zum rechnerischen Slotende zeichnet.
     int slot = (x - pillStartX) / PAGINATION_SLOT_WIDTH;
     if (slot < 0) slot = 0;
     if (slot >= totalPages) slot = totalPages - 1;
@@ -71,13 +86,16 @@ TouchResult mapPaginationTouch(int x, int totalPages) {
 } // namespace
 
 TouchResult mapTouchToZone(int x, int y, int favoriteCount, int totalPages) {
-    if (y >= FAVORITE_ROW_TOP && y < FAVORITE_ROW_BOTTOM) {
-        return { mapFavoriteTouch(x, favoriteCount), 0 };
-    }
-    if (y >= PAGINATION_ROW_TOP && y < PAGINATION_ROW_BOTTOM) {
-        return mapPaginationTouch(x, totalPages);
-    }
-    return {};
+    // Pille und Favoriten liegen seit 2026-09-04 in DERSELBEN Zeile -- die
+    // Pille muss deshalb ZUERST geprueft werden. Andernfalls schluckte
+    // mapFavoriteTouch() den Tipp, sobald die Favoritenberechnung den
+    // Pillenbereich faelschlich mit abdeckte.
+    if (y < FAVORITE_ROW_TOP || y >= FAVORITE_ROW_BOTTOM) return {};
+
+    TouchResult pill = mapPaginationTouch(x, totalPages);
+    if (pill.zone != TouchZone::None) return pill;
+
+    return { mapFavoriteTouch(x, favoriteCount, totalPages), 0 };
 }
 
 const char* touchZoneToHeaderValue(TouchZone zone) {

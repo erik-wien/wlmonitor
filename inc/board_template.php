@@ -298,29 +298,49 @@ SVG;
  * @param list<string> $favoriteTitles 1-3 Titel, bereits fertig ermittelt
  *        (diese Funktion laedt selbst keine Favoriten).
  */
-function board_render_touch_bar_svg(array $favoriteTitles, int $activeIndex): string
+function board_render_touch_bar_svg(array $favoriteTitles, int $activeIndex, int $totalPages = 1): string
 {
     if ($favoriteTitles === []) {
         return '';
     }
 
     $count = count($favoriteTitles);
-    $margin = 16;
-    $gap = 16;
-    $buttonWidth = intdiv(1872 - 2 * $margin - ($count - 1) * $gap, $count);
+    $margin = BOARD_NAV_MARGIN;
+    $gap = BOARD_NAV_MARGIN;
+
+    // Die Pille sitzt seit 2026-09-04 links in derselben Zeile -- die
+    // Favoriten fangen erst dahinter an.
+    //
+    // Der Platz wird auch dann freigehalten, wenn die Pille GERADE nicht
+    // gezeichnet wird (echter Schlafschirm, $showPagination=false): sonst
+    // wuerden die Favoriten beim Einschlafen sichtbar aufspringen, und die
+    // Firmware -- die nichts von $showPagination weiss -- rechnete mit
+    // anderen Zonen als das Bild zeigt.
+    $left = $margin + board_pagination_pill_width($totalPages);
+    if ($totalPages > 1) {
+        $left += $gap;
+    }
+
+    $verfuegbar = 1872 - $margin - $left - ($count - 1) * $gap;
+    // Rein defensiv: bei absurd vielen Seiten bliebe sonst eine negative
+    // Breite und die Knoepfe wuerden verkehrt herum gezeichnet.
+    $buttonWidth = max(0, intdiv($verfuegbar, $count));
+
+    $y = BOARD_NAV_ROW_TOP;
+    $textY = $y + 47; // wie zuvor: 1320 -> Grundlinie 1367
 
     $out = '<g font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="34">';
     foreach ($favoriteTitles as $i => $title) {
-        $x = $margin + $i * ($buttonWidth + $gap);
+        $x = $left + $i * ($buttonWidth + $gap);
         $active = $i === $activeIndex;
         $out .= sprintf(
-            '<rect x="%d" y="1320" width="%d" height="74" rx="10" %s/>',
-            $x, $buttonWidth,
+            '<rect x="%d" y="%d" width="%d" height="%d" rx="10" %s/>',
+            $x, $y, $buttonWidth, BOARD_NAV_ROW_HEIGHT,
             $active ? 'fill="black"' : 'fill="white" stroke="black" stroke-width="3"'
         );
         $out .= sprintf(
-            '<text x="%d" y="1367" text-anchor="middle" fill="%s">%s</text>',
-            $x + intdiv($buttonWidth, 2), $active ? 'white' : 'black',
+            '<text x="%d" y="%d" text-anchor="middle" fill="%s">%s</text>',
+            $x + intdiv($buttonWidth, 2), $textY, $active ? 'white' : 'black',
             htmlspecialchars($title, ENT_XML1)
         );
     }
@@ -346,37 +366,46 @@ function board_touch_zones(int $favoriteCount, int $totalPages): array
 {
     $zones = [];
 
-    if ($favoriteCount > 0) {
-        $margin = 16;
-        $gap = 16;
-        $buttonWidth = intdiv(1872 - 2 * $margin - ($favoriteCount - 1) * $gap, $favoriteCount);
-        $favZoneNames = ['fav0', 'fav1', 'fav2'];
-        for ($i = 0; $i < $favoriteCount; $i++) {
-            $zones[] = [
-                'zone' => $favZoneNames[$i],
-                'x' => $margin + $i * ($buttonWidth + $gap),
-                'y' => 1320,
-                'w' => $buttonWidth,
-                'h' => 1404 - 1320,
-            ];
-        }
-    }
-
+    // Pille zuerst: sie sitzt seit 2026-09-04 LINKS IN derselben Zeile wie die
+    // Favoriten, und touch_zone.cpp prueft sie ebenfalls zuerst. Die
+    // Reihenfolge in dieser Liste muss dem entsprechen, sonst zeigte der
+    // Simulator eine andere Trefferreihenfolge als das Geraet.
     if ($totalPages > 1) {
         // Absolut statt relativ (Nutzerwunsch 2026-08-27, TASK-25): jeder
-        // Slot springt per "page_<N>" DIREKT zu seiner eigenen Seitenzahl --
-        // kein page_prev/page_next-Halbraum mehr fuer die Pille. Die letzte
-        // Zone reicht bewusst bis BOARD_PAGINATION_RIGHT_EDGE (nicht nur bis
+        // Slot springt per "page_<N>" DIREKT zu seiner eigenen Seitenzahl.
+        // Die letzte Zone reicht bewusst bis zum Pillenende (nicht nur bis
         // zum Slotende): mapPaginationTouch() in touch_zone.cpp klemmt einen
         // Tipp im rechten Padding-Streifen auf den letzten Slot, diese Zone
         // MUSS deckungsgleich sein, sonst zeigt der Simulator dort eine
         // Luecke, die es am echten Geraet gar nicht gibt.
-        $pillWidth = $totalPages * BOARD_PAGINATION_SLOT_WIDTH + BOARD_PAGINATION_SIDE_PADDING;
-        $pillStartX = BOARD_PAGINATION_RIGHT_EDGE - $pillWidth;
+        $pillStartX = BOARD_PAGINATION_LEFT_EDGE;
+        $pillEndX = $pillStartX + board_pagination_pill_width($totalPages);
         for ($p = 1; $p <= $totalPages; $p++) {
             $slotStart = $pillStartX + ($p - 1) * BOARD_PAGINATION_SLOT_WIDTH;
-            $slotEnd = $p === $totalPages ? BOARD_PAGINATION_RIGHT_EDGE : $slotStart + BOARD_PAGINATION_SLOT_WIDTH;
+            $slotEnd = $p === $totalPages ? $pillEndX : $slotStart + BOARD_PAGINATION_SLOT_WIDTH;
             $zones[] = ['zone' => 'page_' . $p, 'x' => $slotStart, 'y' => BOARD_PAGINATION_TOP, 'w' => $slotEnd - $slotStart, 'h' => BOARD_PAGINATION_HEIGHT];
+        }
+    }
+
+    if ($favoriteCount > 0) {
+        // Dieselbe Herleitung wie board_render_touch_bar_svg() und
+        // mapFavoriteTouch(): die Favoriten fangen hinter der Pille an.
+        $margin = BOARD_NAV_MARGIN;
+        $gap = BOARD_NAV_MARGIN;
+        $left = $margin + board_pagination_pill_width($totalPages);
+        if ($totalPages > 1) {
+            $left += $gap;
+        }
+        $buttonWidth = max(0, intdiv(1872 - $margin - $left - ($favoriteCount - 1) * $gap, $favoriteCount));
+        $favZoneNames = ['fav0', 'fav1', 'fav2'];
+        for ($i = 0; $i < $favoriteCount; $i++) {
+            $zones[] = [
+                'zone' => $favZoneNames[$i],
+                'x' => $left + $i * ($buttonWidth + $gap),
+                'y' => BOARD_NAV_ROW_TOP,
+                'w' => $buttonWidth,
+                'h' => 1404 - BOARD_NAV_ROW_TOP,
+            ];
         }
     }
 
@@ -587,7 +616,7 @@ function board_render_svg(
     }
 
     $defs = board_svg_defs();
-    $touchBar = board_render_touch_bar_svg($touchBarFavoriteTitles, $activeFavoriteIndex);
+    $touchBar = board_render_touch_bar_svg($touchBarFavoriteTitles, $activeFavoriteIndex, $totalPages);
 
     // Reihenfolge: Abfahrten -> Stoerungen -> Kalender -> MQTT -> Schlafschirm
     // (der oben schon per Frueh-Ausstieg behandelt ist).
@@ -941,21 +970,44 @@ const BOARD_DEPARTURES_MAX_Y = 1250;
  * epaper-monitor/lib/boardlogic/touch_zone.cpp bleiben -- die Firmware
  * berechnet aus denselben Werten die Tipp-Zonen fuer page_prev/page_next.
  */
-const BOARD_PAGINATION_SLOT_WIDTH  = 87; // 58 * 1.5 -- volle 50%, der Pfeil-Wegfall macht den Platz frei
+// Seit 2026-09-04 steht die Pille LINKS IN DER FAVORITENZEILE, nicht mehr in
+// einem eigenen Band darueber (Nutzerwunsch: "die ganze Hauptnavigation in
+// einer Zeile"). Sie ist damit genauso hoch wie die Favoritenknoepfe; Slots,
+// Kreis und Icons sind entsprechend mitgewachsen, sonst wirkten sie in der
+// 74px-Zeile verloren.
+//
+// Beide Elemente teilen sich jetzt DIESELBE Zeile -- die Firmware muss die
+// Pille deshalb VOR den Favoriten pruefen (touch_zone.cpp), sonst schluckt
+// der Favoritenbereich den Tipp.
+const BOARD_NAV_ROW_TOP    = 1320;
+const BOARD_NAV_ROW_HEIGHT = 74;
+const BOARD_NAV_MARGIN     = 16; // Rand links/rechts, auch Luecke Pille<->Favoriten
+
+const BOARD_PAGINATION_SLOT_WIDTH  = 100; // war 87 (48px-Zeile), gewachsen mit der Zeilenhoehe
 const BOARD_PAGINATION_SIDE_PADDING = 20; // Luft links/rechts der aeussersten Zahl
-// 20 (Nutzerwunsch 2026-08-29: mind. 10px Luft zur Trennlinie bei y=1310,
-// s. BOARD_PAGINATION_HEIGHT) -- war 24, das liesse bei der neuen, 8px
-// knapperen Pillenhoehe kaum noch Rand um die Icons.
-const BOARD_PAGINATION_CIRCLE_RADIUS = 20;
-const BOARD_PAGINATION_FONT_SIZE   = 30; // 24 * 1.25
-const BOARD_PAGINATION_RIGHT_EDGE  = 1083; // rechter Rand der Abfahrtenspalte
-const BOARD_PAGINATION_TOP         = 1252;
-// 48 (Nutzerbefund 2026-08-29: die Pille beruehrte optisch die volle
-// Trennlinie bei y=1310 -- Boden lag bei 1252+56=1308, nur 2px Abstand. War
-// 56; TOP bleibt fix, die Pille wird nur von unten gekuerzt. Neuer Boden
-// 1252+48=1300, exakt 10px zur Trennlinie. MUSS deckungsgleich mit
-// PAGINATION_ROW_BOTTOM in touch_zone.cpp bleiben (Firmware-Tippzone).
-const BOARD_PAGINATION_HEIGHT      = 48;
+const BOARD_PAGINATION_CIRCLE_RADIUS = 30; // war 20 -- passt zur 74px-Zeile
+const BOARD_PAGINATION_ICON_SCALE  = 1.5;  // Icons sind auf ~26px gezeichnet (+-13)
+const BOARD_PAGINATION_FONT_SIZE   = 38;   // war 30
+/** Linke Kante der Pille -- sie waechst jetzt nach RECHTS (vorher rechtsbuendig
+ *  auf x=1083 verankert und nach links gewachsen). */
+const BOARD_PAGINATION_LEFT_EDGE   = BOARD_NAV_MARGIN;
+const BOARD_PAGINATION_TOP         = BOARD_NAV_ROW_TOP;
+const BOARD_PAGINATION_HEIGHT      = BOARD_NAV_ROW_HEIGHT;
+
+/**
+ * Breite der Pille fuer $totalPages Seiten. Eine Funktion statt einer
+ * Konstanten, weil sowohl die Pille selbst als auch die Favoritenleiste
+ * (die sich rechts daneben einordnet) und die Firmware denselben Wert
+ * brauchen -- eine zweite Herleitung waere genau die Sorte Duplikat, die
+ * bei einer Aenderung auseinanderlaeuft.
+ */
+function board_pagination_pill_width(int $totalPages): int
+{
+    if ($totalPages <= 1) {
+        return 0; // keine Pille -> die Favoriten bekommen die volle Breite
+    }
+    return $totalPages * BOARD_PAGINATION_SLOT_WIDTH + BOARD_PAGINATION_SIDE_PADDING;
+}
 
 /**
  * Cursor-Layout + Pagination der Abfahrtenliste eines einzelnen Favoriten
@@ -1355,11 +1407,13 @@ function board_render_stand_and_pagination_svg(
         return $standSvg;
     }
 
-    $pillWidth = $totalPages * BOARD_PAGINATION_SLOT_WIDTH + BOARD_PAGINATION_SIDE_PADDING;
-    $pillStartX = BOARD_PAGINATION_RIGHT_EDGE - $pillWidth;
+    $pillWidth = board_pagination_pill_width($totalPages);
+    // Linksbuendig in der Favoritenzeile (vorher rechtsbuendig auf x=1083 im
+    // eigenen Band darueber).
+    $pillStartX = BOARD_PAGINATION_LEFT_EDGE;
     $numberStartX = $pillStartX + (int) (BOARD_PAGINATION_SIDE_PADDING / 2) + (int) (BOARD_PAGINATION_SLOT_WIDTH / 2);
-    $cy = BOARD_PAGINATION_TOP + (int) (BOARD_PAGINATION_HEIGHT / 2); // = 1280
-    $baselineY = $cy + 9; // gleicher Versatz wie zuvor (cy=1280, baseline=1289)
+    $cy = BOARD_PAGINATION_TOP + (int) (BOARD_PAGINATION_HEIGHT / 2); // Mitte der Navigationszeile
+    $baselineY = $cy + 13; // optische Mitte fuer die Ziffern-Ersatzdarstellung
 
     $pagesSvg = '';
     for ($p = 1; $p <= $totalPages; $p++) {
@@ -1373,7 +1427,14 @@ function board_render_stand_and_pagination_svg(
         }
 
         if ($iconSvg !== '') {
-            $pagesSvg .= sprintf('<g transform="translate(%d,%d)">%s</g>', $x, $cy, $iconSvg);
+            // Die Icons sind auf ~26px gezeichnet (+-13 um den Ursprung) und
+            // waren fuer das alte 48px-Band gedacht; in der 74px-Zeile wirken
+            // sie ohne Skalierung verloren. Skalieren statt neu zeichnen haelt
+            // sie deckungsgleich mit drawStatusIcon() in der Firmware.
+            $pagesSvg .= sprintf(
+                '<g transform="translate(%d,%d) scale(%s)">%s</g>',
+                $x, $cy, rtrim(rtrim(number_format(BOARD_PAGINATION_ICON_SCALE, 2, '.', ''), '0'), '.'), $iconSvg
+            );
         } elseif ($isActive) {
             $pagesSvg .= sprintf(
                 '<text x="%d" y="%d" text-anchor="middle" font-weight="bold" font-size="%d" fill="white">%d</text>',
@@ -1388,7 +1449,10 @@ function board_render_stand_and_pagination_svg(
     }
 
     return $standSvg . sprintf(
-        '<g font-family="Atkinson Hyperlegible Next"><rect x="%d" y="%d" width="%d" height="%d" rx="%d" fill="white" stroke="black" stroke-width="2"/>%s</g>',
+        // stroke-width 3 wie die Favoritenknoepfe: seit die Pille in derselben
+        // Zeile direkt daneben steht, faellt ein duennerer Rand als
+        // Ungenauigkeit auf (vorher stand sie allein in ihrem eigenen Band).
+        '<g font-family="Atkinson Hyperlegible Next"><rect x="%d" y="%d" width="%d" height="%d" rx="%d" fill="white" stroke="black" stroke-width="3"/>%s</g>',
         $pillStartX, BOARD_PAGINATION_TOP, $pillWidth, BOARD_PAGINATION_HEIGHT,
         (int) (BOARD_PAGINATION_HEIGHT / 2), $pagesSvg
     );

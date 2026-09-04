@@ -166,13 +166,15 @@ class BoardSleepTest extends TestCase
         $svg = board_sleep_render_svg($this->today(), $this->day(), null, $this->wifi(), $this->now(), 4);
 
         $this->assertStringContainsString(
-            sprintf('y="%d" width="%d" height="%d"', BOARD_PAGINATION_TOP, 368, BOARD_PAGINATION_HEIGHT),
+            // 420 = 4*100+20 (Slotbreite seit der Umstellung auf eine
+            // gemeinsame Navigationszeile, 2026-09-04).
+            sprintf('y="%d" width="%d" height="%d"', BOARD_PAGINATION_TOP, 420, BOARD_PAGINATION_HEIGHT),
             $svg,
             'Pillenhoehe/-position muessen exakt mit der Abfahrtenseite uebereinstimmen'
         );
         // Seite 4 von 4 (der Schlafschirm-Slot selbst) ist die aktive --
         // schwarzer Kreis mit weisser "4".
-        $this->assertStringContainsString('font-weight="bold" font-size="30" fill="white">4<', $svg);
+        $this->assertStringContainsString('font-weight="bold" font-size="38" fill="white">4<', $svg);
         $this->assertStringContainsString('Stand 21:34', $svg);
     }
 
@@ -186,7 +188,7 @@ class BoardSleepTest extends TestCase
 
         $this->assertStringContainsString('Stand 21:34', $svg);
         $this->assertStringNotContainsString(sprintf('y="%d"', BOARD_PAGINATION_TOP), $svg);
-        $this->assertStringNotContainsString('font-size="30" fill="white">4<', $svg);
+        $this->assertStringNotContainsString('font-size="38" fill="white">4<', $svg);
     }
 
     public function test_pagination_pill_always_present_even_with_only_two_pages(): void
@@ -198,7 +200,7 @@ class BoardSleepTest extends TestCase
         $svg = board_sleep_render_svg($this->today(), $this->day(), null, null, $this->now(), 2);
 
         $this->assertStringContainsString(sprintf('y="%d"', BOARD_PAGINATION_TOP), $svg);
-        $this->assertStringContainsString('font-weight="bold" font-size="30" fill="white">2<', $svg);
+        $this->assertStringContainsString('font-weight="bold" font-size="38" fill="white">2<', $svg);
     }
 
     public function test_qr_survives_the_1bpp_pipeline_pixel_exact(): void

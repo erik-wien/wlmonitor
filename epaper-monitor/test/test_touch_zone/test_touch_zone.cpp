@@ -57,59 +57,74 @@ void test_pagination_zones_absent_when_only_one_page(void) {
 }
 
 void test_pagination_pill_two_pages_each_slot_is_its_own_absolute_page(void) {
-    // totalPages=2: pillWidth=2*87+20=194, pillStartX=1083-194=889.
-    // Slot 1 (Seite 1): [889,976)  Slot 2 (Seite 2): [976,1083) -- reicht bis
-    // zum Pillenrand, schluckt den rechten Padding-Streifen (Klemmung).
-    TouchResult before = mapTouchToZone(888, 1280, 3, 2);
-    TEST_ASSERT_TRUE(before.zone == TouchZone::None);                          // vor der Pille
-
-    TouchResult slot1Start = mapTouchToZone(889, 1280, 3, 2);
+    // Seit 2026-09-04 sitzt die Pille LINKS in der Favoritenzeile (y 1320..1404).
+    // totalPages=2: pillWidth=2*100+20=220, pillStartX=16, Pillenende=236.
+    // Slot 1 (Seite 1): [16,116)  Slot 2 (Seite 2): [116,236) -- der letzte
+    // Slot schluckt den rechten Padding-Streifen (Klemmung).
+    TouchResult slot1Start = mapTouchToZone(16, 1350, 3, 2);
     TEST_ASSERT_TRUE(slot1Start.zone == TouchZone::Page);
     TEST_ASSERT_EQUAL_INT(1, slot1Start.page);                                 // Pillenanfang -> Seite 1
 
-    TouchResult slot1End = mapTouchToZone(975, 1280, 3, 2);
+    TouchResult slot1End = mapTouchToZone(115, 1350, 3, 2);
     TEST_ASSERT_TRUE(slot1End.zone == TouchZone::Page);
     TEST_ASSERT_EQUAL_INT(1, slot1End.page);
 
-    TouchResult slot2Start = mapTouchToZone(976, 1280, 3, 2);
+    TouchResult slot2Start = mapTouchToZone(116, 1350, 3, 2);
     TEST_ASSERT_TRUE(slot2Start.zone == TouchZone::Page);
     TEST_ASSERT_EQUAL_INT(2, slot2Start.page);
 
-    TouchResult slot2End = mapTouchToZone(1082, 1280, 3, 2);
+    TouchResult slot2End = mapTouchToZone(235, 1350, 3, 2);
     TEST_ASSERT_TRUE(slot2End.zone == TouchZone::Page);
-    TEST_ASSERT_EQUAL_INT(2, slot2End.page);                                   // rechter Padding-Streifen -> auf Seite 2 geklemmt
+    TEST_ASSERT_EQUAL_INT(2, slot2End.page);                                   // Padding-Streifen -> auf Seite 2 geklemmt
 
-    TouchResult after = mapTouchToZone(1083, 1280, 3, 2);
-    TEST_ASSERT_TRUE(after.zone == TouchZone::None);                           // Pillenende, exklusiv
+    // Direkt hinter der Pille beginnt die Luecke, dann die Favoriten -- auf
+    // KEINEN Fall noch eine Seitenzone.
+    TEST_ASSERT_TRUE(mapTouchToZone(236, 1350, 3, 2).zone != TouchZone::Page);
 }
 
-void test_pagination_pill_grows_leftward_and_slots_stay_87px(void) {
-    // totalPages=5: pillWidth=5*87+20=455, pillStartX=1083-455=628.
-    // Slots je 87px ab 628: [628,715)=1 [715,802)=2 [802,889)=3 [889,976)=4
-    // [976,1083)=5 (letzter Slot bis zum Pillenrand).
-    TouchResult before = mapTouchToZone(627, 1280, 3, 5);
-    TEST_ASSERT_TRUE(before.zone == TouchZone::None);
+void test_pagination_pill_grows_rightward_and_slots_stay_100px(void) {
+    // totalPages=5: pillWidth=5*100+20=520, ab x=16 -> Pillenende 536.
+    // Slots je 100px ab 16: [16,116)=1 [116,216)=2 [216,316)=3 [316,416)=4
+    // [416,536)=5 (letzter Slot bis zum Pillenrand).
+    TEST_ASSERT_EQUAL_INT(1, mapTouchToZone(50, 1350, 3, 5).page);
+    TEST_ASSERT_EQUAL_INT(3, mapTouchToZone(250, 1350, 3, 5).page);
+    TEST_ASSERT_EQUAL_INT(5, mapTouchToZone(535, 1350, 3, 5).page);
 
-    TEST_ASSERT_EQUAL_INT(1, mapTouchToZone(700, 1280, 3, 5).page);
-    TEST_ASSERT_EQUAL_INT(3, mapTouchToZone(850, 1280, 3, 5).page);
-    TEST_ASSERT_EQUAL_INT(5, mapTouchToZone(1082, 1280, 3, 5).page);
-
-    TouchResult after = mapTouchToZone(1083, 1280, 3, 5);
-    TEST_ASSERT_TRUE(after.zone == TouchZone::None);
+    TEST_ASSERT_TRUE(mapTouchToZone(536, 1350, 3, 5).zone != TouchZone::Page);
 }
 
-void test_pagination_row_boundaries_are_exact(void) {
-    // totalPages=2: Slot 1 [889,976). x=900 liegt darin.
-    TouchResult top = mapTouchToZone(900, 1252, 3, 2);
+void test_navigation_row_boundaries_are_exact(void) {
+    // Pille und Favoriten teilen sich jetzt EINE Zeile: 1320..1404.
+    TouchResult top = mapTouchToZone(50, 1320, 3, 2);
     TEST_ASSERT_TRUE(top.zone == TouchZone::Page);
-    TEST_ASSERT_EQUAL_INT(1, top.page); // top of row
+    TEST_ASSERT_EQUAL_INT(1, top.page);
 
-    TouchResult bottom = mapTouchToZone(900, 1299, 3, 2);
+    TouchResult bottom = mapTouchToZone(50, 1403, 3, 2);
     TEST_ASSERT_TRUE(bottom.zone == TouchZone::Page);
-    TEST_ASSERT_EQUAL_INT(1, bottom.page); // bottom of row
+    TEST_ASSERT_EQUAL_INT(1, bottom.page);
 
-    TEST_ASSERT_TRUE(mapTouchToZone(900, 1300, 3, 2).zone == TouchZone::None); // one px below
-    TEST_ASSERT_TRUE(mapTouchToZone(900, 1251, 3, 2).zone == TouchZone::None); // one px above
+    TEST_ASSERT_TRUE(mapTouchToZone(50, 1319, 3, 2).zone == TouchZone::None); // eins darueber
+    // Das alte Pillenband (1252..1300) ist jetzt leer -- dort darf nichts mehr
+    // ausgeloest werden.
+    TEST_ASSERT_TRUE(mapTouchToZone(900, 1280, 3, 2).zone == TouchZone::None);
+}
+
+void test_favorites_start_after_the_pill_in_the_same_row(void) {
+    // DER Kern der Umstellung: die Pille sitzt links IN der Favoritenzeile.
+    // Ein Tipp auf die Pille darf nicht als Favorit durchgehen -- und die
+    // Favoriten muessen entsprechend nach rechts gerueckt sein.
+    // totalPages=3: pillWidth=320, links=16+320+16=352.
+    // verfuegbar=1872-16-352-2*16=1472, buttonWidth=490.
+    // fav0 [352,842)  fav1 [858,1348)  fav2 [1364,1854)
+    TEST_ASSERT_TRUE(mapTouchToZone(100, 1350, 3, 3).zone == TouchZone::Page);  // Pille, kein Favorit
+    TEST_ASSERT_TRUE(mapTouchToZone(352, 1350, 3, 3).zone == TouchZone::Fav0);
+    TEST_ASSERT_TRUE(mapTouchToZone(841, 1350, 3, 3).zone == TouchZone::Fav0);
+    TEST_ASSERT_TRUE(mapTouchToZone(858, 1350, 3, 3).zone == TouchZone::Fav1);
+    TEST_ASSERT_TRUE(mapTouchToZone(1364, 1350, 3, 3).zone == TouchZone::Fav2);
+
+    // Ohne Pille (totalPages=1) beginnen die Favoriten wieder ganz links --
+    // sonst klaffte dort eine tote Flaeche.
+    TEST_ASSERT_TRUE(mapTouchToZone(100, 1350, 3, 1).zone == TouchZone::Fav0);
 }
 
 // --- Zellen ausserhalb beider Reihen ----------------------------------------
@@ -139,8 +154,9 @@ int main(int argc, char** argv) {
     RUN_TEST(test_zero_favorites_means_no_favorite_zones_at_all);
     RUN_TEST(test_pagination_zones_absent_when_only_one_page);
     RUN_TEST(test_pagination_pill_two_pages_each_slot_is_its_own_absolute_page);
-    RUN_TEST(test_pagination_pill_grows_leftward_and_slots_stay_87px);
-    RUN_TEST(test_pagination_row_boundaries_are_exact);
+    RUN_TEST(test_pagination_pill_grows_rightward_and_slots_stay_100px);
+    RUN_TEST(test_navigation_row_boundaries_are_exact);
+    RUN_TEST(test_favorites_start_after_the_pill_in_the_same_row);
     RUN_TEST(test_touch_in_the_departures_area_maps_to_none);
     RUN_TEST(test_zone_to_header_value);
     return UNITY_END();

@@ -38,4 +38,4 @@
 // Panel gezeichnet, damit am echten Geraet sichtbar ist, ob wirklich der
 // aktuell geflashte Code laeuft (2026-08-21: Verwirrung durch e-Paper-
 // Ghosting/unsauberes Partial-Update machte das sonst unmoeglich zu sagen).
-#define FIRMWARE_BUILD 61
+#define FIRMWARE_BUILD 62

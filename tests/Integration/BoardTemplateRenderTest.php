@@ -196,11 +196,12 @@ class BoardTemplateRenderTest extends TestCase
         $this->assertNotNull($titleInkY, 'Stoerungstitel muss auf der Stoerungsseite sichtbar sein');
 
         // Pagination-Pille zeigt Seite 3 von 4 als schwarz gefuellten Kreis.
-        // totalPages=4: pillWidth=4*87+20=368, pillStartX=1083-368=715,
-        // numberStartX=715+10+43=768, Seite 3 bei cx=768+2*87=942, cy=1280,
-        // r=24. Bereich knapp innerhalb des Kreisradius, ohne den Pillenrand
-        // (y=1252/1308) mit einzuschliessen.
-        $pillInkY = $this->firstInkY($im, 931, 953, 1265, 1295);
+        // Seit 2026-09-04 sitzt sie LINKS in der Favoritenzeile:
+        // totalPages=4 -> pillWidth=4*100+20=420, pillStartX=16,
+        // numberStartX=16+10+50=76, Seite 3 bei cx=76+2*100=276, cy=1357,
+        // r=30. Bereich knapp innerhalb des Kreisradius, ohne den Pillenrand
+        // (y=1320/1394) mit einzuschliessen.
+        $pillInkY = $this->firstInkY($im, 265, 287, 1340, 1374);
         $this->assertNotNull($pillInkY, 'aktueller Seiten-Kreis der Pagination-Pille muss sichtbar sein');
     }
 

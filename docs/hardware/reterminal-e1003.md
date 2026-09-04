@@ -1157,8 +1157,18 @@ Schlafschirm sollte die Paginierung zeigen, so lange das Gerät nicht
 effektiv schläft, sonst gibts nur den Tastenweg zurück"). Kein Stilentscheid,
 sondern eine harte Randbedingung: `mapPaginationTouch()` (`touch_zone.cpp`)
 erkennt einen Fingertipp rein anhand fester Bildschirmkoordinaten
-(`BOARD_PAGINATION_TOP=1252`, `HEIGHT=56`, rechtsbündig an
-`RIGHT_EDGE=1083`) — **unabhängig davon, was dort gerade gezeichnet ist**.
+— **unabhängig davon, was dort gerade gezeichnet ist**.
+
+> **Stand 2026-09-04:** Die Pille sitzt seit dem Umbau auf eine gemeinsame
+> Navigationszeile **links in der Favoritenzeile** (`BOARD_PAGINATION_TOP=1320`,
+> `HEIGHT=74`, linksbündig ab `LEFT_EDGE=16`, Slotbreite 100) statt in einem
+> eigenen Band darüber (vorher `TOP=1252`, `HEIGHT=48`, rechtsbündig an
+> `RIGHT_EDGE=1083`). Weil sich Pille und Favoriten jetzt **dieselbe Zeile**
+> teilen, prüft `mapTouchToZone()` die Pille **zuerst** — sonst schluckte der
+> Favoritenbereich den Tipp. Die Favoriten beginnen erst hinter der Pille;
+> ihr Platz wird auch dann freigehalten, wenn die Pille gerade nicht
+> gezeichnet wird (echter Schlafschirm), sonst wären Bild und Tippzonen
+> gegeneinander verschoben.
 Eine Pille an anderer Stelle wäre entweder unsichtbar tippbar (Tipp landet
 auf leerer Fläche, tut aber etwas) oder sichtbar untippbar (Pille zu sehen,
 Tipp wirkungslos). `board_sleep_render_svg()` ruft deshalb **dieselbe**

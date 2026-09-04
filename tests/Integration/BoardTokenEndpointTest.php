@@ -753,7 +753,7 @@ final class BoardTokenEndpointTest extends TestCase
             'headers' => ['X-Device-Screen' => 'sleep'],
             'get' => ['debug' => 'svg'],
         ]);
-        $this->assertStringNotContainsString('height="48" rx="24"', $forced['out'], 'erzwungener Vorschlaf-Abruf darf keine Pille zeigen');
+        $this->assertStringNotContainsString('height="74" rx="37"', $forced['out'], 'erzwungener Vorschlaf-Abruf darf keine Pille zeigen');
         $this->assertStringContainsString('Stand ', $forced['out'], '"Stand HH:MM" bleibt trotzdem stehen');
 
         $paged = $this->runProbe('board.php', [
@@ -762,6 +762,6 @@ final class BoardTokenEndpointTest extends TestCase
             'headers' => ['X-Device-Touch' => 'page_next'],
             'get' => ['debug' => 'svg'],
         ]);
-        $this->assertStringContainsString('height="48" rx="24"', $paged['out'], 'bewusstes Hinblaettern zeigt die Pille');
+        $this->assertStringContainsString('height="74" rx="37"', $paged['out'], 'bewusstes Hinblaettern zeigt die Pille');
     }
 }
