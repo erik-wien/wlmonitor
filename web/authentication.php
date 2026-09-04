@@ -1,6 +1,15 @@
 <?php
 require_once(__DIR__ . '/../inc/initialize.php');
 
+// Prod/.test haben kein App-lokales Login: das Formular in login.php leitet
+// dort bereits zum zentralen Login um. Ohne denselben Riegel HIER blieb der
+// POST-Endpunkt aber offen -- CSRF-Tokens sind sitzungs-, nicht
+// formulargebunden, ein Token von einer beliebigen anonymen Seite derselben
+// App genuegte also, um sich am zentralen Login vorbei lokal anzumelden.
+// Keine Rechteausweitung (auth_login() prueft weiter Passwort, Ratenlimit,
+// disabled und TOTP), aber die entstehende Sitzung haette keine zentrale
+// Entsprechung -- Single-Logout haette sie nicht erreicht.
+auth_login_redirect_if_central();
 if (empty($_POST['login-username']) || empty($_POST['login-password'])) {
     addAlert('danger', 'Bitte sowohl Benutzername als auch Kennwort ausfullen.');
     header('Location: login.php'); exit;
