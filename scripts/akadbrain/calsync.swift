@@ -73,7 +73,28 @@ let standardKalender = [
     "Birthdays",
     "Österreichische Feiertage",
 ]
+// Auswahldatei, die die Admin-Seite schreibt (web/board_settings.php ->
+// board_settings_write_calendar_selection()). Sie liegt NEBEN dem Cache in
+// data/calendar/ -- dort, wo der Webserver ohnehin schreibt; ~/.config waere
+// eine zweite, unnoetige Rechte-Annahme. Fehlt sie oder ist sie leer, gilt
+// weiter CALSYNC_CALENDARS bzw. die eingebaute Liste: eine leere Auswahl darf
+// NICHT "gar keine Kalender" bedeuten, sonst stuende das Board nach einem
+// Fehlgriff in der Oberflaeche stumm da.
+func ladeAuswahl(nebenCache ziel: String) -> [String]? {
+    let pfad = URL(fileURLWithPath: ziel).deletingLastPathComponent()
+        .appendingPathComponent("selection.json")
+    guard let daten = try? Data(contentsOf: pfad),
+          let namen = try? JSONDecoder().decode([String].self, from: daten) else {
+        return nil
+    }
+    let sauber = namen.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    return sauber.isEmpty ? nil : sauber
+}
+
 let gewuenschteKalender: [String] = {
+    if let ziel = config["CALSYNC_OUT"], let ausDatei = ladeAuswahl(nebenCache: ziel) {
+        return ausDatei
+    }
     guard let roh = config["CALSYNC_CALENDARS"], !roh.isEmpty else { return standardKalender }
     return roh.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
 }()
@@ -165,6 +186,8 @@ struct Nutzlast: Encodable {
     let generated_at: String
     let timezone: String
     let days: [Tag]
+    let available_calendars: [String]
+    let selected_calendars: [String]
 }
 
 var tage: [Tag] = []
@@ -206,7 +229,9 @@ let nutzlast = Nutzlast(
     schema: 1,
     generated_at: iso.string(from: Date()),
     timezone: kalender.timeZone.identifier,
-    days: tage
+    days: tage,
+    available_calendars: alle.map { $0.title }.sorted(),
+    selected_calendars: ausgewaehlt.map { $0.title }.sorted()
 )
 
 let encoder = JSONEncoder()
@@ -237,6 +262,12 @@ struct Cache: Encodable {
     let generated_at: String
     let timezone: String
     let days: [Tag]
+    // Alle Kalender, die EventKit hier kennt -- NICHT nur die ausgewaehlten.
+    // Nur dieses Programm sieht sie; die Admin-Seite kann daraus die
+    // Ankreuzliste bauen, statt dass jemand Namen abtippt (Nutzerwunsch
+    // 2026-09-04). Mitgeliefert wird auch, was gerade aktiv ist.
+    let available_calendars: [String]
+    let selected_calendars: [String]
 }
 
 let cache = Cache(
@@ -244,7 +275,9 @@ let cache = Cache(
     received_at: iso.string(from: Date()),
     generated_at: iso.string(from: Date()),
     timezone: kalender.timeZone.identifier,
-    days: tage
+    days: tage,
+    available_calendars: alle.map { $0.title }.sorted(),
+    selected_calendars: ausgewaehlt.map { $0.title }.sorted()
 )
 
 guard let cacheJson = try? encoder.encode(cache) else {

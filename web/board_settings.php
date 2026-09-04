@@ -19,6 +19,7 @@ declare(strict_types=1);
  */
 require_once(__DIR__ . '/../inc/initialize.php');
 require_once(__DIR__ . '/../inc/board_settings.php');
+require_once(__DIR__ . '/../inc/board_calendar.php');
 require_once(__DIR__ . '/../inc/layout.php');
 
 // Konfiguriert ein Geraet, das nur an dieser einen Instanz haengt
@@ -36,6 +37,11 @@ admin_require();
 $wifiError = null;
 $batteryError = null;
 $mqttError = null;
+$calendarError = null;
+
+// Das Board meldet sich als EIN Konto an (auth_accounts.id); dessen
+// Kalender-Cache traegt die Liste der verfuegbaren Kalender.
+const BOARD_DEVICE_USER_ID = 3921;
 // Erfolg wird per PRG-Redirect (?saved=…) zurueckgemeldet und HIER gerendert.
 // addAlert() waere falsch: diese Seite rendert $_SESSION['alerts'] nicht und
 // leert sie auch nicht -- die Meldung poppte erst spaeter kontextlos auf einer
@@ -44,6 +50,7 @@ $savedLabels = [
     'wifi'    => 'Gäste-WLAN gespeichert.',
     'battery' => 'Akku-Kalibrierung gespeichert.',
     'mqtt'    => 'MQTT-Sender-Zugangsdaten gespeichert.',
+    'kalender' => 'Kalenderauswahl gespeichert. Sie greift beim nächsten calsync-Lauf (alle 15 Minuten).',
 ];
 $saved = $savedLabels[(string) ($_GET['saved'] ?? '')] ?? null;
 
@@ -61,6 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $wifiError = $action === 'save_wifi' ? $msg : null;
         $batteryError = $action === 'save_battery' ? $msg : null;
         $mqttError = $action === 'save_mqtt_sender' ? $msg : null;
+        $calendarError = $action === 'save_calendars' ? $msg : null;
     } elseif ($action === 'save_wifi') {
         $form = [
             'wifi_ssid'       => trim((string) ($_POST['wifi_ssid'] ?? '')),
@@ -91,6 +99,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($batteryError === null) {
             appendLog($con, 'admin', 'Board-Einstellungen: Akku-Kalibrierung geaendert.');
             header('Location: board_settings.php?saved=battery#battery'); exit;
+        }
+    } elseif ($action === 'save_calendars') {
+        // Kein Eintrag angekreuzt -> leeres Array; board_settings_save_calendars()
+        // entfernt dann die Auswahldatei, calsync faellt auf seine eingebaute
+        // Liste zurueck (eine leere Auswahl darf das Board nicht stumm stellen).
+        $gewaehlt = array_values(array_filter(
+            (array) ($_POST['calendars'] ?? []),
+            static fn ($n): bool => is_string($n) && trim($n) !== ''
+        ));
+        $calendarError = board_settings_save_calendars($gewaehlt);
+        if ($calendarError === null) {
+            appendLog($con, 'admin', 'Board-Einstellungen: Kalenderauswahl geaendert (' . count($gewaehlt) . ' Kalender).');
+            header('Location: board_settings.php?saved=kalender#kalender'); exit;
         }
     } elseif ($action === 'save_mqtt_sender') {
         $form = ['mqtt_sender_user' => trim((string) ($_POST['mqtt_sender_user'] ?? ''))];
@@ -180,6 +201,45 @@ $e = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
         </div>
         <button type="submit" class="btn btn-outline-danger">Speichern</button>
       </form>
+    </div>
+  </div>
+
+  <div class="app-card" id="kalender">
+    <div class="app-card-header">Kalender</div>
+    <div class="app-card-body">
+      <p class="form-text">
+        Welche Kalender auf der Kalenderseite des Boards erscheinen. Die Liste stammt aus dem letzten
+        <code>calsync</code>-Lauf auf diesem Server &mdash; nur der kennt die Kalender des Systems.
+      </p>
+      <?php if ($calendarError !== null): ?>
+        <div class="app-alert app-alert-danger py-2" role="alert"><?= $e($calendarError) ?></div>
+      <?php endif; ?>
+      <?php $verfuegbar = board_settings_available_calendars(BOARD_DEVICE_USER_ID); ?>
+      <?php if ($verfuegbar === []): ?>
+        <div class="app-alert app-alert-warning py-2" role="alert">
+          Keine Kalenderliste vorhanden. Sie entsteht beim nächsten <code>calsync</code>-Lauf;
+          ist sie danach immer noch leer, läuft dort noch eine ältere Fassung ohne diese Auskunft.
+        </div>
+      <?php else: ?>
+        <form method="post" action="board_settings.php#kalender">
+          <input type="hidden" name="csrf_token" value="<?= $e($csrfToken) ?>">
+          <input type="hidden" name="action" value="save_calendars">
+          <?php $gewaehlt = board_settings_read_calendar_selection(); ?>
+          <?php foreach ($verfuegbar as $i => $name): ?>
+            <div class="form-group form-check">
+              <input type="checkbox" class="form-check-input" id="cal<?= (int) $i ?>"
+                     name="calendars[]" value="<?= $e($name) ?>"
+                     <?= in_array($name, $gewaehlt, true) ? 'checked' : '' ?>>
+              <label class="form-check-label" for="cal<?= (int) $i ?>"><?= $e($name) ?></label>
+            </div>
+          <?php endforeach; ?>
+          <p class="form-text">
+            Nichts angekreuzt bedeutet <strong>nicht</strong> „keine Kalender“: dann gilt weiter die
+            im Server hinterlegte Standardliste. So bleibt das Board nach einem Fehlgriff bedient.
+          </p>
+          <button type="submit" class="btn btn-outline-danger">Speichern</button>
+        </form>
+      <?php endif; ?>
     </div>
   </div>
 

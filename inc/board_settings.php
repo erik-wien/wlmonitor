@@ -327,3 +327,110 @@ function board_settings_save_mqtt_sender(mysqli $con, string $user, string $pass
 
     return null;
 }
+
+/**
+ * Datei, aus der calsync.swift die Auswahl liest -- und zugleich die EINZIGE
+ * Quelle dafuer.
+ *
+ * Bewusst NICHT zusaetzlich in wl_board_settings: die Verbindung steht in
+ * initialize.php auf Zeichensatz "utf8" (3 Byte), womit sich 4-Byte-Zeichen
+ * gar nicht speichern lassen -- und genau die stecken in den Kalendertiteln
+ * hier ("🔜 Eriks Termine"). Am 2026-09-04 am echten Namen nachgewiesen:
+ * MariaDB weist ihn mit "Incorrect string value" ab. Eine zweite Ablage
+ * waere ausserdem doppelter Zustand, der auseinanderlaufen kann.
+ *
+ * Ablageort neben dem Cache in data/calendar/: dort schreibt der Webserver
+ * ohnehin, und data/ ist vom Deploy ausgenommen, ueberlebt also ein Update.
+ */
+function board_settings_calendar_selection_path(): string
+{
+    return __DIR__ . '/../data/calendar/selection.json';
+}
+
+/**
+ * Aktuell hinterlegte Auswahl. Leer = keine eigene Auswahl; calsync bleibt
+ * dann bei CALSYNC_CALENDARS bzw. seiner eingebauten Liste.
+ *
+ * @return list<string>
+ */
+function board_settings_read_calendar_selection(): array
+{
+    $pfad = board_settings_calendar_selection_path();
+    if (!is_file($pfad)) {
+        return [];
+    }
+    $namen = json_decode((string) @file_get_contents($pfad), true);
+    if (!is_array($namen)) {
+        return [];
+    }
+    $namen = array_map('trim', array_filter($namen, 'is_string'));
+
+    return array_values(array_filter($namen, static fn (string $n): bool => $n !== ''));
+}
+
+/**
+ * Schreibt die Auswahl fuer calsync -- atomar (tmp + rename) wie der
+ * Wetter-Cron und calsync selbst: eine halb geschriebene Datei waere fuer
+ * calsync nicht von Muell zu unterscheiden.
+ *
+ * Leere Auswahl -> Datei ENTFERNEN statt leer schreiben. calsync faellt dann
+ * auf seine eingebaute Liste zurueck; eine leere Liste wuerde sonst "gar keine
+ * Kalender" bedeuten und das Board stumm stellen.
+ *
+ * @param list<string> $namen
+ * @return string|null Fehlermeldung, oder null bei Erfolg.
+ */
+function board_settings_save_calendars(array $namen): ?string
+{
+    $namen = array_values(array_filter(array_map('trim', $namen), static fn (string $n): bool => $n !== ''));
+    if (count($namen) > 50) {
+        return 'Zu viele Kalender ausgewaehlt.';
+    }
+
+    $pfad = board_settings_calendar_selection_path();
+
+    if ($namen === []) {
+        if (is_file($pfad) && !@unlink($pfad)) {
+            error_log('board_settings: Kalenderauswahl nicht entfernbar: ' . $pfad);
+            return 'Auswahl konnte nicht zurueckgesetzt werden.';
+        }
+        return null;
+    }
+
+    $verzeichnis = dirname($pfad);
+    if (!is_dir($verzeichnis) && !@mkdir($verzeichnis, 0755, true) && !is_dir($verzeichnis)) {
+        return 'Ablageverzeichnis nicht anlegbar.';
+    }
+
+    $tmp = $pfad . '.tmp';
+    $json = json_encode($namen, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false || @file_put_contents($tmp, $json) === false || !@rename($tmp, $pfad)) {
+        @unlink($tmp);
+        error_log('board_settings: Kalenderauswahl nicht schreibbar: ' . $pfad);
+        return 'Auswahl konnte nicht gespeichert werden.';
+    }
+
+    return null;
+}
+
+/**
+ * Welche Kalender kennt der Server? Steht im Kalender-Cache, den calsync
+ * schreibt (available_calendars) -- nur EventKit kann sie aufzaehlen, PHP
+ * nicht. Fehlt der Cache oder das Feld (calsync noch nicht neu gebaut),
+ * kommt eine leere Liste zurueck; die Seite sagt dann, woran es liegt,
+ * statt eine leere Auswahl anzubieten.
+ *
+ * @return list<string>
+ */
+function board_settings_available_calendars(int $userId): array
+{
+    $cache = board_calendar_load($userId);
+    $namen = is_array($cache) ? ($cache['available_calendars'] ?? null) : null;
+    if (!is_array($namen)) {
+        return [];
+    }
+    $namen = array_values(array_filter($namen, 'is_string'));
+    sort($namen, SORT_NATURAL | SORT_FLAG_CASE);
+
+    return $namen;
+}

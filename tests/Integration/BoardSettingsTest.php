@@ -191,4 +191,52 @@ class BoardSettingsTest extends IntegrationTestCase
         $this->assertNotNull($err);
         $this->assertSame('sender', \board_settings_load($this->con)['mqtt_sender_user'], 'nichts gespeichert');
     }
+
+    // --- Kalenderauswahl (Nutzerwunsch 2026-09-04) -----------------------------
+
+    public function test_calendar_selection_round_trips_through_the_file(): void
+    {
+        // Emoji im Titel sind der Normalfall ("🔜 Eriks Termine") -- und der
+        // Grund, warum die Auswahl NICHT in der DB liegt: die Verbindung steht
+        // auf Zeichensatz "utf8" (3 Byte) und weist 4-Byte-Zeichen ab.
+        $err = \board_settings_save_calendars(['🔜 Eriks Termine', 'Birthdays']);
+
+        $this->assertNull($err);
+        $this->assertSame(['🔜 Eriks Termine', 'Birthdays'], \board_settings_read_calendar_selection());
+
+        $pfad = \board_settings_calendar_selection_path();
+        $this->assertFileExists($pfad);
+        $this->assertSame(['🔜 Eriks Termine', 'Birthdays'], json_decode((string) file_get_contents($pfad), true));
+    }
+
+    public function test_empty_selection_removes_the_file_so_calsync_keeps_its_defaults(): void
+    {
+        // Nichts angekreuzt darf NICHT "gar keine Kalender" heissen -- sonst
+        // stuende das Board nach einem Fehlgriff stumm da.
+        \board_settings_save_calendars(['Birthdays']);
+        $this->assertFileExists(\board_settings_calendar_selection_path());
+
+        $err = \board_settings_save_calendars([]);
+
+        $this->assertNull($err);
+        $this->assertFileDoesNotExist(\board_settings_calendar_selection_path());
+        $this->assertSame([], \board_settings_read_calendar_selection());
+    }
+
+    public function test_calendar_names_with_any_character_survive(): void
+    {
+        // JSON statt Trennzeichen: ein "|" im Titel war frueher ein Problem,
+        // jetzt nicht mehr.
+        \board_settings_save_calendars(['Kaputt|Name', 'Komma, Punkt']);
+        $this->assertSame(['Kaputt|Name', 'Komma, Punkt'], \board_settings_read_calendar_selection());
+    }
+
+    public function test_available_calendars_come_from_the_calsync_cache(): void
+    {
+        // Nur calsync (EventKit) kann Kalender aufzaehlen; PHP liest die Liste
+        // aus dem Cache. Fehlt sie (aeltere calsync-Fassung), kommt eine leere
+        // Liste zurueck statt einer Falschauskunft.
+        $this->assertIsArray(\board_settings_available_calendars(999999));
+        $this->assertSame([], \board_settings_available_calendars(999999));
+    }
 }
