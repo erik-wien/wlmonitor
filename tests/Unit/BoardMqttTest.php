@@ -522,4 +522,47 @@ class BoardMqttTest extends TestCase
 
         $this->assertStringContainsString('>Heute<', $svg, 'ohne Cache ist Seite 2 bereits der Schlafschirm');
     }
+
+    // --- Loeschzonen-Header fuers Geraet (TASK-28) -----------------------------
+
+    public function test_delete_zones_header_is_compact_and_drops_the_prefix(): void
+    {
+        // Kompaktformat statt JSON, weil die Firmware keinen JSON-Parser hat.
+        // Das Praefix "mqtt_del_" waere in jeder Zone dieselben neun Byte --
+        // die Firmware setzt es beim Senden wieder davor.
+        $items = board_mqtt_layout(['messages' => [
+            ['id' => 'aaaaaaaa', 'title' => 'A', 'body' => 'x', 'age' => ''],
+            ['id' => 'bbbbbbbb', 'title' => 'B', 'body' => 'y', 'age' => ''],
+        ]]);
+
+        $header = board_mqtt_delete_zones_header($items);
+
+        $this->assertMatchesRegularExpression('/^[a-z0-9]+:\d+,\d+,\d+,\d+(;[a-z0-9]+:\d+,\d+,\d+,\d+)*$/', $header);
+        $this->assertStringNotContainsString('mqtt_del_', $header);
+        $this->assertStringContainsString('aaaaaaaa:', $header);
+        $this->assertStringContainsString('bbbbbbbb:', $header);
+    }
+
+    public function test_delete_zones_header_matches_the_json_zones(): void
+    {
+        // Eine Quelle, zwei Serialisierungen -- die Koordinaten muessen
+        // deckungsgleich sein, sonst tippt das Geraet woanders hin als der
+        // Simulator.
+        $items = board_mqtt_layout(['messages' => [
+            ['id' => 'aaaaaaaa', 'title' => 'A', 'body' => 'x', 'age' => ''],
+        ]]);
+        $zone = board_mqtt_touch_zones($items)[0];
+
+        $this->assertSame(
+            sprintf('aaaaaaaa:%d,%d,%d,%d', $zone['x'], $zone['y'], $zone['w'], $zone['h']),
+            board_mqtt_delete_zones_header($items)
+        );
+    }
+
+    public function test_delete_zones_header_is_empty_without_cards(): void
+    {
+        // Leerer Cache -> nur ein Hinweis-Item, keine Karten. board.php setzt
+        // den Header dann gar nicht erst.
+        $this->assertSame('', board_mqtt_delete_zones_header(board_mqtt_layout(['messages' => []])));
+    }
 }

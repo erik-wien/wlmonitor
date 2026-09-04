@@ -11,6 +11,7 @@
 #include "board_client.h"
 #include "display.h"
 #include "touch.h"
+#include "delete_zone.h"
 #include "buttons.h"
 #include "battery.h"
 #include "sensor.h"
@@ -34,6 +35,14 @@ RTC_DATA_ATTR int rtcConsecutiveFailures = 0;
 RTC_DATA_ATTR char rtcLastEtag[80] = "";
 RTC_DATA_ATTR int rtcLastFavoriteCount = 0;
 RTC_DATA_ATTR int rtcLastTotalPages = 1;
+// Loesch-X der Nachrichtenkarten (TASK-28). MUSS den Tiefschlaf ueberleben:
+// die Zonen kommen mit einer Antwort, der Tipp erfolgt aber erst spaeter --
+// typischerweise nachdem das Geraet zwischendurch geschlafen hat. Geprueft
+// wird also immer gegen die Zonen des LETZTEN ausgelieferten Bildes, und
+// genau das ist richtig: der Nutzer tippt auf das, was er gerade sieht.
+// ~500 Byte im RTC-Speicher (8 kB gesamt).
+RTC_DATA_ATTR DeleteZone rtcDeleteZones[MAX_DELETE_ZONES];
+RTC_DATA_ATTR int rtcDeleteZoneCount = 0;
 // Der Server berechnet Patches als Diff gegen SEIN eigenes letztes Bild --
 // weiss aber nichts von lokal aufs Panel gezeichnetem Inhalt (Fehler-Banner,
 // Touch-Blob, Status-/Build-/Input-Marker). Bleibt so eine lokale Flaeche
@@ -348,6 +357,10 @@ static const char* inputStatusText(const char* touchValue, bool forceFull) {
     if (strcmp(touchValue, "fav2") == 0)      return "Favorit 3";
     if (strcmp(touchValue, "page_next") == 0) return "Seite vor";
     if (strcmp(touchValue, "page_prev") == 0) return "Seite zurueck";
+    // Ohne eigenen Text stuende beim Wegklicken einer Notiz nur "Lade ..." --
+    // der Nutzer saehe nicht, dass sein Tipp als LOESCHEN verstanden wurde
+    // (TASK-28).
+    if (strncmp(touchValue, "mqtt_del_", 9) == 0) return "Loeschen";
     return "Lade ...";
 }
 
@@ -423,6 +436,12 @@ static bool fetchAndRender(const String& token, const char* touchValue, bool for
         rtcLastEtag[sizeof(rtcLastEtag) - 1] = '\0';
         rtcLastFavoriteCount = fetch.parsed.favoriteCount;
         rtcLastTotalPages = fetch.parsed.totalPages;
+        // Immer neu setzen, auch wenn der Header fehlt (dann 0 Zonen): sonst
+        // blieben die Zonen der MQTT-Seite stehen, nachdem der Nutzer
+        // weitergeblaettert hat -- ein Tipp an derselben Stelle loeschte dann
+        // eine Nachricht, die gar nicht mehr zu sehen ist.
+        rtcDeleteZoneCount = parseDeleteZones(fetch.deleteZones.c_str(),
+                                              rtcDeleteZones, MAX_DELETE_ZONES);
         showingSleepPage = fetch.isSleepPage;
     } else if (st.banner != ErrorBanner::None) {
         showErrorBanner(st.banner, "??:??");
@@ -517,6 +536,8 @@ static void runActiveSession(const String& token) {
         // const char* liefern. Lebt bis fetchAndRender() weiter unten in
         // diesem Schleifendurchlauf, das reicht.
         char pageTouchBuf[16];
+        // "mqtt_del_" (9) + Kennung (max. MAX_DELETE_ID_LEN) + Nullbyte.
+        char deleteTouchBuf[9 + MAX_DELETE_ID_LEN + 1];
 
         if (readRawButtonStates().key2Low) {
             if (key2DownSince == 0) {
@@ -539,11 +560,35 @@ static void runActiveSession(const String& token) {
             key2ConsumedByAdmin = false;
         }
 
-        int touchX = 0, touchY = 0;
+        // -1 statt 0: pollTouch() schreibt die Koordinaten NUR bei echtem
+        // Fingerkontakt. Bei 0 waere "kein Touch" nicht von einem Tipp auf
+        // (0,0) zu unterscheiden -- fuer die festen Zonen egal (die liegen
+        // alle weit weg vom Ursprung), fuer die Loeschzonen unten aber sehr
+        // wohl, weil dort der Rohpunkt selbst entscheidet.
+        int touchX = -1, touchY = -1;
         TouchResult touch = pollTouch(rtcLastFavoriteCount, rtcLastTotalPages, &touchX, &touchY);
+        // Loesch-X der Nachrichtenkarten (TASK-28) VOR der festen Geometrie:
+        // die Zonen sind das speziellere Ziel. Ueberlappen tun sie sich
+        // bauartbedingt nicht (Karten liegen im Inhaltsbereich, Pille und
+        // Favoritenleiste darunter), die Reihenfolge ist also nur Vorsorge.
+        const int deleteHit = (touchX >= 0)
+            ? findDeleteZone(rtcDeleteZones, rtcDeleteZoneCount, touchX, touchY)
+            : -1;
         if (touchValue != nullptr) {
             // Schon von der linken Taste belegt (kurzer Druck, oben erkannt) --
             // Touch/andere Tasten in diesem Durchlauf nicht mehr auswerten.
+        } else if (deleteHit >= 0) {
+            touchReleaseStreak = 0;
+            if (!touchDown) {
+                // Der Server erwartet "mqtt_del_<id>" (board.php); das Praefix
+                // spart der Header sich pro Zone, wir setzen es hier zurueck.
+                snprintf(deleteTouchBuf, sizeof(deleteTouchBuf), "mqtt_del_%s",
+                         rtcDeleteZones[deleteHit].id);
+                touchValue = deleteTouchBuf;
+                beepRecognized();
+                drawTouchBlob(touchX, touchY);
+                touchDown = true;
+            }
         } else if (touch.zone != TouchZone::None) {
             touchReleaseStreak = 0;
             if (!touchDown) {

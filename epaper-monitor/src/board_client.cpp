@@ -15,6 +15,9 @@ const char* HEADER_NAMES[] = {
     "X-Board-Snapshot-Requested",
     "X-Board-Encoding", "X-Board-Raw-Length",
     "X-Board-Is-Sleep-Page",
+    // TASK-28: Loesch-X der Nachrichtenkarten. Inhaltsabhaengig (Masonry),
+    // deshalb vom Server geliefert statt hier nachgerechnet.
+    "X-Board-Delete-Zones",
 };
 const size_t HEADER_COUNT = sizeof(HEADER_NAMES) / sizeof(HEADER_NAMES[0]);
 
@@ -252,6 +255,10 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
 
     out.snapshotRequested = http.header("X-Board-Snapshot-Requested") == "1";
     out.isSleepPage = http.header("X-Board-Is-Sleep-Page") == "1";
+    // Roh uebernehmen; zerlegt wird erst in main.cpp (parseDeleteZones()),
+    // wo auch der RTC-Speicher liegt. Fehlt der Header (jede Seite ausser der
+    // MQTT-Seite), bleibt der String leer -> 0 Zonen.
+    out.deleteZones = http.header("X-Board-Delete-Zones").c_str();
 
     BoardHeaders headers;
     headers.mode           = http.header("X-Board-Mode").c_str();

@@ -422,6 +422,33 @@ SVG;
     // totalPages ab -- die Firmware braucht das, um die Touch-Zonen fuer
     // die Pfeile korrekt nachzurechnen.
     header('X-Board-Total-Pages: ' . $totalPages);
+    // Loesch-X der Nachrichtenkarten (TASK-28). Favoritenleiste und Pille
+    // rechnet die Firmware aus den beiden Headern oben selbst nach; DIESE
+    // Zonen kann sie nicht nachrechnen, weil die Kartenpositionen erst beim
+    // Masonry-Umbruch entstehen -- sie muessen mitgeliefert werden. Bisher
+    // ging der Zonen-Header ausschliesslich an den Browser-Simulator
+    // (debug=png&sim=1), weshalb das Wegklicken am Geraet gar nicht
+    // funktionieren KONNTE (Nutzerbefund 2026-09-04).
+    //
+    // Nur auf der MQTT-Seite gesetzt: sonst waeren es auf jeder anderen Seite
+    // nutzlose Bytes in jeder Antwort.
+    //
+    // Absichtlich gegen $renderPage geprueft, nicht gegen $requestedPage:
+    // beim erzwungenen Schlafschirm (X-Device-Screen: sleep) faellt beides
+    // auseinander ($renderPage = $totalPages, s.o.). Die gespeicherte aktive
+    // Seite kann dabei durchaus die MQTT-Seite sein -- wir wuerden dann
+    // Loeschzonen fuer Karten mitschicken, die gar nicht auf dem Schirm
+    // stehen, und ein Tipp loeschte eine unsichtbare Nachricht.
+    $mqttSeite = $totalDeparturePages
+        + ($filteredAlerts !== [] ? 1 : 0)
+        + ($hasCalendar ? 1 : 0)
+        + 1;
+    if ($hasMqtt && $mqtt !== null && $renderPage === $mqttSeite) {
+        $loeschZonen = board_mqtt_delete_zones_header(board_mqtt_layout($mqtt));
+        if ($loeschZonen !== '') {
+            header('X-Board-Delete-Zones: ' . $loeschZonen);
+        }
+    }
     // Sagt der Firmware, ob GERADE der Schlafschirm-Slot ausgeliefert wurde --
     // unabhaengig davon, ob per $forceSleepScreen oder durch bewusstes
     // Hinblaettern (Nutzerwunsch 2026-08-23). Traegt main.cpps

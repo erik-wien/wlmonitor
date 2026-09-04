@@ -631,3 +631,39 @@ function board_mqtt_touch_zones(array $items): array
 
     return $zones;
 }
+
+/**
+ * Dieselben Zonen wie board_mqtt_touch_zones(), aber als kompakte Zeile fuer
+ * das GERAET (Header X-Board-Delete-Zones, TASK-28):
+ *
+ *     <id>:<x>,<y>,<w>,<h>;<id>:<x>,<y>,<w>,<h>
+ *
+ * Bewusst kein JSON: die Firmware hat keinen JSON-Parser (und soll fuer diese
+ * eine Zeile keinen bekommen). Das Format ist fest, ohne Verschachtelung und
+ * mit einem Blick begrenzbar -- auf einem Mikrocontroller genau das, was man
+ * will. Der Simulator bekommt weiterhin JSON ueber X-Board-Touch-Zones; beide
+ * stammen aus DERSELBEN Zonenberechnung, nur die Serialisierung unterscheidet
+ * sich.
+ *
+ * Das Praefix "mqtt_del_" faellt weg -- es waere in jeder Zone dieselben neun
+ * Byte. Die Firmware setzt es beim Senden wieder davor, board.php erwartet es
+ * unveraendert (s. Zeile mit board_mqtt_delete()).
+ *
+ * @param list<array> $items Ergebnis von board_mqtt_layout()
+ */
+function board_mqtt_delete_zones_header(array $items): string
+{
+    $teile = [];
+    foreach (board_mqtt_touch_zones($items) as $zone) {
+        $teile[] = sprintf(
+            '%s:%d,%d,%d,%d',
+            substr($zone['zone'], strlen('mqtt_del_')),
+            $zone['x'],
+            $zone['y'],
+            $zone['w'],
+            $zone['h']
+        );
+    }
+
+    return implode(';', $teile);
+}

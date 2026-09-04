@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <vector>
+#include <string>
 #include "board_response.h"
 
 enum class BoardFetchOutcome {
@@ -28,6 +29,13 @@ struct BoardFetchResult {
     // bedeutet -- ebenfalls ausserhalb von ParsedBoardResponse, aus demselben
     // Grund wie snapshotRequested.
     bool isSleepPage = false;
+    // X-Board-Delete-Zones (TASK-28), roh: "<id>:<x>,<y>,<w>,<h>;..." fuer die
+    // Loesch-X der Nachrichtenkarten. Nur auf der MQTT-Seite gesetzt, sonst
+    // leer. Zerlegt wird in main.cpp (parseDeleteZones(), lib/boardlogic) --
+    // hier bewusst nur durchgereicht, damit der HTTP-Client nichts ueber den
+    // Inhalt wissen muss. Wie snapshotRequested/isSleepPage ausserhalb von
+    // ParsedBoardResponse: kein Teil des Kern-Bildprotokolls.
+    std::string deleteZones;
 };
 
 // Fuehrt GET https://BOARD_HOST:BOARD_PORT/board.php aus (board_config.h),
