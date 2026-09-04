@@ -277,6 +277,12 @@ function board_calendar_normalize_events(array $roh, DateTimeZone $tz, array $ku
 
         $out[] = [
             'title'   => $titel,
+            // Zusaetzlich zum Praefix im Titel: der Renderer zeichnet das
+            // Kuerzel als Plakette und muss es dafuer exakt kennen. Es aus
+            // dem Titelanfang zu ERRATEN waere fehleranfaellig -- ein Termin,
+            // der zufaellig mit demselben Zeichen beginnt, bekaeme sonst eine
+            // Plakette, die ihm nicht gehoert.
+            'marker'  => $marke,
             'all_day' => $ganztaegig,
             'start'   => $start,
             'end'     => $ende,
@@ -485,6 +491,7 @@ function board_calendar_layout_with(array $selected, array $m): array
                 'y'          => $y,
                 'time'       => board_calendar_time_label($ev, $tagStart, $tagEnde),
                 'lines'      => $zeilen,
+                'marker'     => (string) ($ev['marker'] ?? ''),
                 'title_size' => $m['title_size'],
                 'time_size'  => $m['time_size'],
                 'wrap_lead'  => $m['wrap_lead'],
@@ -516,36 +523,55 @@ function board_calendar_layout_with(array $selected, array $m): array
 // tippt, will Klammern sehen.
 
 /**
- * Zerlegt eine Titelzeile in [umkreister Buchstabe, Rest]. Ohne solchen
- * Anfang: [null, unveraenderte Zeile].
+ * Zeichen, das in der Plakette steht -- oder null, wenn dieses Kuerzel keine
+ * Plakette bekommt.
  *
- * @return array{0: ?string, 1: string}
+ * Ein UMKREISTER Buchstabe (\u{24B6}..\u{24E9}) wird auf seinen nackten
+ * Buchstaben zurueckgefuehrt: den Kreis zeichnen wir selbst, ein zweiter im
+ * Glyph waere doppelt gemoppelt. Jedes andere EINZELNE Zeichen (etwa "\u{260D}"
+ * fuer gemeinsame Termine) kommt unveraendert in die Plakette -- sonst stuende
+ * es als duenner, kleiner Strich neben fetten Plaketten, was auf dem Panel
+ * aus Zimmerentfernung wie ein Fehler aussieht (beobachtet 2026-09-04).
+ *
+ * MEHRZEICHIGE Kuerzel wie "(A)" bleiben schlichter Text: wer Klammern tippt,
+ * will Klammern sehen, und drei Zeichen passen nicht in einen Kreis.
  */
-function board_calendar_split_circled_marker(string $zeile): array
+function board_calendar_badge_glyph(string $kuerzel): ?string
 {
-    $erstes = mb_substr($zeile, 0, 1, 'UTF-8');
-    // mb_ord('') WIRFT (ValueError), es liefert nicht false -- eine leere
-    // Titelzeile ist damit ein Fatal mitten in einer PNG-Antwort. Genau der
-    // Fehlertyp, den dieses Modul sonst ueberall vermeidet.
-    if ($erstes === '') {
-        return [null, $zeile];
+    $kuerzel = trim($kuerzel);
+    if ($kuerzel === '' || mb_strlen($kuerzel, 'UTF-8') !== 1) {
+        return null;
     }
-    $code = mb_ord($erstes, 'UTF-8');
+
+    // mb_ord('') WIRFT (ValueError) statt false zu liefern -- oben schon
+    // ausgeschlossen, der Vollstaendigkeit halber trotzdem abgesichert.
+    $code = mb_ord($kuerzel, 'UTF-8');
     if ($code === false) {
-        return [null, $zeile];
+        return null;
     }
 
     if ($code >= 0x24B6 && $code <= 0x24CF) {          // \u{24B6}..\u{24CF}
-        $buchstabe = chr(ord('A') + $code - 0x24B6);
-    } elseif ($code >= 0x24D0 && $code <= 0x24E9) {     // \u{24D0}..\u{24E9}
-        $buchstabe = chr(ord('A') + $code - 0x24D0);
-    } else {
-        return [null, $zeile];
+        return chr(ord('A') + $code - 0x24B6);
     }
+    if ($code >= 0x24D0 && $code <= 0x24E9) {          // \u{24D0}..\u{24E9}
+        return chr(ord('A') + $code - 0x24D0);
+    }
+    return $kuerzel;
+}
 
+/**
+ * Entfernt das bekannte Kuerzel vom Anfang der Titelzeile. Steht es dort
+ * nicht (Folgezeile eines Umbruchs, Kuerzel leer), bleibt die Zeile, wie sie
+ * ist.
+ */
+function board_calendar_strip_marker(string $zeile, string $kuerzel): string
+{
+    if ($kuerzel === '' || !str_starts_with($zeile, $kuerzel)) {
+        return $zeile;
+    }
     // Das trennende Leerzeichen entfaellt: den Abstand macht die Plakette
     // selbst (board_calendar_marker_badge_width()).
-    return [$buchstabe, ltrim(mb_substr($zeile, 1, null, 'UTF-8'))];
+    return ltrim(substr($zeile, strlen($kuerzel)));
 }
 
 /**
@@ -667,9 +693,11 @@ function board_calendar_render_svg(array $items): string
                     // vom ersten Wort ab (board_calendar_fit_title() bricht an
                     // Leerzeichen, das Kuerzel ist ein einzelnes Zeichen).
                     if ($index === 0) {
-                        [$marke, $zeile] = board_calendar_split_circled_marker($zeile);
-                        if ($marke !== null) {
-                            $out .= board_calendar_render_marker_badge($marke, $x, $y, $item['title_size']);
+                        $kuerzel = (string) ($item['marker'] ?? '');
+                        $glyph = board_calendar_badge_glyph($kuerzel);
+                        if ($glyph !== null) {
+                            $zeile = board_calendar_strip_marker($zeile, $kuerzel);
+                            $out .= board_calendar_render_marker_badge($glyph, $x, $y, $item['title_size']);
                             $x += board_calendar_marker_badge_width($item['title_size']);
                         }
                     }

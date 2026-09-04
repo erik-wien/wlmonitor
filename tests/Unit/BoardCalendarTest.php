@@ -282,37 +282,48 @@ class BoardCalendarTest extends TestCase
 
     // --- Kalenderkuerzel als Plakette (Nutzerwunsch 2026-09-04) -------------
 
-    public function test_circled_letter_marker_is_drawn_as_a_filled_badge(): void
+    public function test_circled_letter_marker_becomes_a_bare_letter_in_the_badge(): void
     {
-        // "invertiere das Kalendersymbol und mach es fett": weisser fetter
-        // Buchstabe auf gefuelltem Kreis, selbst gezeichnet statt als
-        // Schriftzeichen -- ob die Schrift U+24B6..U+24CF fuehrt, ist ungeprueft.
-        [$marke, $rest] = board_calendar_split_circled_marker("\u{24BA} Friseur Dante");
+        // Den Kreis zeichnen wir selbst -- ein zweiter im Glyph waere doppelt.
+        $this->assertSame('E', board_calendar_badge_glyph("\u{24BA}"));
+        $this->assertSame('A', board_calendar_badge_glyph("\u{24B6}"));
+        $this->assertSame('E', board_calendar_badge_glyph("\u{24D4}"), 'auch klein geschrieben');
+    }
 
-        $this->assertSame('E', $marke);
-        $this->assertSame('Friseur Dante', $rest, 'Trennzeichen faellt weg, den Abstand macht die Plakette');
+    public function test_any_single_character_marker_gets_a_badge(): void
+    {
+        // "\u{260D}" fuer gemeinsame Termine: stand ohne Plakette als duenner,
+        // kleiner Strich neben zwei fetten Plaketten und sah auf dem Panel
+        // wie ein Fehler aus (beobachtet 2026-09-04 am gerenderten Bild).
+        $this->assertSame("\u{260D}", board_calendar_badge_glyph("\u{260D}"));
+        $this->assertSame('*', board_calendar_badge_glyph('*'));
+    }
 
+    public function test_multi_character_markers_stay_plain_text(): void
+    {
+        // Wer Klammern tippt, will Klammern sehen -- und drei Zeichen passen
+        // nicht in einen Kreis.
+        $this->assertNull(board_calendar_badge_glyph('(A)'));
+        $this->assertNull(board_calendar_badge_glyph(''));
+        $this->assertNull(board_calendar_badge_glyph('  '));
+    }
+
+    public function test_badge_is_drawn_filled_with_a_white_bold_glyph(): void
+    {
         $svg = board_calendar_render_marker_badge('E', 218, 300, 48);
+
         $this->assertStringContainsString('<circle', $svg);
         $this->assertStringContainsString('fill="black"', $svg);
         $this->assertStringContainsString('font-weight="bold"', $svg);
         $this->assertStringContainsString('fill="white">E</text>', $svg);
     }
 
-    public function test_markers_without_a_circled_letter_stay_plain_text(): void
-    {
-        // "(A)" hat jemand bewusst mit Klammern getippt -- wer Klammern
-        // tippt, will Klammern sehen.
-        $this->assertSame([null, '(A) Passservice'], board_calendar_split_circled_marker('(A) Passservice'));
-        $this->assertSame([null, 'Ohne Kuerzel'], board_calendar_split_circled_marker('Ohne Kuerzel'));
-        $this->assertSame([null, ''], board_calendar_split_circled_marker(''));
-    }
-
     public function test_badge_is_exactly_as_wide_as_the_two_characters_it_replaces(): void
     {
         // board_calendar_fit_title() bricht den Titel MIT Kuerzel um und kennt
-        // die Plakette nicht. Waere sie breiter als "\u{24BA}" + Leerzeichen, liefe
-        // jede markierte Zeile genau um die Differenz ueber die Spaltenkante.
+        // die Plakette nicht. Waere sie breiter als Kuerzel + Leerzeichen,
+        // liefe jede markierte Zeile genau um die Differenz ueber die
+        // Spaltenkante.
         foreach ([38, 48] as $titleSize) {
             $zweiZeichen = 2 * 17.37 * $titleSize / 39;
             $this->assertEqualsWithDelta(
@@ -324,20 +335,40 @@ class BoardCalendarTest extends TestCase
         }
     }
 
-    public function test_event_line_with_a_marker_renders_badge_and_shifted_text(): void
+    public function test_marker_comes_from_its_own_field_not_from_the_title_text(): void
     {
-        $svg = board_calendar_render_svg([[
+        // Ein Termin, dessen TITEL zufaellig mit demselben Zeichen beginnt,
+        // darf keine Plakette bekommen -- das Kuerzel ist ein eigenes Feld,
+        // kein Ratespiel auf dem Titelanfang.
+        $ohneKuerzel = board_calendar_render_svg([[
             'type' => 'event', 'time_end' => 190, 'title_x' => 218, 'y' => 300,
-            'time' => '14:00', 'lines' => ["\u{24BA} Friseur Dante"],
+            'time' => '14:00', 'lines' => ["\u{24BA} kein Kuerzel gesetzt"], 'marker' => '',
             'title_size' => 48, 'time_size' => 30, 'wrap_lead' => 53,
         ]]);
+        $this->assertStringNotContainsString('<circle', $ohneKuerzel);
 
-        $this->assertStringContainsString('<circle', $svg);
-        $this->assertStringNotContainsString("\u{24BA}", $svg, 'das Schriftzeichen selbst kommt nicht mehr vor');
-        // Text beginnt hinter der Plakette, nicht mehr auf title_x.
+        $mitKuerzel = board_calendar_render_svg([[
+            'type' => 'event', 'time_end' => 190, 'title_x' => 218, 'y' => 300,
+            'time' => '14:00', 'lines' => ["\u{24BA} Friseur Dante"], 'marker' => "\u{24BA}",
+            'title_size' => 48, 'time_size' => 30, 'wrap_lead' => 53,
+        ]]);
+        $this->assertStringContainsString('<circle', $mitKuerzel);
+        $this->assertStringNotContainsString("\u{24BA}", $mitKuerzel, 'Schriftzeichen selbst kommt nicht mehr vor');
         $this->assertStringContainsString(
             sprintf('<text x="%d"', 218 + board_calendar_marker_badge_width(48)),
-            $svg
+            $mitKuerzel,
+            'Titeltext beginnt hinter der Plakette'
         );
+    }
+
+    public function test_normalize_events_records_the_marker_as_a_field(): void
+    {
+        $roh = [['title' => 'Friseur', 'all_day' => false, 'calendar' => 'Eriks',
+                 'start' => '2026-09-04T14:00:00+02:00', 'end' => '2026-09-04T15:00:00+02:00']];
+
+        $out = board_calendar_normalize_events($roh, new \DateTimeZone('Europe/Vienna'), ['Eriks' => "\u{24BA}"]);
+
+        $this->assertSame("\u{24BA}", $out[0]['marker']);
+        $this->assertSame("\u{24BA} Friseur", $out[0]['title'], 'Praefix bleibt im Titel -- der Umbruch rechnet darauf');
     }
 }
