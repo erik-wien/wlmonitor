@@ -1,10 +1,10 @@
 ---
 id: TASK-25
 title: Absolutes Antippen der Pagination-Icons (Monitor/Störung/Kalender/Wetter)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-08-27 10:50'
-updated_date: '2026-09-04 19:46'
+updated_date: '2026-09-04 20:45'
 labels: []
 dependencies: []
 priority: medium
@@ -25,7 +25,7 @@ Nutzerwunsch 2026-08-27: die Pagination-Pille zeigt 4 Kategorie-Icons, ist aber 
 - [x] #4 Antippen des Wetter-Icons springt direkt zum Schlafschirm
 - [x] #5 web/board.php?debug=ui (Browser-Simulator) zeigt 4 einzelne Zonen statt page_prev/page_next und sendet die neuen absoluten X-Device-Touch-Werte
 - [x] #6 touch_zone.cpp erkennt Tipp-Position pro Icon-Slot und sendet den passenden absoluten Touch-Wert
-- [ ] #7 Firmware neu geflasht und am echten Geraet verifiziert
+- [x] #7 Firmware neu geflasht und am echten Geraet verifiziert
 - [x] #8 Alle bestehenden Tests bleiben gruen, neue Tests fuer die absolute Navigation ergaenzt
 <!-- AC:END -->
 
