@@ -255,4 +255,43 @@ class BoardSleepTest extends TestCase
         $this->assertSame(0, $notUniform, 'jedes Modul muss einfarbig sein');
         $this->assertSame(0, $wrongColour, 'jedes Modul muss die richtige Farbe haben');
     }
+
+    // --- Kopfzeile auf dem Schlafschirm (Nutzerwunsch 2026-09-04) -----------
+
+    public function test_sleep_screen_carries_the_header_when_one_is_passed(): void
+    {
+        // "so seh ich nicht wann ungefaehr die Batterie leer war und bei
+        // welcher Voltzahl" -- der Schlafschirm ist das Bild, das nach einem
+        // Ausfall stehenbleibt, also gerade der Ort, an dem Akkustand und
+        // WLAN-Staerke etwas aussagen.
+        $kopf = board_render_chrome_svg($this->now(), 41, 2, false, 3640, 4160, 'volt');
+        $svg = board_sleep_render_svg(
+            $this->today(), $this->day(), null, $this->wifi(), $this->now(), 4, true, [], 0, [], $kopf
+        );
+
+        $this->assertStringContainsString('3,64 V', $svg, 'Akkustand beim Einschlafen');
+    }
+
+    public function test_sleep_screen_without_a_header_is_unchanged(): void
+    {
+        // Vorgabe bleibt "keine Kopfzeile", damit bestehende Aufrufer und
+        // Tests unveraendert funktionieren.
+        $svg = board_sleep_render_svg($this->today(), $this->day(), null, $this->wifi(), $this->now(), 4);
+
+        $this->assertStringNotContainsString('WIENER LINIEN', $svg);
+    }
+
+    public function test_the_clock_is_dropped_only_when_really_going_to_sleep(): void
+    {
+        // Akku und WLAN frieren genauso ein, sagen aber etwas ueber den
+        // Zustand BEIM Einschlafen. Eine Uhrzeit beschreibt nur sich selbst
+        // und saehe eingefroren wie eine gueltige Angabe aus.
+        $wach    = board_render_chrome_svg($this->now(), 41, 2, false, 3640, 4160, 'volt', true);
+        $schlaf  = board_render_chrome_svg($this->now(), 41, 2, false, 3640, 4160, 'volt', false);
+        $uhrzeit = $this->now()->format('H:i');
+
+        $this->assertStringContainsString('>' . $uhrzeit . '<', $wach);
+        $this->assertStringNotContainsString('>' . $uhrzeit . '<', $schlaf);
+        $this->assertStringContainsString('3,64 V', $schlaf, 'Akku bleibt in beiden Faellen');
+    }
 }

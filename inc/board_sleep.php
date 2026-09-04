@@ -200,7 +200,13 @@ function board_sleep_render_svg(
     int $activeFavoriteIndex = 0,
     // Icon-Pille statt Ziffern (board_pagination_categories()) -- leer =
     // alte Ziffernpille, s. board_render_stand_and_pagination_svg().
-    array $pageCategories = []
+    array $pageCategories = [],
+    // FERTIG gerenderte Kopfzeile (board_render_chrome_svg()). Als String
+    // hereingereicht, nicht als Akku-/WLAN-Werte: diese Funktion soll reines
+    // Layout bleiben und nichts ueber Millivolt oder Anzeigemodi wissen
+    // muessen. Leer = keine Kopfzeile (Vorgabe, damit bestehende Aufrufer und
+    // Tests unveraendert bleiben).
+    string $chromeSvg = ''
 ): string {
     $defs = board_svg_defs();
     $esc = static fn (string $s): string => htmlspecialchars($s, ENT_XML1);
@@ -366,6 +372,7 @@ function board_sleep_render_svg(
 {$defs}
 </defs>
 <rect width="1872" height="1404" fill="white"/>
+{$chromeSvg}
 {$divider}
 {$left}
 {$right}

@@ -265,7 +265,15 @@ function board_render_chrome_svg(
     int $batteryMv = 0,
     // Admin-konfigurierbar (wl_board_settings, Migration 007).
     int $batteryChargingMv = BOARD_BATTERY_CHARGING_MV_DEFAULT,
-    string $batteryDisplayMode = 'percent'
+    string $batteryDisplayMode = 'percent',
+    // Auf dem echten Schlafschirm abgeschaltet: das Geraet zeigt dieses Bild
+    // stundenlang weiter, eine eingefrorene Uhrzeit saehe dort aus wie eine
+    // gueltige Angabe. Akku und WLAN frieren zwar genauso ein, sagen aber
+    // etwas anderes -- sie beschreiben den Zustand BEIM Einschlafen, und
+    // genau das will man spaeter wissen ("wann war die Batterie leer, bei
+    // welcher Spannung", Nutzerwunsch 2026-09-04). Eine Uhrzeit beschreibt
+    // dagegen nur sich selbst.
+    bool $showClock = true
 ): string {
     $wifiBars = max(0, min(3, $wifiBars));
     $percent = max(0, min(100, $batteryPercent));
@@ -319,12 +327,20 @@ function board_render_chrome_svg(
 
     $logo = board_wl_logo_paths();
 
+    $clockSvg = $showClock
+        ? sprintf(
+            '<text x="936" y="55" font-family="Atkinson Hyperlegible Next" font-weight="bold"'
+            . ' font-size="34" fill="black" text-anchor="middle">%s</text>',
+            $renderedAt->format('H:i')
+        )
+        : '';
+
     return <<<SVG
 <line x1="0" y1="90" x2="1872" y2="90" stroke="black" stroke-width="2"/>
 <g transform="translate(24,12) scale(0.5025)">
 {$logo}
 </g>
-<text x="936" y="55" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="34" fill="black" text-anchor="middle">{$renderedAt->format('H:i')}</text>
+{$clockSvg}
 
 <g font-family="Atkinson Hyperlegible Next" fill="black">
   <g transform="translate(1665,46)">{$wifiBarsSvg}</g>
@@ -650,7 +666,15 @@ function board_render_svg(
     // 0 = keine Messung im Request.
     int $batteryMv = 0,
     int $batteryChargingMv = BOARD_BATTERY_CHARGING_MV_DEFAULT,
-    string $batteryDisplayMode = 'percent'
+    string $batteryDisplayMode = 'percent',
+    // Auf dem echten Schlafschirm abgeschaltet: das Geraet zeigt dieses Bild
+    // stundenlang weiter, eine eingefrorene Uhrzeit saehe dort aus wie eine
+    // gueltige Angabe. Akku und WLAN frieren zwar genauso ein, sagen aber
+    // etwas anderes -- sie beschreiben den Zustand BEIM Einschlafen, und
+    // genau das will man spaeter wissen ("wann war die Batterie leer, bei
+    // welcher Spannung", Nutzerwunsch 2026-09-04). Eine Uhrzeit beschreibt
+    // dagegen nur sich selbst.
+    bool $showClock = true
 ): string {
     $departurePages = board_paginate_departures($activeFavorite, 1);
     $totalDeparturePages = $departurePages['totalPages'];
@@ -665,10 +689,27 @@ function board_render_svg(
 
     if ($requestedPage > $totalContentPages) {
         $sleepWeather ??= ['today' => ['available' => false], 'tomorrow' => ['available' => false]];
+
+        // Kopfzeile jetzt AUCH auf dem Schlafschirm (Nutzerwunsch 2026-09-04:
+        // "so seh ich nicht wann ungefaehr die Batterie leer war und bei
+        // welcher Voltzahl"). Ohne Spaltentrennlinie -- der Schlafschirm
+        // zieht seine eigene an anderer Stelle. Die Uhrzeit entfaellt nur
+        // beim ECHTEN Einschlafen ($sleepShowPagination === false, dasselbe
+        // Signal wie bei Pille und Touch-Leiste): dann steht das Bild
+        // stundenlang, und eine eingefrorene Uhrzeit saehe aus wie eine
+        // gueltige Angabe. Akku und WLAN frieren genauso ein, sagen aber
+        // etwas ueber den Zustand BEIM Einschlafen -- genau das ist gefragt.
+        $sleepChrome = board_render_chrome_svg(
+            $renderedAt, $batteryPercent, $wifiBars, false,
+            $batteryMv, $batteryChargingMv, $batteryDisplayMode,
+            $sleepShowPagination
+        );
+
         return board_sleep_render_svg(
             $sleepWeather['today'], $sleepWeather['tomorrow'], $sun, $guestWifi, $renderedAt,
             $totalPages, $sleepShowPagination,
-            $touchBarFavoriteTitles, $activeFavoriteIndex, $pageCategories
+            $touchBarFavoriteTitles, $activeFavoriteIndex, $pageCategories,
+            $sleepChrome
         );
     }
 
