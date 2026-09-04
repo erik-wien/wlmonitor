@@ -73,6 +73,30 @@ final class BoardSettingsPageTest extends TestCase
         $this->assertStringContainsString('Gäste-WLAN', $r['out']);
         $this->assertStringContainsString('Akku-Kalibrierung', $r['out']);
         $this->assertStringContainsString('MQTT-Sender-Zugangsdaten', $r['out']);
+        $this->assertStringContainsString('Zeitverhalten des Displays', $r['out']);
+
+        // Tab-Geruest (Nutzerwunsch 2026-09-04). Jeder Tab-Knopf braucht sein
+        // Panel, sonst schaltet der geteilte Helfer ins Leere -- und JEDE
+        // Karte muss in einem Panel liegen, sonst waere sie unerreichbar.
+        foreach (['geraet', 'anzeige', 'nachrichten'] as $tab) {
+            $this->assertStringContainsString('data-tab="' . $tab . '"', $r['out']);
+            $this->assertStringContainsString('id="panel-' . $tab . '"', $r['out']);
+        }
+        $this->assertSame(
+            3,
+            substr_count($r['out'], 'class="app-tab-panel'),
+            'genau drei Panels -- eine Karte ausserhalb waere nicht erreichbar'
+        );
+
+        // Die Umschaltung kommt aus dem geteilten Helfer, nicht aus Eigenbau.
+        $this->assertStringContainsString('js/admin.js', $r['out']);
+
+        // Die Icons muessen im Sprite existieren; ein <use> auf eine fehlende
+        // ID rendert stillschweigend nichts.
+        $sprite = (string) file_get_contents(__DIR__ . '/../../web/css/icons.svg');
+        foreach (['microchip', 'desktop', 'comment-dots'] as $iconId) {
+            $this->assertStringContainsString('id="icon-' . $iconId . '"', $sprite);
+        }
 
         // Passwortfelder duerfen NIE den Bestandswert ausspucken. Bewusst
         // STRUKTURELL geprueft (gar kein value=-Attribut) statt auf einen
@@ -93,5 +117,19 @@ final class BoardSettingsPageTest extends TestCase
                 "$feld darf kein value=-Attribut tragen (auch kein leeres) -- sonst wandert der Bestand ins HTML"
             );
         }
+    }
+
+    public function test_saving_returns_to_the_tab_not_to_a_card_anchor(): void
+    {
+        // Der geteilte Umschalter waehlt den Tab anhand von location.hash --
+        // ein Anker auf die KARTE (#battery) wuerde nach dem Speichern keinen
+        // Tab oeffnen, der Nutzer landete stumm auf dem ersten.
+        $quelle = (string) file_get_contents(__DIR__ . '/../../web/board_settings.php');
+
+        foreach (['wifi' => 'anzeige', 'kalender' => 'anzeige', 'timing' => 'geraet',
+                  'battery' => 'geraet', 'mqtt' => 'nachrichten'] as $abschnitt => $tab) {
+            $this->assertStringContainsString("?saved=$abschnitt#$tab'", $quelle);
+        }
+        $this->assertStringNotContainsString('board_settings.php#battery', $quelle);
     }
 }

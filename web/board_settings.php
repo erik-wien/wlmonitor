@@ -87,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
         if ($wifiError === null) {
             appendLog($con, 'admin', 'Board-Einstellungen: Gaeste-WLAN geaendert.');
-            header('Location: board_settings.php?saved=wifi#wifi'); exit;
+            header('Location: board_settings.php?saved=wifi#anzeige'); exit;
         }
     } elseif ($action === 'save_timing') {
         $timingError = board_settings_save_device_timing(
@@ -100,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
         if ($timingError === null) {
             appendLog($con, 'admin', 'Board-Einstellungen: Zeitverhalten geaendert.');
-            header('Location: board_settings.php?saved=timing#timing'); exit;
+            header('Location: board_settings.php?saved=timing#geraet'); exit;
         }
     } elseif ($action === 'save_battery') {
         // Eingabe in Volt (so steht es auf jedem Messgeraet), gespeichert in
@@ -126,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($batteryError === null) {
             appendLog($con, 'admin', 'Board-Einstellungen: Akku-Kalibrierung geaendert.');
-            header('Location: board_settings.php?saved=battery#battery'); exit;
+            header('Location: board_settings.php?saved=battery#geraet'); exit;
         }
     } elseif ($action === 'save_calendars') {
         // Kein Eintrag angekreuzt -> leeres Array; board_settings_save_calendars()
@@ -148,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $calendarError = board_settings_save_calendars($gewaehlt);
         if ($calendarError === null) {
             appendLog($con, 'admin', 'Board-Einstellungen: Kalenderauswahl geaendert (' . count($gewaehlt) . ' Kalender).');
-            header('Location: board_settings.php?saved=kalender#kalender'); exit;
+            header('Location: board_settings.php?saved=kalender#anzeige'); exit;
         }
     } elseif ($action === 'save_mqtt_sender') {
         $form = ['mqtt_sender_user' => trim((string) ($_POST['mqtt_sender_user'] ?? ''))];
@@ -159,7 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
         if ($mqttError === null) {
             appendLog($con, 'admin', 'Board-Einstellungen: MQTT-Sender-Zugangsdaten geaendert.');
-            header('Location: board_settings.php?saved=mqtt#mqtt'); exit;
+            header('Location: board_settings.php?saved=mqtt#nachrichten'); exit;
         }
     }
 }
@@ -178,44 +178,33 @@ $e = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
     <div class="app-alert app-alert-success" role="status"><?= $e($saved) ?></div>
   <?php endif; ?>
 
-  <div class="app-card" id="wifi">
-    <div class="app-card-header">Gäste-WLAN</div>
-    <div class="app-card-body">
-      <p class="form-text">Erscheint als QR-Code auf dem Schlafschirm des Boards. Leere SSID blendet den QR-Block aus.</p>
-      <?php if ($wifiError !== null): ?>
-        <div class="app-alert app-alert-danger py-2" role="alert"><?= $e($wifiError) ?></div>
-      <?php endif; ?>
-      <form method="post" action="board_settings.php#wifi">
-        <input type="hidden" name="csrf_token" value="<?= $e($csrfToken) ?>">
-        <input type="hidden" name="action" value="save_wifi">
-        <div class="form-group">
-          <label class="form-label" for="wifi_ssid">SSID</label>
-          <input type="text" class="form-control" id="wifi_ssid" name="wifi_ssid"
-                 value="<?= $e($settings['wifi_ssid']) ?>" maxlength="64">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="wifi_password">Passwort</label>
-          <input type="text" class="form-control" id="wifi_password" name="wifi_password"
-                 autocomplete="off" placeholder="unverändert lassen = leer senden" maxlength="128">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="wifi_encryption">Verschlüsselung</label>
-          <select class="form-control" id="wifi_encryption" name="wifi_encryption">
-            <?php foreach (['WPA', 'WEP', 'NOPASS'] as $enc): ?>
-              <option value="<?= $e($enc) ?>" <?= $settings['wifi_encryption'] === $enc ? 'selected' : '' ?>><?= $e($enc) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div class="form-group form-check">
-          <input type="checkbox" class="form-check-input" id="wifi_hidden" name="wifi_hidden" value="1"
-                 <?= $settings['wifi_hidden'] ? 'checked' : '' ?>>
-          <label class="form-check-label" for="wifi_hidden">Verstecktes Netz</label>
-        </div>
-        <button type="submit" class="btn btn-outline-danger">Speichern</button>
-      </form>
-    </div>
-  </div>
+  <!-- Drei Tabs statt fuenf gleichrangiger Karten untereinander
+       (Nutzerwunsch 2026-09-04): gruppiert nach dem, WORUEBER man entscheidet.
+       "Geraet" = wie sich die Hardware verhaelt, "Anzeige" = was auf dem
+       Schirm steht, "Nachrichten" = Zugang zum Sendewerkzeug. Umschaltung
+       ueber den geteilten Helfer in css_library/js/admin.js (ui-admin.md
+       §15.4), Zustand in location.hash -- deshalb zeigen die PRG-Redirects
+       nach dem Speichern auf den TAB, nicht auf die Karte. -->
+  <nav class="app-tabs" role="tablist" aria-label="Board-Einstellungen">
+    <button type="button" class="app-tab is-active" role="tab"
+            id="tab-geraet" aria-controls="panel-geraet" aria-selected="true"
+            data-tab="geraet">
+      <?= icon("microchip") ?> Gerät
+    </button>
+    <button type="button" class="app-tab" role="tab"
+            id="tab-anzeige" aria-controls="panel-anzeige" aria-selected="false"
+            data-tab="anzeige">
+      <?= icon("desktop") ?> Anzeige
+    </button>
+    <button type="button" class="app-tab" role="tab"
+            id="tab-nachrichten" aria-controls="panel-nachrichten" aria-selected="false"
+            data-tab="nachrichten">
+      <?= icon("comment-dots") ?> Nachrichten
+    </button>
+  </nav>
 
+  <section id="panel-geraet" class="app-tab-panel is-active"
+           role="tabpanel" aria-labelledby="tab-geraet">
   <div class="app-card" id="timing">
     <div class="app-card-header">Zeitverhalten des Displays</div>
     <div class="app-card-body">
@@ -226,7 +215,7 @@ $e = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
       <?php if ($timingError !== null): ?>
         <div class="app-alert app-alert-danger py-2" role="alert"><?= $e($timingError) ?></div>
       <?php endif; ?>
-      <form method="post" action="board_settings.php#timing">
+      <form method="post" action="board_settings.php#geraet">
         <input type="hidden" name="csrf_token" value="<?= $e($csrfToken) ?>">
         <input type="hidden" name="action" value="save_timing">
         <div class="form-group">
@@ -286,7 +275,7 @@ $e = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
         <div class="app-alert app-alert-danger py-2" role="alert"><?= $e($batteryError) ?></div>
       <?php endif; ?>
       <?php $volt = static fn (int $mv): string => number_format($mv / 1000, 2, ',', ''); ?>
-      <form method="post" action="board_settings.php#battery">
+      <form method="post" action="board_settings.php#geraet">
         <input type="hidden" name="csrf_token" value="<?= $e($csrfToken) ?>">
         <input type="hidden" name="action" value="save_battery">
         <div class="form-group">
@@ -329,7 +318,10 @@ $e = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
       </form>
     </div>
   </div>
+  </section>
 
+  <section id="panel-anzeige" class="app-tab-panel"
+           role="tabpanel" aria-labelledby="tab-anzeige" hidden>
   <div class="app-card" id="kalender">
     <div class="app-card-header">Kalender</div>
     <div class="app-card-body">
@@ -347,7 +339,7 @@ $e = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
           ist sie danach immer noch leer, läuft dort noch eine ältere Fassung ohne diese Auskunft.
         </div>
       <?php else: ?>
-        <form method="post" action="board_settings.php#kalender">
+        <form method="post" action="board_settings.php#anzeige">
           <input type="hidden" name="csrf_token" value="<?= $e($csrfToken) ?>">
           <input type="hidden" name="action" value="save_calendars">
           <?php $gewaehlt = board_calendar_selection(); ?>
@@ -381,6 +373,47 @@ $e = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
     </div>
   </div>
 
+  <div class="app-card" id="wifi">
+    <div class="app-card-header">Gäste-WLAN</div>
+    <div class="app-card-body">
+      <p class="form-text">Erscheint als QR-Code auf dem Schlafschirm des Boards. Leere SSID blendet den QR-Block aus.</p>
+      <?php if ($wifiError !== null): ?>
+        <div class="app-alert app-alert-danger py-2" role="alert"><?= $e($wifiError) ?></div>
+      <?php endif; ?>
+      <form method="post" action="board_settings.php#anzeige">
+        <input type="hidden" name="csrf_token" value="<?= $e($csrfToken) ?>">
+        <input type="hidden" name="action" value="save_wifi">
+        <div class="form-group">
+          <label class="form-label" for="wifi_ssid">SSID</label>
+          <input type="text" class="form-control" id="wifi_ssid" name="wifi_ssid"
+                 value="<?= $e($settings['wifi_ssid']) ?>" maxlength="64">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="wifi_password">Passwort</label>
+          <input type="text" class="form-control" id="wifi_password" name="wifi_password"
+                 autocomplete="off" placeholder="unverändert lassen = leer senden" maxlength="128">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="wifi_encryption">Verschlüsselung</label>
+          <select class="form-control" id="wifi_encryption" name="wifi_encryption">
+            <?php foreach (['WPA', 'WEP', 'NOPASS'] as $enc): ?>
+              <option value="<?= $e($enc) ?>" <?= $settings['wifi_encryption'] === $enc ? 'selected' : '' ?>><?= $e($enc) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="form-group form-check">
+          <input type="checkbox" class="form-check-input" id="wifi_hidden" name="wifi_hidden" value="1"
+                 <?= $settings['wifi_hidden'] ? 'checked' : '' ?>>
+          <label class="form-check-label" for="wifi_hidden">Verstecktes Netz</label>
+        </div>
+        <button type="submit" class="btn btn-outline-danger">Speichern</button>
+      </form>
+    </div>
+  </div>
+  </section>
+
+  <section id="panel-nachrichten" class="app-tab-panel"
+           role="tabpanel" aria-labelledby="tab-nachrichten" hidden>
   <div class="app-card" id="mqtt">
     <div class="app-card-header">MQTT-Sender-Zugangsdaten</div>
     <div class="app-card-body">
@@ -391,7 +424,7 @@ $e = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
       <?php if ($mqttError !== null): ?>
         <div class="app-alert app-alert-danger py-2" role="alert"><?= $e($mqttError) ?></div>
       <?php endif; ?>
-      <form method="post" action="board_settings.php#mqtt">
+      <form method="post" action="board_settings.php#nachrichten">
         <input type="hidden" name="csrf_token" value="<?= $e($csrfToken) ?>">
         <input type="hidden" name="action" value="save_mqtt_sender">
         <div class="form-group">
@@ -408,8 +441,11 @@ $e = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
       </form>
     </div>
   </div>
+  </section>
 
 </div>
 </main>
+
+<script src="css/shared/js/admin.js<?= \Erikr\Chrome\AssetVersion::forFile(__DIR__, 'css/shared/js/admin.js') ?>" nonce="<?= $_cspNonce ?>"></script>
 
 <?php render_footer(); ?>
