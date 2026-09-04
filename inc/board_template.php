@@ -7,6 +7,14 @@
 // DateTimeImmutable herein), analog zu inc/board.php und inc/weather.php.
 declare(strict_types=1);
 
+// board_render_chrome_svg() ruft board_battery_is_charging_mv() und
+// board_battery_label() -- die leben in board.php. Bisher hing es daran, dass
+// jeder Aufrufer beides ohnehin laedt; ein Skript, das nur den Renderer
+// braucht, lief in "Call to undefined function" (beim Rendern eines
+// Vorschaubildes aufgefallen, 2026-09-04). board.php hat selbst keine
+// Requires, ein Zirkel ist also ausgeschlossen.
+require_once __DIR__ . '/board.php';
+
 /** board_type()-Ergebnis (inc/board.php) -> Badge-Id aus board_svg_defs(). */
 const BOARD_BADGE_SHAPE_BY_TYPE = [
     'metro' => 'badgeMetro',
@@ -266,13 +274,29 @@ function board_render_chrome_svg(
     // Schalterpille "87 %" oder "3,87 V"; der Balken fuellt sich in beiden
     // Faellen nach Prozent.
     $isCharging = $batteryMv > 0 && board_battery_is_charging_mv($batteryMv, $batteryChargingMv);
-    $fillWidth = board_battery_fill_width($percent);
-    $percentSvg = $isCharging
-        ? '<polygon points="1849,38 1839,52 1846,52 1843,64 1856,48 1848,48 1851,38" fill="black"/>'
-        : sprintf(
-            '<text x="1856" y="63" text-anchor="end" font-weight="bold" font-size="24">%s</text>',
-            htmlspecialchars(board_battery_label($batteryMv, $percent, $batteryDisplayMode), ENT_XML1)
-        );
+
+    // Der Blitz sitzt IM Akkusymbol und ersetzt dort den Fuellbalken -- der
+    // Wert daneben bleibt in jedem Fall stehen.
+    //
+    // Frueher ersetzte der Blitz den WERT. Das war genau verkehrt herum
+    // (Nutzerbefund 2026-09-04: "wenn das Kabel angeschlossen ist seh ich
+    // sofort den Blitz, keine Volt"): kalibriert wird am oberen Ende der
+    // Kurve, also am Kabel -- und ausgerechnet dort verschwand die Spannung,
+    // die man dafuer ablesen muss.
+    //
+    // Der Fuellbalken darf dabei weichen, ohne dass Information verloren geht:
+    // waehrend des Ladens ist die Spannung ohnehin von der Ladeschaltung
+    // hochgetrieben, ein Fuellstand waere dort eine Behauptung. Nebenbei
+    // erspart das auf 1bpp die Frage, ob der Blitz schwarz oder weiss sein
+    // muesste -- auf einem teils gefuellten Balken waere er mal so, mal so.
+    $fillOrBolt = $isCharging
+        ? '<polygon points="10,0 0,14 7,14 4,26 17,10 9,10 12,0" fill="black" transform="translate(22,4) scale(0.69)"/>'
+        : sprintf('<rect x="4" y="4" width="%d" height="18" fill="black"/>', board_battery_fill_width($percent));
+
+    $percentSvg = sprintf(
+        '<text x="1856" y="63" text-anchor="end" font-weight="bold" font-size="24">%s</text>',
+        htmlspecialchars(board_battery_label($batteryMv, $percent, $batteryDisplayMode), ENT_XML1)
+    );
 
     $wifiBarSpecs = [
         ['x' => 0,  'y' => 10, 'h' => 8],
@@ -307,7 +331,7 @@ function board_render_chrome_svg(
   <g transform="translate(1713,42)">
     <rect x="0" y="0" width="56" height="26" rx="3" fill="white" stroke="black" stroke-width="3"/>
     <rect x="56" y="7" width="7" height="12" fill="black"/>
-    <rect x="4" y="4" width="{$fillWidth}" height="18" fill="black"/>
+    {$fillOrBolt}
   </g>
   {$percentSvg}
 </g>

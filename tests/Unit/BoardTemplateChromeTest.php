@@ -108,12 +108,29 @@ class BoardTemplateChromeTest extends TestCase
         $this->assertFalse(board_battery_is_charging_mv(4000), 'Vorgabe bleibt 4155');
     }
 
-    public function test_chrome_shows_lightning_bolt_instead_of_a_value_when_charging(): void
+    public function test_charging_shows_the_bolt_AND_keeps_the_value(): void
     {
-        $svg = board_render_chrome_svg(new DateTimeImmutable(), 97, 3, true, 4180);
+        // Nutzerbefund 2026-09-04: "wenn das Kabel angeschlossen ist seh ich
+        // sofort den Blitz, keine Volt". Kalibriert wird am oberen Ende der
+        // Kurve, also am Kabel -- ausgerechnet dort verschwand die Spannung,
+        // die man dafuer ablesen muss.
+        $svg = board_render_chrome_svg(new DateTimeImmutable(), 97, 3, true, 4180, 4155, 'volt');
 
-        $this->assertStringNotContainsString('97 %', $svg);
+        $this->assertStringContainsString('4,18 V', $svg, 'Wert bleibt waehrend des Ladens lesbar');
         $this->assertStringContainsString('<polygon', $svg, 'Blitz-Symbol');
+    }
+
+    public function test_the_bolt_replaces_the_fill_bar_inside_the_symbol(): void
+    {
+        // Waehrend des Ladens ist die Spannung von der Ladeschaltung
+        // hochgetrieben -- ein Fuellstand waere dort eine Behauptung. Und auf
+        // 1bpp erspart es die Frage, ob der Blitz auf einem teils gefuellten
+        // Balken schwarz oder weiss sein muesste.
+        $laedt = board_render_chrome_svg(new DateTimeImmutable(), 97, 3, true, 4180);
+        $normal = board_render_chrome_svg(new DateTimeImmutable(), 97, 3, true, 3900);
+
+        $this->assertStringNotContainsString('height="18" fill="black"', $laedt, 'kein Fuellbalken');
+        $this->assertStringContainsString('height="18" fill="black"', $normal);
     }
 
     public function test_chrome_shows_the_value_when_not_charging(): void
