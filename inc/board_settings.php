@@ -1,6 +1,12 @@
 <?php
 declare(strict_types=1);
 
+// Die Akku-Vorgaben (BOARD_BATTERY_*_MV_DEFAULT) stehen in inc/board.php, wo
+// auch die Rechenfunktionen liegen. board_settings.php wird von vier Stellen
+// eingebunden (web/board.php, web/board_settings.php, web/mqtt/index.php,
+// tests/bootstrap.php) -- nicht alle laden board.php, also hier explizit.
+require_once __DIR__ . '/board.php';
+
 /**
  * inc/board_settings.php — Board-Einstellungen (TASK-27): Gaeste-WLAN,
  * Akku-Kalibrierung, MQTT-Sender-Credentials. Single-Row-Tabelle
@@ -23,7 +29,8 @@ const BOARD_SETTINGS_MQTT_PASSWD_FILE = '/opt/homebrew/etc/mosquitto/passwd';
 /**
  * @return array{
  *   wifi_ssid: string, wifi_password: string, wifi_encryption: string, wifi_hidden: bool,
- *   battery_charging_threshold: int, battery_full_threshold: int,
+ *   battery_empty_mv: int, battery_full_mv: int, battery_charging_mv: int,
+ *   battery_display_mode: 'percent'|'volt',
  *   mqtt_sender_user: string, mqtt_sender_password: string
  * }
  */
@@ -34,8 +41,10 @@ function board_settings_load(mysqli $con): array
         'wifi_password' => '',
         'wifi_encryption' => 'WPA',
         'wifi_hidden' => false,
-        'battery_charging_threshold' => 95,
-        'battery_full_threshold' => 92,
+        'battery_empty_mv' => BOARD_BATTERY_EMPTY_MV_DEFAULT,
+        'battery_full_mv' => BOARD_BATTERY_FULL_MV_DEFAULT,
+        'battery_charging_mv' => BOARD_BATTERY_CHARGING_MV_DEFAULT,
+        'battery_display_mode' => 'percent',
         'mqtt_sender_user' => 'sender',
         'mqtt_sender_password' => '',
     ];
@@ -51,7 +60,8 @@ function board_settings_load(mysqli $con): array
     try {
         $result = $con->query(
             'SELECT wifi_ssid, wifi_password, wifi_encryption, wifi_hidden,
-                    battery_charging_threshold, battery_full_threshold,
+                    battery_empty_mv, battery_full_mv, battery_charging_mv,
+                    battery_display_mode,
                     mqtt_sender_user, mqtt_sender_password
              FROM wl_board_settings WHERE id = 1'
         );
@@ -71,8 +81,10 @@ function board_settings_load(mysqli $con): array
         'wifi_password' => (string) ($row['wifi_password'] ?? ''),
         'wifi_encryption' => (string) ($row['wifi_encryption'] ?? 'WPA'),
         'wifi_hidden' => (bool) ($row['wifi_hidden'] ?? false),
-        'battery_charging_threshold' => (int) ($row['battery_charging_threshold'] ?? 95),
-        'battery_full_threshold' => (int) ($row['battery_full_threshold'] ?? 92),
+        'battery_empty_mv' => (int) ($row['battery_empty_mv'] ?? BOARD_BATTERY_EMPTY_MV_DEFAULT),
+        'battery_full_mv' => (int) ($row['battery_full_mv'] ?? BOARD_BATTERY_FULL_MV_DEFAULT),
+        'battery_charging_mv' => (int) ($row['battery_charging_mv'] ?? BOARD_BATTERY_CHARGING_MV_DEFAULT),
+        'battery_display_mode' => ($row['battery_display_mode'] ?? 'percent') === 'volt' ? 'volt' : 'percent',
         'mqtt_sender_user' => (string) ($row['mqtt_sender_user'] ?? 'sender'),
         'mqtt_sender_password' => (string) ($row['mqtt_sender_password'] ?? ''),
     ];
@@ -147,32 +159,85 @@ function board_settings_save_wifi(
 }
 
 /**
- * Akku-Kalibrierung speichern (s. board_battery_is_charging()/
- * board_battery_display_percent() in inc/board.php). full MUSS unter
- * charging liegen, sonst waere der "voll"-Bereich leer oder invertiert.
+ * Akku-Kalibrierung speichern -- in MILLIVOLT, nicht in Prozent
+ * (Nutzerbefund 2026-09-04, Herleitung s. migrations/007_board_battery_volts.sql).
  *
- * @return string|null Fehlermeldung, oder null bei Erfolg.
+ * Reihenfolge leer < voll <= laedt ist Pflicht, nicht Geschmack:
+ * - leer >= voll waere eine Division durch null bzw. eine invertierte Skala
+ *   in board_battery_percent_from_mv().
+ * - laedt < voll hiesse, dass der Blitz schon erscheint, bevor 100 %
+ *   ueberhaupt erreichbar sind -- der volle Ladestand waere nie zu sehen.
+ *
+ * Die Grenzen 2500..5000 mV umschliessen jede sinnvolle Einzelzelle mit
+ * Reserve; ausserhalb liegt entweder ein Tippfehler oder ein anderer Akkutyp,
+ * und beides gehoert bemerkt statt stillschweigend in ein Bild gerechnet.
  */
-function board_settings_save_battery(mysqli $con, int $chargingThreshold, int $fullThreshold): ?string
-{
+function board_settings_save_battery(
+    mysqli $con,
+    int $emptyMv,
+    int $fullMv,
+    int $chargingMv,
+    string $displayMode
+): ?string {
     board_settings_ensure_row($con);
-    if ($chargingThreshold < 1 || $chargingThreshold > 100 || $fullThreshold < 1 || $fullThreshold > 100) {
-        return 'Schwellwerte muessen zwischen 1 und 100 liegen.';
+
+    foreach (['leer' => $emptyMv, 'voll' => $fullMv, 'laedt' => $chargingMv] as $name => $wert) {
+        if ($wert < 2500 || $wert > 5000) {
+            return sprintf('Spannung "%s" muss zwischen 2,50 V und 5,00 V liegen.', $name);
+        }
     }
-    if ($fullThreshold >= $chargingThreshold) {
-        return 'Der "voll"-Schwellwert muss unter dem Lade-Schwellwert liegen.';
+    if ($emptyMv >= $fullMv) {
+        return 'Die "leer"-Spannung muss unter der "voll"-Spannung liegen.';
+    }
+    if ($chargingMv < $fullMv) {
+        return 'Die "laedt"-Spannung darf nicht unter der "voll"-Spannung liegen -- sonst waere der volle Ladestand nie zu sehen.';
+    }
+    if ($displayMode !== 'percent' && $displayMode !== 'volt') {
+        return 'Unbekannte Anzeigeart.';
     }
 
-    $stmt = $con->prepare(
-        'UPDATE wl_board_settings
-         SET battery_charging_threshold = ?, battery_full_threshold = ?, updated_at = CURRENT_TIMESTAMP
-         WHERE id = 1'
-    );
-    $stmt->bind_param('ii', $chargingThreshold, $fullThreshold);
-    $stmt->execute();
-    $stmt->close();
+    // Gefangen, weil diese Spalten aus Migration 007 stammen und deploy.py auf
+    // akadbrain GAR KEINE Migration ausfuehrt (s. den Hinweis am Ende von
+    // 006_wl_board_settings.sql). Zwischen Deploy und von Hand eingespielter
+    // Migration gibt es also ein Fenster, in dem die Spalten fehlen --
+    // mysqli_report(MYSQLI_REPORT_STRICT) macht daraus sonst einen Fatal auf
+    // der Adminseite, statt zu sagen, was zu tun ist. board_settings_load()
+    // faengt denselben Fall bereits ab (dort mit Rueckfall auf die Vorgaben,
+    // damit das E-Paper-Board nicht auf 503 faellt).
+    try {
+        $stmt = $con->prepare(
+            'UPDATE wl_board_settings
+             SET battery_empty_mv = ?, battery_full_mv = ?, battery_charging_mv = ?,
+                 battery_display_mode = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE id = 1'
+        );
+        $stmt->bind_param('iiis', $emptyMv, $fullMv, $chargingMv, $displayMode);
+        $stmt->execute();
+        $stmt->close();
+    } catch (mysqli_sql_exception $e) {
+        return 'Speichern nicht moeglich - vermutlich fehlt die Migration '
+             . '007_board_battery_volts.sql auf diesem Server. Bis dahin gelten die Vorgabewerte.';
+    }
 
     return null;
+}
+
+/**
+ * "4,13" / "4.13" / "4130" -> 4130 mV. Die Adminseite laesst Volt eintippen
+ * (so steht es auf jedem Messgeraet), gespeichert wird ganzzahlig in mV --
+ * Gleitkomma-Rundung hat in einer Kalibrierung nichts verloren.
+ *
+ * Werte ueber 100 gelten als bereits in mV eingegeben: 4,13 V und 4130 mV
+ * sind beide eindeutig, dazwischen gibt es keinen plausiblen Akkuwert.
+ */
+function board_settings_volt_input_to_mv(string $eingabe): ?int
+{
+    $eingabe = trim(str_replace(',', '.', $eingabe));
+    if ($eingabe === '' || !is_numeric($eingabe)) {
+        return null;
+    }
+    $zahl = (float) $eingabe;
+    return (int) round($zahl > 100 ? $zahl : $zahl * 1000);
 }
 
 /**

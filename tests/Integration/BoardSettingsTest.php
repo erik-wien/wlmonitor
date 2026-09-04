@@ -38,8 +38,10 @@ class BoardSettingsTest extends IntegrationTestCase
         $this->assertSame('', $settings['wifi_ssid']);
         $this->assertSame('WPA', $settings['wifi_encryption']);
         $this->assertFalse($settings['wifi_hidden']);
-        $this->assertSame(95, $settings['battery_charging_threshold']);
-        $this->assertSame(92, $settings['battery_full_threshold']);
+        $this->assertSame(BOARD_BATTERY_EMPTY_MV_DEFAULT, $settings['battery_empty_mv']);
+        $this->assertSame(BOARD_BATTERY_FULL_MV_DEFAULT, $settings['battery_full_mv']);
+        $this->assertSame(BOARD_BATTERY_CHARGING_MV_DEFAULT, $settings['battery_charging_mv']);
+        $this->assertSame('percent', $settings['battery_display_mode']);
         $this->assertSame('sender', $settings['mqtt_sender_user']);
         $this->assertSame('', $settings['mqtt_sender_password']);
     }
@@ -111,31 +113,59 @@ class BoardSettingsTest extends IntegrationTestCase
         $this->assertSame('', \board_settings_load($this->con)['wifi_ssid']);
     }
 
-    // --- Akku-Kalibrierung -------------------------------------------------
+    // --- Akku-Kalibrierung in VOLT (Nutzerbefund 2026-09-04) ----------------
+    //
+    // Frueher zwei Prozent-Schwellwerte. Die wirkten auf eine Zahl, die
+    // board_battery_percent_from_mv() aus einer fest verdrahteten mV-Spanne
+    // rechnete -- kalibriert wurde also eine Ableitung, deren Grundlage nie
+    // kalibriert war. Jetzt ist die Spanne selbst die Kalibrierung.
 
-    public function test_save_battery_persists(): void
+    public function test_save_battery_persists_millivolts_and_mode(): void
     {
-        $err = \board_settings_save_battery($this->con, 90, 85);
+        $err = \board_settings_save_battery($this->con, 3200, 4100, 4180, 'volt');
 
         $this->assertNull($err);
         $settings = \board_settings_load($this->con);
-        $this->assertSame(90, $settings['battery_charging_threshold']);
-        $this->assertSame(85, $settings['battery_full_threshold']);
+        $this->assertSame(3200, $settings['battery_empty_mv']);
+        $this->assertSame(4100, $settings['battery_full_mv']);
+        $this->assertSame(4180, $settings['battery_charging_mv']);
+        $this->assertSame('volt', $settings['battery_display_mode']);
     }
 
-    public function test_save_battery_rejects_full_at_or_above_charging(): void
+    public function test_save_battery_rejects_an_empty_voltage_at_or_above_full(): void
     {
-        $err = \board_settings_save_battery($this->con, 95, 95);
-        $this->assertNotNull($err);
-
-        $err = \board_settings_save_battery($this->con, 90, 95);
-        $this->assertNotNull($err);
+        // Sonst Division durch null bzw. invertierte Skala in
+        // board_battery_percent_from_mv().
+        $this->assertNotNull(\board_settings_save_battery($this->con, 4100, 4100, 4180, 'percent'));
+        $this->assertNotNull(\board_settings_save_battery($this->con, 4200, 4100, 4180, 'percent'));
     }
 
-    public function test_save_battery_rejects_out_of_range_values(): void
+    public function test_save_battery_rejects_a_charging_voltage_below_full(): void
     {
-        $this->assertNotNull(\board_settings_save_battery($this->con, 101, 50));
-        $this->assertNotNull(\board_settings_save_battery($this->con, 50, 0));
+        // Sonst erschiene der Blitz, bevor 100 % ueberhaupt erreichbar sind --
+        // der volle Ladestand waere nie zu sehen.
+        $this->assertNotNull(\board_settings_save_battery($this->con, 3300, 4100, 4050, 'percent'));
+    }
+
+    public function test_save_battery_rejects_voltages_outside_any_plausible_cell(): void
+    {
+        $this->assertNotNull(\board_settings_save_battery($this->con, 1000, 4100, 4180, 'percent'));
+        $this->assertNotNull(\board_settings_save_battery($this->con, 3300, 4100, 9000, 'percent'));
+    }
+
+    public function test_save_battery_rejects_an_unknown_display_mode(): void
+    {
+        $this->assertNotNull(\board_settings_save_battery($this->con, 3300, 4100, 4180, 'ampere'));
+    }
+
+    public function test_volt_input_accepts_comma_dot_and_raw_millivolts(): void
+    {
+        // Auf dem Messgeraet stehen Volt; gespeichert wird ganzzahlig in mV.
+        $this->assertSame(4130, \board_settings_volt_input_to_mv('4,13'));
+        $this->assertSame(4130, \board_settings_volt_input_to_mv('4.13'));
+        $this->assertSame(4130, \board_settings_volt_input_to_mv(' 4130 '), 'ueber 100 = schon mV');
+        $this->assertNull(\board_settings_volt_input_to_mv(''));
+        $this->assertNull(\board_settings_volt_input_to_mv('viereinhalb'));
     }
 
     // --- MQTT-Sender ---------------------------------------------------------

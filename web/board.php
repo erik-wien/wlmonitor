@@ -205,7 +205,13 @@ try {
     $boardSettings = board_settings_load($con);
 
     $batteryMv = $_SERVER['HTTP_X_DEVICE_BATTERY_MV'] ?? null;
-    $batteryPercent = is_numeric($batteryMv) ? board_battery_percent_from_mv((int) $batteryMv) : 0;
+    $batteryPercent = is_numeric($batteryMv)
+        ? board_battery_percent_from_mv(
+            (int) $batteryMv,
+            $boardSettings['battery_empty_mv'],
+            $boardSettings['battery_full_mv']
+        )
+        : 0;
     $rssi = $_SERVER['HTTP_X_DEVICE_RSSI'] ?? null;
     $wifiBars = is_numeric($rssi) ? board_wifi_bars_from_rssi((int) $rssi) : 0;
     // Firmware-Marke: seit 2026-08-22 serverseitig gerendert statt lokal aufs
@@ -308,8 +314,9 @@ SVG;
             !$forceSleepScreen,
             $calendar,
             $mqtt,
-            $boardSettings['battery_charging_threshold'],
-            $boardSettings['battery_full_threshold']
+            $batteryMv !== null && is_numeric($batteryMv) ? (int) $batteryMv : 0,
+            $boardSettings['battery_charging_mv'],
+            $boardSettings['battery_display_mode']
         );
     }
 

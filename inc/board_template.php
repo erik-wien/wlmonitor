@@ -211,13 +211,21 @@ function board_read_weather_icon(string $filename): string
 }
 
 /**
- * Fuellbreite des Akku-Balkens in Pixeln (0-48, proportional zu Prozent).
- * Das Akku-Icon sitzt im Kopfbereich bei transform="translate(1713,42)":
- * Umriss-Rechteck lokal x=0 width=56 (absolut x=1713-1769), Polklemme bei
- * lokal x=56 (absolut x=1769); der Fuellbalken beginnt bei lokal x=4
- * (absolut x=1717), also max. 48px breit. Minimum 2px, damit der Balken bei
- * sehr niedrigem Ladestand nicht komplett verschwindet (0% waere sonst nicht
- * von einem Rendering-Fehler zu unterscheiden).
+ * Fuellbreite des Akku-Balkens in Pixeln (0-48). Das Akku-Icon sitzt im
+ * Kopfbereich bei transform="translate(1713,42)": Umriss-Rechteck lokal x=0
+ * width=56 (absolut x=1713-1769), Polklemme bei lokal x=56 (absolut x=1769);
+ * der Fuellbalken beginnt bei lokal x=4 (absolut x=1717), also max. 48px breit.
+ *
+ * Fuellung STUFENLOS, nicht in Vierteln: der Balken wird als SVG-Rechteck
+ * gezeichnet, nicht aus festen Symbolen zusammengesetzt, also kostet jeder
+ * Zwischenwert nichts (Nutzerentscheidung 2026-09-04, nachdem eine
+ * Quantisierung auf 0/25/50/75/100 % erwogen war). Das naheliegende
+ * Gegenargument -- jede Pixelaenderung erzeugt einen Bilddiff -- traegt hier
+ * nicht: im selben Kopfbereich steht die Uhrzeit, der wird ohnehin jede
+ * Minute neu geschrieben.
+ *
+ * Minimum 2px: bei 0 % soll ein Rest sichtbar bleiben, sonst ist ein leerer
+ * Akku nicht von einem Rendering-Fehler zu unterscheiden.
  */
 function board_battery_fill_width(int $percent): int
 {
@@ -241,25 +249,30 @@ function board_render_chrome_svg(
     // und braucht die Spaltentrennlinie deshalb nicht. Kopf- und Fusszeile
     // bleiben identisch -- nur der senkrechte Strich entfaellt.
     bool $withColumnDivider = true,
-    // TASK-27: admin-konfigurierbar (wl_board_settings). Defaults = bisherige
-    // hartcodierte Werte, damit bestehende Aufrufer unveraendert bleiben.
-    int $batteryChargingThreshold = 95,
-    int $batteryFullThreshold = 92
+    // Gemessene Spannung des Geraets (X-Device-Battery-mV). Seit 2026-09-04
+    // die EINZIGE Grundlage der Anzeige -- $batteryPercent kommt zwar weiter
+    // vorberechnet herein (Aufrufer haben ihn ohnehin), die Entscheidung
+    // "laedt gerade" und die Beschriftung haengen aber an der Spannung.
+    // 0 = keine Messung im Request (dann kein Blitz, Balken auf 0).
+    int $batteryMv = 0,
+    // Admin-konfigurierbar (wl_board_settings, Migration 007).
+    int $batteryChargingMv = BOARD_BATTERY_CHARGING_MV_DEFAULT,
+    string $batteryDisplayMode = 'percent'
 ): string {
     $wifiBars = max(0, min(3, $wifiBars));
     $percent = max(0, min(100, $batteryPercent));
-    // Ab $batteryChargingThreshold ist am Ladekabel in Wahrheit "laedt
-    // gerade" -- Blitz statt Prozentzahl. $batteryFullThreshold bis knapp
-    // darunter ist laut Nutzerkalibrierung schon echte 100% (lineares
-    // Mapping unterschaetzt nahe der Vollladung), zeigt also "100 %" UND
-    // vollen Balken statt des rohen Werts (Nutzerkalibrierung 2026-08-22,
-    // board_battery_display_percent()).
-    $isCharging = board_battery_is_charging($percent, $batteryChargingThreshold);
-    $displayPercent = board_battery_display_percent($percent, $batteryFullThreshold, $batteryChargingThreshold);
-    $fillWidth = board_battery_fill_width($displayPercent);
+    // Oberhalb der Ladeschwelle ist der Messwert kein Ladestand mehr, sondern
+    // die Aussage "haengt am Kabel" -- Blitz statt Wert. Sonst je nach
+    // Schalterpille "87 %" oder "3,87 V"; der Balken fuellt sich in beiden
+    // Faellen nach Prozent.
+    $isCharging = $batteryMv > 0 && board_battery_is_charging_mv($batteryMv, $batteryChargingMv);
+    $fillWidth = board_battery_fill_width($percent);
     $percentSvg = $isCharging
         ? '<polygon points="1849,38 1839,52 1846,52 1843,64 1856,48 1848,48 1851,38" fill="black"/>'
-        : sprintf('<text x="1856" y="63" text-anchor="end" font-weight="bold" font-size="24">%d %%</text>', $displayPercent);
+        : sprintf(
+            '<text x="1856" y="63" text-anchor="end" font-weight="bold" font-size="24">%s</text>',
+            htmlspecialchars(board_battery_label($batteryMv, $percent, $batteryDisplayMode), ENT_XML1)
+        );
 
     $wifiBarSpecs = [
         ['x' => 0,  'y' => 10, 'h' => 8],
@@ -609,10 +622,11 @@ function board_render_svg(
     ?array $calendar = null,
     // TASK-26: null = keine MQTT-Seite (kein Cache vorhanden, s. board_mqtt_load()).
     ?array $mqtt = null,
-    // TASK-27: admin-konfigurierbar (wl_board_settings). Defaults = bisherige
-    // hartcodierte Werte, s. board_render_chrome_svg().
-    int $batteryChargingThreshold = 95,
-    int $batteryFullThreshold = 92
+    // Akku: gemessene Spannung + Kalibrierung, s. board_render_chrome_svg().
+    // 0 = keine Messung im Request.
+    int $batteryMv = 0,
+    int $batteryChargingMv = BOARD_BATTERY_CHARGING_MV_DEFAULT,
+    string $batteryDisplayMode = 'percent'
 ): string {
     $departurePages = board_paginate_departures($activeFavorite, 1);
     $totalDeparturePages = $departurePages['totalPages'];
@@ -655,7 +669,7 @@ function board_render_svg(
     $istVollbreiteSeite = $istKalenderSeite || $istMqttSeite;
     $chrome = board_render_chrome_svg(
         $renderedAt, $batteryPercent, $wifiBars, !$istVollbreiteSeite,
-        $batteryChargingThreshold, $batteryFullThreshold
+        $batteryMv, $batteryChargingMv, $batteryDisplayMode
     );
     $weatherSvg = $istVollbreiteSeite ? '' : board_render_weather_svg($weather, $firmwareBuild, $sun);
 

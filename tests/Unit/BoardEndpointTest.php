@@ -53,21 +53,36 @@ class BoardEndpointTest extends TestCase
 
     // --- board_battery_percent_from_mv() / board_wifi_bars_from_rssi() -------
 
-    public function test_battery_percent_clamps_at_full_lipo_voltage(): void
+    public function test_battery_percent_clamps_at_both_ends_of_the_calibrated_span(): void
     {
-        $this->assertSame(100, board_battery_percent_from_mv(4200));
+        $this->assertSame(100, board_battery_percent_from_mv(BOARD_BATTERY_FULL_MV_DEFAULT));
         $this->assertSame(100, board_battery_percent_from_mv(4500));
-    }
-
-    public function test_battery_percent_clamps_at_zero_below_lipo_floor(): void
-    {
-        $this->assertSame(0, board_battery_percent_from_mv(3300));
+        $this->assertSame(0, board_battery_percent_from_mv(BOARD_BATTERY_EMPTY_MV_DEFAULT));
         $this->assertSame(0, board_battery_percent_from_mv(2900));
     }
 
     public function test_battery_percent_is_linear_at_midpoint(): void
     {
-        $this->assertSame(50, board_battery_percent_from_mv(3750));
+        $mitte = (int) ((BOARD_BATTERY_EMPTY_MV_DEFAULT + BOARD_BATTERY_FULL_MV_DEFAULT) / 2);
+        $this->assertSame(50, board_battery_percent_from_mv($mitte));
+    }
+
+    public function test_battery_span_is_calibratable(): void
+    {
+        // Der eigentliche Punkt der Umstellung (Nutzerbefund 2026-09-04):
+        // die SPANNE ist die Kalibrierung, nicht ein Schwellwert dahinter.
+        $this->assertSame(0,   board_battery_percent_from_mv(3000, 3000, 4000));
+        $this->assertSame(50,  board_battery_percent_from_mv(3500, 3000, 4000));
+        $this->assertSame(100, board_battery_percent_from_mv(4000, 3000, 4000));
+    }
+
+    public function test_an_inverted_span_falls_back_instead_of_dividing_by_zero(): void
+    {
+        // Die Speicherfunktion laesst das nicht zu -- dieser Wert fliesst
+        // aber in ein BILD, und ein Fehler waere am Geraet nicht zu
+        // diagnostizieren.
+        $this->assertSame(50, board_battery_percent_from_mv(3714, 4000, 4000));
+        $this->assertSame(50, board_battery_percent_from_mv(3714, 4200, 3300));
     }
 
     public function test_wifi_bars_thresholds(): void

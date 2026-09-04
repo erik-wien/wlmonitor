@@ -87,89 +87,78 @@ class BoardTemplateChromeTest extends TestCase
         $this->assertStringContainsString('translate(1713,42)', $svg, 'Akku-Icon-Ursprung (linker Rand 1713 > WLAN-rechter-Rand 1697)');
     }
 
-    // --- Lade-Erkennung (Nutzerkalibrierung 2026-08-22, verschaerft auf >=95%) --
+    // --- Lade-Erkennung ueber SPANNUNG (Nutzerbefund 2026-09-04) ------------
+    //
+    // Frueher verglich board_battery_is_charging() PROZENT. Das Prozent haengt
+    // seinerseits an der Kalibrierung -- eine Schwelle darauf haette sich bei
+    // jeder Aenderung der Spanne stillschweigend mitverschoben.
 
-    public function test_battery_is_charging_from_95_percent(): void
+    public function test_charging_is_decided_on_millivolts(): void
     {
-        $this->assertTrue(board_battery_is_charging(95));
-        $this->assertTrue(board_battery_is_charging(97));
-        $this->assertTrue(board_battery_is_charging(100));
+        $this->assertTrue(board_battery_is_charging_mv(4155));
+        $this->assertTrue(board_battery_is_charging_mv(4200));
+        $this->assertFalse(board_battery_is_charging_mv(4154));
+        $this->assertFalse(board_battery_is_charging_mv(3700));
     }
 
-    public function test_battery_is_not_charging_below_95_percent(): void
+    public function test_charging_threshold_is_configurable(): void
     {
-        $this->assertFalse(board_battery_is_charging(94));
-        $this->assertFalse(board_battery_is_charging(50));
-        $this->assertFalse(board_battery_is_charging(0));
+        $this->assertTrue(board_battery_is_charging_mv(4000, 4000));
+        $this->assertFalse(board_battery_is_charging_mv(3999, 4000));
+        $this->assertFalse(board_battery_is_charging_mv(4000), 'Vorgabe bleibt 4155');
     }
 
-    // --- Konfigurierbare Schwellwerte (TASK-27, wl_board_settings) -----------
-
-    public function test_battery_is_charging_respects_custom_threshold(): void
+    public function test_chrome_shows_lightning_bolt_instead_of_a_value_when_charging(): void
     {
-        $this->assertTrue(board_battery_is_charging(90, 90));
-        $this->assertFalse(board_battery_is_charging(89, 90));
-        // Default bleibt 95, wenn nicht uebergeben.
-        $this->assertFalse(board_battery_is_charging(90));
-    }
-
-    public function test_battery_display_percent_respects_custom_thresholds(): void
-    {
-        $this->assertSame(100, board_battery_display_percent(85, 80, 90));
-        $this->assertSame(79, board_battery_display_percent(79, 80, 90));
-        $this->assertSame(90, board_battery_display_percent(90, 80, 90), 'ab chargingThreshold zeigt is_charging() den Blitz, nicht display_percent()');
-    }
-
-    public function test_chrome_uses_custom_battery_thresholds(): void
-    {
-        // 88% ist mit den Standard-Schwellwerten (92/95) weder "voll" noch
-        // "laedt", mit 85/90 als Custom-Werten aber "voll" (Blitz waere erst
-        // ab 90).
-        $svg = board_render_chrome_svg(new DateTimeImmutable(), 88, 3, true, 90, 85);
-
-        $this->assertStringContainsString('>100 %<', $svg);
-        $this->assertStringNotContainsString('<polygon', $svg, 'unter dem Custom-Lade-Schwellwert 90, kein Blitz');
-    }
-
-    public function test_chrome_shows_lightning_bolt_instead_of_percent_when_charging(): void
-    {
-        $svg = board_render_chrome_svg(new DateTimeImmutable(), 97, 3);
+        $svg = board_render_chrome_svg(new DateTimeImmutable(), 97, 3, true, 4180);
 
         $this->assertStringNotContainsString('97 %', $svg);
         $this->assertStringContainsString('<polygon', $svg, 'Blitz-Symbol');
     }
 
-    public function test_chrome_shows_percent_when_not_charging(): void
+    public function test_chrome_shows_the_value_when_not_charging(): void
     {
-        $svg = board_render_chrome_svg(new DateTimeImmutable(), 80, 3);
+        $svg = board_render_chrome_svg(new DateTimeImmutable(), 80, 3, true, 3900);
 
         $this->assertStringContainsString('>80 %<', $svg);
         $this->assertStringNotContainsString('<polygon', $svg);
     }
 
-    // --- Anzeige-Korrektur 92-94% -> 100% (Nutzerkalibrierung 2026-08-22) -----
-
-    public function test_battery_display_percent_rounds_92_to_94_up_to_100(): void
+    public function test_chrome_without_a_measurement_never_shows_the_bolt(): void
     {
-        $this->assertSame(100, board_battery_display_percent(92));
-        $this->assertSame(100, board_battery_display_percent(93));
-        $this->assertSame(100, board_battery_display_percent(94));
+        // $batteryMv = 0 heisst "keine Messung im Request" (der Header ist
+        // optional) -- ein Blitz waere dort eine Behauptung ueber Hardware,
+        // von der nichts bekannt ist.
+        $svg = board_render_chrome_svg(new DateTimeImmutable(), 0, 3);
+
+        $this->assertStringNotContainsString('<polygon', $svg);
     }
 
-    public function test_battery_display_percent_leaves_other_values_unchanged(): void
+    // --- Schalterpille % / Volt (Nutzerwunsch 2026-09-04) -------------------
+
+    public function test_label_shows_percent_or_volt_depending_on_the_mode(): void
     {
-        $this->assertSame(91, board_battery_display_percent(91));
-        $this->assertSame(95, board_battery_display_percent(95));
-        $this->assertSame(50, board_battery_display_percent(50));
-        $this->assertSame(0, board_battery_display_percent(0));
+        $this->assertSame('87 %', board_battery_label(3987, 87, 'percent'));
+        $this->assertSame('3,99 V', board_battery_label(3987, 87, 'volt'), 'deutsches Dezimalkomma');
+        $this->assertSame('4,20 V', board_battery_label(4200, 100, 'volt'));
     }
 
-    public function test_chrome_shows_100_percent_and_full_bar_for_92_to_94_raw(): void
+    public function test_chrome_renders_volts_when_that_mode_is_set(): void
     {
-        $svg = board_render_chrome_svg(new DateTimeImmutable(), 93, 3);
+        $svg = board_render_chrome_svg(new DateTimeImmutable(), 62, 3, true, 3850, 4155, 'volt');
 
-        $this->assertStringContainsString('>100 %<', $svg);
-        $this->assertStringContainsString('width="48"', $svg, 'voller Balken bei angezeigten 100%');
-        $this->assertStringNotContainsString('<polygon', $svg, '92-94% ist noch kein Laden, s. board_battery_is_charging()');
+        $this->assertStringContainsString('3,85 V', $svg);
+        $this->assertStringNotContainsString('62 %', $svg);
+    }
+
+    public function test_the_bar_follows_percent_in_both_modes(): void
+    {
+        // Ein Balken ist ein Balken -- nur die Beschriftung wechselt.
+        $prozent = board_render_chrome_svg(new DateTimeImmutable(), 50, 3, true, 3714, 4155, 'percent');
+        $volt    = board_render_chrome_svg(new DateTimeImmutable(), 50, 3, true, 3714, 4155, 'volt');
+
+        $breite = sprintf('width="%d"', board_battery_fill_width(50));
+        $this->assertStringContainsString($breite, $prozent);
+        $this->assertStringContainsString($breite, $volt);
     }
 }

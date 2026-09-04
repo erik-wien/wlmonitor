@@ -87,15 +87,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: board_settings.php?saved=wifi#wifi'); exit;
         }
     } elseif ($action === 'save_battery') {
+        // Eingabe in Volt (so steht es auf jedem Messgeraet), gespeichert in
+        // mV -- s. board_settings_volt_input_to_mv().
+        $mv = static fn (string $feld): ?int
+            => board_settings_volt_input_to_mv((string) ($_POST[$feld] ?? ''));
         $form = [
-            'battery_charging_threshold' => (int) ($_POST['battery_charging_threshold'] ?? 0),
-            'battery_full_threshold'     => (int) ($_POST['battery_full_threshold'] ?? 0),
+            'battery_empty_mv'     => $mv('battery_empty_v'),
+            'battery_full_mv'      => $mv('battery_full_v'),
+            'battery_charging_mv'  => $mv('battery_charging_v'),
+            'battery_display_mode' => ($_POST['battery_display_mode'] ?? '') === 'volt' ? 'volt' : 'percent',
         ];
-        $batteryError = board_settings_save_battery(
-            $con,
-            $form['battery_charging_threshold'],
-            $form['battery_full_threshold']
-        );
+        if (in_array(null, [$form['battery_empty_mv'], $form['battery_full_mv'], $form['battery_charging_mv']], true)) {
+            $batteryError = 'Alle drei Spannungen muessen Zahlen sein (z.B. 4,13).';
+        } else {
+            $batteryError = board_settings_save_battery(
+                $con,
+                $form['battery_empty_mv'],
+                $form['battery_full_mv'],
+                $form['battery_charging_mv'],
+                $form['battery_display_mode']
+            );
+        }
         if ($batteryError === null) {
             appendLog($con, 'admin', 'Board-Einstellungen: Akku-Kalibrierung geaendert.');
             header('Location: board_settings.php?saved=battery#battery'); exit;
@@ -191,22 +203,53 @@ $e = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
   <div class="app-card" id="battery">
     <div class="app-card-header">Akku-Kalibrierung</div>
     <div class="app-card-body">
-      <p class="form-text">Ab dem Lade-Schwellwert zeigt das Board ein Blitz-Symbol statt einer Prozentzahl. Zwischen "voll" und "lädt" wird 100&nbsp;% angezeigt.</p>
+      <p class="form-text">
+        Kalibriert wird in <strong>Volt</strong>, nicht in Prozent: das Gerät misst Spannung, die
+        Prozentzahl entsteht erst hier daraus. Die Prozent-Schwellwerte von früher stellten an einer
+        Zahl, deren Herleitung selbst nie kalibriert war.
+      </p>
       <?php if ($batteryError !== null): ?>
         <div class="app-alert app-alert-danger py-2" role="alert"><?= $e($batteryError) ?></div>
       <?php endif; ?>
+      <?php $volt = static fn (int $mv): string => number_format($mv / 1000, 2, ',', ''); ?>
       <form method="post" action="board_settings.php#battery">
         <input type="hidden" name="csrf_token" value="<?= $e($csrfToken) ?>">
         <input type="hidden" name="action" value="save_battery">
         <div class="form-group">
-          <label class="form-label" for="battery_full_threshold">"Voll"-Schwellwert (%)</label>
-          <input type="number" class="form-control" id="battery_full_threshold" name="battery_full_threshold"
-                 min="1" max="100" value="<?= (int) $settings['battery_full_threshold'] ?>">
+          <label class="form-label" for="battery_empty_v">Leer &ndash; hier wird 0&nbsp;% angezeigt (V)</label>
+          <input type="text" inputmode="decimal" class="form-control" id="battery_empty_v" name="battery_empty_v"
+                 value="<?= $e($volt((int) $settings['battery_empty_mv'])) ?>">
         </div>
         <div class="form-group">
-          <label class="form-label" for="battery_charging_threshold">Lade-Schwellwert (%)</label>
-          <input type="number" class="form-control" id="battery_charging_threshold" name="battery_charging_threshold"
-                 min="1" max="100" value="<?= (int) $settings['battery_charging_threshold'] ?>">
+          <label class="form-label" for="battery_full_v">Voll &ndash; hier wird 100&nbsp;% angezeigt (V)</label>
+          <input type="text" inputmode="decimal" class="form-control" id="battery_full_v" name="battery_full_v"
+                 value="<?= $e($volt((int) $settings['battery_full_mv'])) ?>">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="battery_charging_v">Lädt &ndash; ab hier Blitz statt Wert (V)</label>
+          <input type="text" inputmode="decimal" class="form-control" id="battery_charging_v" name="battery_charging_v"
+                 value="<?= $e($volt((int) $settings['battery_charging_mv'])) ?>">
+          <small class="form-text">
+            Am Ladekabel treibt die Ladeschaltung die Spannung über das, was ein ruhender Akku je
+            erreicht &mdash; darüber ist der Messwert kein Ladestand mehr.
+          </small>
+        </div>
+        <div class="form-group">
+          <span class="form-label d-block">Anzeige am Display</span>
+          <div class="btn-group" role="group">
+            <?php foreach (['percent' => '%', 'volt' => 'Volt'] as $wert => $beschriftung): ?>
+              <?php $aktiv = $settings['battery_display_mode'] === $wert; ?>
+              <input type="radio" class="btn-check" name="battery_display_mode" id="mode_<?= $e($wert) ?>"
+                     value="<?= $e($wert) ?>"<?= $aktiv ? ' checked' : '' ?>>
+              <label class="btn <?= $aktiv ? 'btn-primary' : 'btn-outline-primary' ?>" for="mode_<?= $e($wert) ?>">
+                <?= $e($beschriftung) ?>
+              </label>
+            <?php endforeach; ?>
+          </div>
+          <small class="form-text">
+            Der Balken füllt sich in beiden Fällen stufenlos nach Prozent &mdash; nur die
+            Beschriftung wechselt.
+          </small>
         </div>
         <button type="submit" class="btn btn-outline-danger">Speichern</button>
       </form>

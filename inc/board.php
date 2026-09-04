@@ -296,50 +296,72 @@ function board_filter_alerts_for_favorite(array $alerts, array $favorite): array
     }));
 }
 
+/** Vorgaben, falls die Einstellungen (noch) nicht aus der DB kommen --
+ *  entsprechen dem Verhalten vor der Umstellung auf Spannung, zurueckgerechnet
+ *  aus der frueheren festen Spanne 3300..4200 mV: 92 % = 4128 mV, 95 % = 4155 mV. */
+const BOARD_BATTERY_EMPTY_MV_DEFAULT    = 3300;
+const BOARD_BATTERY_FULL_MV_DEFAULT     = 4128;
+const BOARD_BATTERY_CHARGING_MV_DEFAULT = 4155;
+
 /**
- * Roher Akku-Millivolt-Wert -> grober Prozentwert (Spec §3, §13: bewusst
- * keine kalibrierte Fuel-Gauge-Kurve). Lineare Spreizung ueber den ueblichen
- * LiPo-Nutzbereich (3300-4200 mV), geklemmt auf 0-100.
+ * Gemessene Millivolt -> Prozent, linear zwischen den beiden kalibrierten
+ * Spannungen, geklemmt auf 0..100.
+ *
+ * Frueher stand hier eine FEST VERDRAHTETE Spanne 3300..4200, auf deren
+ * Ergebnis dann zwei Prozent-Schwellwerte wirkten -- kalibriert wurde also
+ * eine abgeleitete Zahl, deren Herleitung selbst nie kalibriert war
+ * (Nutzerbefund 2026-09-04: "Sie ueber die % zu kalibrieren war auch ein
+ * Bloedsinn"). Jetzt ist die Spanne SELBST die Kalibrierung, und die beiden
+ * Prozent-Schwellwerte entfallen ersatzlos: dass "92-94 % in Wahrheit voll"
+ * waren, war nur das Symptom eines zu hoch angesetzten oberen Endes.
+ *
+ * $fullMv <= $emptyMv waere eine Division durch null bzw. eine invertierte
+ * Skala. Die Speicherfunktion laesst das nicht zu (board_settings_save_battery());
+ * hier wird trotzdem abgefangen, weil dieser Wert in ein BILD fliesst und ein
+ * Fehler am Geraet nicht zu diagnostizieren ist.
  */
-function board_battery_percent_from_mv(int $mv): int
-{
-    $percent = (int) round(($mv - 3300) / (4200 - 3300) * 100);
+function board_battery_percent_from_mv(
+    int $mv,
+    int $emptyMv = BOARD_BATTERY_EMPTY_MV_DEFAULT,
+    int $fullMv = BOARD_BATTERY_FULL_MV_DEFAULT
+): int {
+    if ($fullMv <= $emptyMv) {
+        $emptyMv = BOARD_BATTERY_EMPTY_MV_DEFAULT;
+        $fullMv  = BOARD_BATTERY_FULL_MV_DEFAULT;
+    }
+
+    $percent = (int) round(($mv - $emptyMv) / ($fullMv - $emptyMv) * 100);
     return max(0, min(100, $percent));
 }
 
 /**
- * Am USB-Ladekabel liegt die gemessene Spannung ueber dem, was ein
- * entladener/ruhender LiPo bei "echten" 100% haette (Ladeschaltung treibt
- * sie waehrend des Ladevorgangs hoeher) -- ab 95% (Nutzerkalibrierung
- * 2026-08-22, verschaerft von urspruenglich >96%) ist das in Wahrheit
- * "laedt gerade", kein plausibler Ladestand. Schwellwert fuer die
- * Entladeseite (0%/fast leer) noch nicht kalibriert --
- * board_battery_percent_from_mv() bleibt dort unveraendert.
+ * Am USB-Ladekabel treibt die Ladeschaltung die Spannung ueber das, was ein
+ * ruhender LiPo je erreicht -- oberhalb dieser Schwelle ist der Messwert kein
+ * Ladestand mehr, sondern die Aussage "haengt am Kabel". Deshalb Blitz statt
+ * Zahl.
  *
- * $chargingThreshold ist seit TASK-27 ueber die Board-Einstellungen
- * (wl_board_settings, board_settings_load()) admin-konfigurierbar -- der
- * Default bleibt der bisherige hartcodierte Wert, damit bestehende Aufrufer
- * ohne den Parameter unveraendert funktionieren.
+ * Vergleicht jetzt SPANNUNG statt Prozent: das Prozent haengt seinerseits an
+ * der Kalibrierung, eine Schwelle darauf haette sich bei jeder Aenderung der
+ * Spanne stillschweigend mitverschoben.
  */
-function board_battery_is_charging(int $percent, int $chargingThreshold = 95): bool
+function board_battery_is_charging_mv(int $mv, int $chargingMv = BOARD_BATTERY_CHARGING_MV_DEFAULT): bool
 {
-    return $percent >= $chargingThreshold;
+    return $mv >= $chargingMv;
 }
 
 /**
- * Das lineare mV->%-Mapping unterschaetzt nahe der Vollladung (die LiPo-
- * Spannungskurve flacht dort ab) -- 92-94% roh sind laut Nutzerkalibrierung
- * 2026-08-22 in Wahrheit schon 100% voll (nur noch nicht am Ladekabel, das
- * waere >=95%, s. board_battery_is_charging()). Nur fuer die ANZEIGE
- * (Text + Balkenfuellung); board_battery_percent_from_mv() selbst bleibt
- * der rohe Messwert.
+ * Beschriftung neben dem Balken: "87 %" oder "3,87 V" (Nutzerwunsch
+ * 2026-09-04: Schalterpille in den Board-Einstellungen). Der BALKEN fuellt
+ * sich in beiden Faellen nach Prozent -- ein Balken ist ein Balken.
  *
- * $fullThreshold/$chargingThreshold s. board_battery_is_charging() -- der
- * "voll"-Bereich ist [$fullThreshold, $chargingThreshold).
+ * Komma als Dezimaltrenner: das Board beschriftet durchgehend deutsch.
  */
-function board_battery_display_percent(int $percent, int $fullThreshold = 92, int $chargingThreshold = 95): int
+function board_battery_label(int $mv, int $percent, string $mode): string
 {
-    return ($percent >= $fullThreshold && $percent < $chargingThreshold) ? 100 : $percent;
+    if ($mode === 'volt') {
+        return number_format($mv / 1000, 2, ',', '') . ' V';
+    }
+    return $percent . ' %';
 }
 
 /**
