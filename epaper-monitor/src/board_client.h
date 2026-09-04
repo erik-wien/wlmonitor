@@ -12,6 +12,20 @@ enum class BoardFetchOutcome {
     UnreadableResponse,  // headers missing/malformed or Content-Length mismatch
 };
 
+// Zeitverhalten, wie es der Server mitschickt (X-Board-*-Sec / -Hour, s.
+// web/board.php). present == false heisst "diese Antwort trug keine Angabe"
+// -- dann behaelt main.cpp seine bisherigen Werte, statt auf 0 zu springen.
+// Getrennt gemeldet, weil quietEndHour == 0 (Mitternacht) ein gueltiger Wert
+// ist und sich sonst nicht von "fehlt" unterscheiden liesse.
+struct BoardTiming {
+    bool present = false;
+    uint32_t idleTimeoutSec = 0;
+    uint32_t refreshIntervalSec = 0;
+    uint32_t wakeIntervalSec = 0;
+    int quietStartHour = 0;
+    int quietEndHour = 0;
+};
+
 struct BoardFetchResult {
     BoardFetchOutcome outcome = BoardFetchOutcome::NetworkUnavailable;
     ParsedBoardResponse parsed;   // only meaningful when outcome == Success
@@ -29,6 +43,10 @@ struct BoardFetchResult {
     // bedeutet -- ebenfalls ausserhalb von ParsedBoardResponse, aus demselben
     // Grund wie snapshotRequested.
     bool isSleepPage = false;
+    // Zeitverhalten vom Server (s. BoardTiming). Wie snapshotRequested und
+    // isSleepPage ausserhalb von ParsedBoardResponse: kein Teil des strikt
+    // getesteten Kern-Bildprotokolls, sondern ein Steuer-Seitenkanal.
+    BoardTiming timing;
     // X-Board-Delete-Zones (TASK-28), roh: "<id>:<x>,<y>,<w>,<h>;..." fuer die
     // Loesch-X der Nachrichtenkarten. Nur auf der MQTT-Seite gesetzt, sonst
     // leer. Zerlegt wird in main.cpp (parseDeleteZones(), lib/boardlogic) --

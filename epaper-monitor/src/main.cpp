@@ -51,7 +51,28 @@ RTC_DATA_ATTR int rtcDeleteZoneCount = 0;
 // sichtbare Verschiebung/Reste genau im Logo-Bereich, wo der Fehler-Banner
 // sitzt). rtcBannerShown erzwingt ein Vollbild, sobald der Banner mal
 // gezeichnet wurde, bis der naechste Erfolg das ganze Panel neu synchronisiert.
+// RUECKFALL-Werte. Massgeblich sind seit 2026-09-04 die Server-Einstellungen
+// (wl_board_settings -> X-Board-Idle-Timeout-Sec / -Refresh-Interval-Sec,
+// gehalten in rtcIdleTimeoutSec / rtcRefreshIntervalSec). Diese Konstanten
+// gelten nur beim allerersten Start oder wenn noch nie ein Abruf glueckte.
+static const uint32_t ACTIVE_IDLE_TIMEOUT_MS_DEFAULT = 10UL * 60 * 1000;  // 10 Minuten
+static const uint32_t REFRESH_INTERVAL_MS_DEFAULT    = 25UL * 1000;       // 25 Sekunden
+
 RTC_DATA_ATTR bool rtcBannerShown = false;
+
+// Zeitverhalten vom Server (Nutzerwunsch 2026-09-04). Im RTC-Speicher, weil
+// der Wert GEBRAUCHT wird, bevor der naechste Abruf ihn liefern koennte:
+// goToSleep() rechnet den Weckzeitpunkt aus, und wenn ausgerechnet dieser
+// Abruf fehlgeschlagen ist, gibt es sonst nichts als die Vorgabe. Ueber den
+// Tiefschlaf gehalten heisst: der letzte bekannte Stand gilt weiter.
+//
+// Nicht dauerhaft (Stromausfall loescht auch RTC) -- deshalb schickt der
+// Server die Header bei JEDER Antwort mit, nicht nur bei Aenderungen.
+RTC_DATA_ATTR uint32_t rtcIdleTimeoutSec     = ACTIVE_IDLE_TIMEOUT_MS_DEFAULT / 1000;
+RTC_DATA_ATTR uint32_t rtcRefreshIntervalSec = REFRESH_INTERVAL_MS_DEFAULT / 1000;
+RTC_DATA_ATTR uint32_t rtcWakeIntervalSec    = WAKE_SCHEDULE_INTERVAL_SECONDS_DEFAULT;
+RTC_DATA_ATTR int rtcQuietStartHour          = WAKE_SCHEDULE_QUIET_START_HOUR_DEFAULT;
+RTC_DATA_ATTR int rtcQuietEndHour            = WAKE_SCHEDULE_QUIET_END_HOUR_DEFAULT;
 
 // PATCHES SIND ABGESCHAFFT (Messung 2026-08-22, fw43 am echten Geraet).
 //
@@ -87,13 +108,11 @@ static const uint32_t WIFI_PORTAL_TIMEOUT_S = 180;
 // Aktion ist Bloedsinn". Nach MANUELLEM Wecken (Taste) bleibt das Geraet in
 // einer ECHTEN Schleife wach -- kein Deep Sleep zwischen einzelnen Aktionen.
 // Eingaben werden sofort quittiert, Inhalt laedt periodisch nach. Erst nach
-// ACTIVE_IDLE_TIMEOUT_MS ohne Eingabe geht es in den Tiefschlaf zurueck.
+// rtcIdleTimeoutSec ohne Eingabe geht es in den Tiefschlaf zurueck.
 // 5 -> 10 Minuten (Nutzervorgabe 2026-08-23: "10 Minuten wach mit 25sec
 // polling nur nach manuellem aufwecken") -- gilt seither NUR noch fuer
 // manuelles Wecken, automatisches (Timer-)Wecken durchlaeuft diese Schleife
 // gar nicht mehr (ein Abruf, sofort zurueck in den Schlaf, s. setup()).
-static const uint32_t ACTIVE_IDLE_TIMEOUT_MS = 10UL * 60 * 1000;  // 10 Minuten
-static const uint32_t REFRESH_INTERVAL_MS    = 25UL * 1000;      // 25 Sekunden
 static const uint32_t INPUT_POLL_MS          = 30;               // wie Seeeds Touch-Beispiel
 // POST_HIT_COOLDOWN_MS (900ms) entfernt (2026-08-22): seit fw31 verhindert
 // der Press/Release-Zustand in runActiveSession() (touchDown/buttonDown)
@@ -338,7 +357,8 @@ static void goToSleep() {
     // Geraet nicht fuer den Rest der Nacht verstummen laesst.
     struct tm localNow;
     const uint32_t sleepSeconds = getLocalTime(&localNow, 100)
-        ? secondsUntilNextAutomaticWake(localNow.tm_hour, localNow.tm_min, localNow.tm_sec)
+        ? secondsUntilNextAutomaticWake(localNow.tm_hour, localNow.tm_min, localNow.tm_sec,
+                                        rtcWakeIntervalSec, rtcQuietStartHour, rtcQuietEndHour)
         : NETWORK_RETRY_INTERVAL_SEC;
     Serial.printf("[sleep] naechstes automatisches Wecken in %lu s\n", (unsigned long) sleepSeconds);
 
@@ -432,6 +452,25 @@ static bool fetchAndRender(const String& token, const char* touchValue, bool for
             wasFullFrame = true;
         }
         rtcBannerShown = false;
+
+        // Zeitverhalten vom Server uebernehmen (Nutzerwunsch 2026-09-04).
+        // Nur wenn die Antwort es wirklich trug: ein aelterer Server oder
+        // eine Antwort ohne die Header darf die zuletzt bekannten Werte NICHT
+        // auf null setzen -- das Geraet wuerde sonst in einen Weckzyklus ohne
+        // Pause laufen und den Akku in Stunden leeren.
+        if (fetch.timing.present) {
+            if (fetch.timing.idleTimeoutSec > 0)     rtcIdleTimeoutSec     = fetch.timing.idleTimeoutSec;
+            if (fetch.timing.refreshIntervalSec > 0) rtcRefreshIntervalSec = fetch.timing.refreshIntervalSec;
+            if (fetch.timing.wakeIntervalSec > 0)    rtcWakeIntervalSec    = fetch.timing.wakeIntervalSec;
+            // Stunden duerfen 0 sein (Mitternacht) -- deshalb ohne >0-Pruefung,
+            // gerettet allein durch fetch.timing.present.
+            rtcQuietStartHour = fetch.timing.quietStartHour;
+            rtcQuietEndHour   = fetch.timing.quietEndHour;
+            Serial.printf("[timing] idle=%lus refresh=%lus wake=%lus ruhe=%d..%d\n",
+                          (unsigned long) rtcIdleTimeoutSec, (unsigned long) rtcRefreshIntervalSec,
+                          (unsigned long) rtcWakeIntervalSec, rtcQuietStartHour, rtcQuietEndHour);
+        }
+
         strncpy(rtcLastEtag, fetch.parsed.etag.c_str(), sizeof(rtcLastEtag) - 1);
         rtcLastEtag[sizeof(rtcLastEtag) - 1] = '\0';
         rtcLastFavoriteCount = fetch.parsed.favoriteCount;
@@ -471,9 +510,9 @@ static bool fetchAndRender(const String& token, const char* touchValue, bool for
     return outcome == FetchOutcome::Success;
 }
 
-// Bleibt wach, bis ACTIVE_IDLE_TIMEOUT_MS lang keine Eingabe mehr kam.
+// Bleibt wach, bis rtcIdleTimeoutSec lang keine Eingabe mehr kam.
 // Eingaben (Touch/Tasten) loesen sofort einen Abruf aus; ohne Eingabe wird
-// trotzdem alle REFRESH_INTERVAL_MS nachgeladen.
+// trotzdem alle rtcRefreshIntervalSec nachgeladen.
 //
 // NUR fuer manuelles (Tasten-)Wecken (Nutzervorgabe 2026-08-23: "10 Minuten
 // wach mit 25sec polling nur nach manuellem aufwecken") -- automatisches
@@ -517,7 +556,7 @@ static void runActiveSession(const String& token) {
     // Flackern -- readPageButtons()/isFullUpdateButtonHeld() entprellen die
     // Flanke bereits selbst (~50ms, s. buttons.cpp).
     bool buttonDown = false;
-    uint32_t lastRefresh = millis(); // naechster automatischer Refresh erst in REFRESH_INTERVAL_MS
+    uint32_t lastRefresh = millis(); // naechster automatischer Refresh erst in rtcRefreshIntervalSec
 
     // Die linke Taste (KEY2) wird KOMPLETT hier behandelt, nicht mehr ueber
     // readPageButtons(): kurz = "Seite zurueck" (erst beim LOSLASSEN, sonst
@@ -528,7 +567,7 @@ static void runActiveSession(const String& token) {
     bool key2ConsumedByAdmin = false;
     const uint32_t ADMIN_TRIGGER_HOLD_MS = 3000;
 
-    while (millis() - lastActivity < ACTIVE_IDLE_TIMEOUT_MS) {
+    while (millis() - lastActivity < rtcIdleTimeoutSec * 1000UL) {
         const char* touchValue = nullptr;
         bool forceFull = false;
         // Puffer fuer "page_<N>" (TouchZone::Page, TASK-25) -- der Wert ist
@@ -620,7 +659,7 @@ static void runActiveSession(const String& token) {
                     // Schlafschirm gibt es keine Abfahrten zum Aktualisieren --
                     // "Vollupdate" waere hier bedeutungslos. Stattdessen bricht
                     // ein Druck auf die gruene Taste sofort in den Tiefschlaf
-                    // ab, statt den Rest von ACTIVE_IDLE_TIMEOUT_MS zu warten.
+                    // ab, statt den Rest von rtcIdleTimeoutSec zu warten.
                     beepConfirm();
                     Serial.println("[active] gruene Taste auf Schlafschirm -- sofort schlafen");
                     break;
@@ -633,7 +672,7 @@ static void runActiveSession(const String& token) {
             buttonDown = false;
         }
 
-        bool dueForRefresh = (millis() - lastRefresh >= REFRESH_INTERVAL_MS);
+        bool dueForRefresh = (millis() - lastRefresh >= rtcRefreshIntervalSec * 1000UL);
         if (touchValue != nullptr || forceFull || dueForRefresh) {
             fetchAndRender(token, touchValue, forceFull);
             lastRefresh = millis();
@@ -726,13 +765,22 @@ void setup() {
     syncTimeForTls();
 
     if (wokenByTimer) {
-        // Automatisches Wecken (Nutzervorgabe 2026-08-23): EIN Abruf, KEIN
-        // Piep (niemand steht davor), sofort zurueck in den Schlaf -- keine
-        // 10-Minuten-Aktiv-Session. Zeigt die zuletzt aktive Abfahrtenseite
-        // (nicht den Schlafschirm): stuendliche Abfahrtsdaten sind noch
-        // brauchbar frisch, anders als nach einer stundenlangen Funkstille.
-        Serial.println("[boot] automatisches Wecken -- ein Abruf, kein Piep");
-        fetchAndRender(token, nullptr, false);
+        // Automatisches Wecken: EIN Abruf, KEIN Piep (niemand steht davor),
+        // sofort zurueck in den Schlaf -- keine Aktiv-Session. Zeigt die
+        // zuletzt aktive Abfahrtenseite (nicht den Schlafschirm): stuendliche
+        // Abfahrtsdaten sind noch brauchbar frisch, anders als nach einer
+        // stundenlangen Funkstille.
+        //
+        // forceFull = true (Nutzervorgabe 2026-09-04, kehrt die Vorgabe vom
+        // 2026-08-23 um): jedes automatische Wecken zeichnet das Panel
+        // VOLLSTAENDIG neu, nicht als Patch. Frueher war das Argument
+        // "Geflacker vermeiden" -- der Nutzer hat es verworfen, und in der
+        // Sache mit Recht: bei stuendlichem Abstand ist ein einzelner
+        // Vollbild-Durchlauf nichts gegen die Geisterbilder, die sich sonst
+        // ueber einen ganzen Tag aus lauter Patches ansammeln. E-Ink braucht
+        // den vollen Durchlauf, um Reste auszuloeschen.
+        Serial.println("[boot] automatisches Wecken -- ein Vollbild-Abruf, kein Piep");
+        fetchAndRender(token, nullptr, true);
     } else {
         // Touch-/Tastenpruefung startet HIER, nicht erst nach einem ersten
         // Abruf (der bisher WLAN-Connect+Zeit-Sync+Fetch bloehte -- spuerbare

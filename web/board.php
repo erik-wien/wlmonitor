@@ -437,6 +437,20 @@ SVG;
     // totalPages ab -- die Firmware braucht das, um die Touch-Zonen fuer
     // die Pfeile korrekt nachzurechnen.
     header('X-Board-Total-Pages: ' . $totalPages);
+    // Zeitverhalten des Geraets (Migration 008, Nutzerwunsch 2026-09-04).
+    // Bisher Firmware-Konstanten -- jede Aenderung kostete Neubau und Flashen
+    // am Kabel, obwohl es Werte sind, die man durch Beobachten kalibriert.
+    //
+    // Bei JEDER Antwort mitgeschickt, nicht nur bei Aenderung: die Firmware
+    // haelt sie im RTC-Speicher ueber den Tiefschlaf, und ohne staendige
+    // Wiederholung wuesste ein Geraet nach einem Stromausfall (RTC-Speicher
+    // weg) nichts mehr davon, bis zufaellig die Einstellung geaendert wird.
+    // Fuenf kurze Header sind dafuer ein guenstiger Preis.
+    header('X-Board-Idle-Timeout-Sec: '     . $boardSettings['device_idle_timeout_sec']);
+    header('X-Board-Refresh-Interval-Sec: ' . $boardSettings['device_refresh_interval_sec']);
+    header('X-Board-Wake-Interval-Sec: '    . $boardSettings['device_wake_interval_sec']);
+    header('X-Board-Quiet-Start-Hour: '     . $boardSettings['device_quiet_start_hour']);
+    header('X-Board-Quiet-End-Hour: '       . $boardSettings['device_quiet_end_hour']);
     // Loesch-X der Nachrichtenkarten (TASK-28). Favoritenleiste und Pille
     // rechnet die Firmware aus den beiden Headern oben selbst nach; DIESE
     // Zonen kann sie nicht nachrechnen, weil die Kartenpositionen erst beim

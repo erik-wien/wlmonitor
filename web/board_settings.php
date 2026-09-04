@@ -36,6 +36,7 @@ admin_require();
 
 $wifiError = null;
 $batteryError = null;
+$timingError = null;
 $mqttError = null;
 $calendarError = null;
 
@@ -49,6 +50,7 @@ const BOARD_DEVICE_USER_ID = 3921;
 $savedLabels = [
     'wifi'    => 'Gäste-WLAN gespeichert.',
     'battery' => 'Akku-Kalibrierung gespeichert.',
+    'timing' => 'Zeitverhalten gespeichert. Wirkt beim naechsten Abruf des Geraets.',
     'mqtt'    => 'MQTT-Sender-Zugangsdaten gespeichert.',
     'kalender' => 'Kalenderauswahl gespeichert. Sie greift beim nächsten calsync-Lauf (alle 15 Minuten).',
 ];
@@ -67,6 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $msg = 'Sicherheits-Token abgelaufen -- Seite neu laden und nochmal versuchen.';
         $wifiError = $action === 'save_wifi' ? $msg : null;
         $batteryError = $action === 'save_battery' ? $msg : null;
+        $timingError  = $action === 'save_timing' ? $msg : null;
         $mqttError = $action === 'save_mqtt_sender' ? $msg : null;
         $calendarError = $action === 'save_calendars' ? $msg : null;
     } elseif ($action === 'save_wifi') {
@@ -85,6 +88,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($wifiError === null) {
             appendLog($con, 'admin', 'Board-Einstellungen: Gaeste-WLAN geaendert.');
             header('Location: board_settings.php?saved=wifi#wifi'); exit;
+        }
+    } elseif ($action === 'save_timing') {
+        $timingError = board_settings_save_device_timing(
+            $con,
+            (int) ($_POST['device_idle_timeout_sec'] ?? 0),
+            (int) ($_POST['device_refresh_interval_sec'] ?? 0),
+            (int) ($_POST['device_wake_interval_sec'] ?? 0),
+            (int) ($_POST['device_quiet_start_hour'] ?? 0),
+            (int) ($_POST['device_quiet_end_hour'] ?? 0)
+        );
+        if ($timingError === null) {
+            appendLog($con, 'admin', 'Board-Einstellungen: Zeitverhalten geaendert.');
+            header('Location: board_settings.php?saved=timing#timing'); exit;
         }
     } elseif ($action === 'save_battery') {
         // Eingabe in Volt (so steht es auf jedem Messgeraet), gespeichert in
@@ -194,6 +210,64 @@ $e = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
           <input type="checkbox" class="form-check-input" id="wifi_hidden" name="wifi_hidden" value="1"
                  <?= $settings['wifi_hidden'] ? 'checked' : '' ?>>
           <label class="form-check-label" for="wifi_hidden">Verstecktes Netz</label>
+        </div>
+        <button type="submit" class="btn btn-outline-danger">Speichern</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="app-card" id="timing">
+    <div class="app-card-header">Zeitverhalten des Displays</div>
+    <div class="app-card-body">
+      <p class="form-text">
+        Wird dem Gerät bei jedem Abruf mitgeschickt und wirkt ab dem nächsten Aufwachen &mdash;
+        <strong>ohne Neu-Flashen</strong>. Bis zum nächsten Abruf gilt am Gerät noch der alte Wert.
+      </p>
+      <?php if ($timingError !== null): ?>
+        <div class="app-alert app-alert-danger py-2" role="alert"><?= $e($timingError) ?></div>
+      <?php endif; ?>
+      <form method="post" action="board_settings.php#timing">
+        <input type="hidden" name="csrf_token" value="<?= $e($csrfToken) ?>">
+        <input type="hidden" name="action" value="save_timing">
+        <div class="form-group">
+          <label class="form-label" for="device_idle_timeout_sec">Einschlaf-Frist (Sekunden)</label>
+          <input type="number" class="form-control" id="device_idle_timeout_sec" name="device_idle_timeout_sec"
+                 min="30" max="3600" value="<?= (int) $settings['device_idle_timeout_sec'] ?>">
+          <small class="form-text">Nach so langer Untätigkeit geht das Gerät schlafen. Gilt nur nach manuellem Wecken.</small>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="device_refresh_interval_sec">Nachladen im Wachbetrieb (Sekunden)</label>
+          <input type="number" class="form-control" id="device_refresh_interval_sec" name="device_refresh_interval_sec"
+                 min="10" max="600" value="<?= (int) $settings['device_refresh_interval_sec'] ?>">
+          <small class="form-text">
+            Nicht unter 10&nbsp;s: ein vollständiger Abruf dauert am Gerät 3&ndash;4&nbsp;s
+            (TLS, Wiener-Linien-API, Bildaufbau, Zeichnen). Zu kurz heißt, es lädt dauernd
+            und reagiert nicht mehr auf Berührungen.
+          </small>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="device_wake_interval_sec">Automatisches Aufwachen alle (Sekunden)</label>
+          <input type="number" class="form-control" id="device_wake_interval_sec" name="device_wake_interval_sec"
+                 min="300" max="86400" value="<?= (int) $settings['device_wake_interval_sec'] ?>">
+          <small class="form-text">3600 = stündlich. Dabei ein Abruf ohne Piep und ohne Vollbild, dann sofort weiterschlafen.</small>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ruhezeit &ndash; gar kein automatisches Aufwachen</label>
+          <div class="d-flex align-items-center" style="gap:.5rem">
+            <span>von</span>
+            <input type="number" class="form-control" style="max-width:6rem" name="device_quiet_start_hour"
+                   min="0" max="23" value="<?= (int) $settings['device_quiet_start_hour'] ?>" aria-label="Ruhezeit Beginn (Stunde)">
+            <span>bis</span>
+            <input type="number" class="form-control" style="max-width:6rem" name="device_quiet_end_hour"
+                   min="0" max="23" value="<?= (int) $settings['device_quiet_end_hour'] ?>" aria-label="Ruhezeit Ende (Stunde)">
+            <span>Uhr</span>
+          </div>
+          <small class="form-text">
+            Ein geplantes Aufwachen, das in die Ruhezeit fiele, entfällt ersatzlos. Bei stündlichem
+            Intervall und Ruhezeit 0&ndash;6&nbsp;Uhr ist deshalb faktisch schon ab 23&nbsp;Uhr Ruhe:
+            der Weckpunkt um Mitternacht liegt bereits darin. Gleicher Wert für Beginn und Ende
+            heißt <em>keine</em> Ruhezeit.
+          </small>
         </div>
         <button type="submit" class="btn btn-outline-danger">Speichern</button>
       </form>

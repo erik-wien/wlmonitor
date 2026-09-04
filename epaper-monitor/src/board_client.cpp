@@ -18,6 +18,11 @@ const char* HEADER_NAMES[] = {
     // TASK-28: Loesch-X der Nachrichtenkarten. Inhaltsabhaengig (Masonry),
     // deshalb vom Server geliefert statt hier nachgerechnet.
     "X-Board-Delete-Zones",
+    // Zeitverhalten, vom Server konfiguriert (Nutzerwunsch 2026-09-04) --
+    // vorher Firmware-Konstanten, jede Aenderung kostete ein Flashen.
+    "X-Board-Idle-Timeout-Sec", "X-Board-Refresh-Interval-Sec",
+    "X-Board-Wake-Interval-Sec",
+    "X-Board-Quiet-Start-Hour", "X-Board-Quiet-End-Hour",
 };
 const size_t HEADER_COUNT = sizeof(HEADER_NAMES) / sizeof(HEADER_NAMES[0]);
 
@@ -259,6 +264,18 @@ void fetchBoard(const char* token, const char* touchValue, const char* lastEtag,
     // wo auch der RTC-Speicher liegt. Fehlt der Header (jede Seite ausser der
     // MQTT-Seite), bleibt der String leer -> 0 Zonen.
     out.deleteZones = http.header("X-Board-Delete-Zones").c_str();
+
+    // 0 heisst "Header fehlte oder war unlesbar" -- der Aufrufer behaelt dann
+    // seinen bisherigen Wert (main.cpp), statt auf 0 zu springen. toInt()
+    // liefert fuer einen leeren String ebenfalls 0, das faellt also zusammen.
+    // Ausnahme quietEndHour: 0 ist dort ein GUELTIGER Wert (Mitternacht),
+    // deshalb wird das Vorhandensein getrennt gemeldet.
+    out.timing.idleTimeoutSec     = (uint32_t) http.header("X-Board-Idle-Timeout-Sec").toInt();
+    out.timing.refreshIntervalSec = (uint32_t) http.header("X-Board-Refresh-Interval-Sec").toInt();
+    out.timing.wakeIntervalSec    = (uint32_t) http.header("X-Board-Wake-Interval-Sec").toInt();
+    out.timing.quietStartHour     = (int) http.header("X-Board-Quiet-Start-Hour").toInt();
+    out.timing.quietEndHour       = (int) http.header("X-Board-Quiet-End-Hour").toInt();
+    out.timing.present            = http.header("X-Board-Wake-Interval-Sec").length() > 0;
 
     BoardHeaders headers;
     headers.mode           = http.header("X-Board-Mode").c_str();

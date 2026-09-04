@@ -277,4 +277,57 @@ class BoardSettingsTest extends IntegrationTestCase
         $this->assertIsArray(\board_settings_available_calendars(999999));
         $this->assertSame([], \board_settings_available_calendars(999999));
     }
+
+    // --- Zeitverhalten des Geraets (Nutzerwunsch 2026-09-04) ----------------
+    //
+    // "Die Einschlaf-Frist gehoert auch in board settings btw" -- alle vier
+    // Werte standen als Firmware-Konstanten im Code, jede Aenderung kostete
+    // Neubau und Flashen am Kabel.
+
+    public function test_device_timing_persists(): void
+    {
+        $err = \board_settings_save_device_timing($this->con, 300, 30, 1800, 22, 7);
+
+        $this->assertNull($err);
+        $s = \board_settings_load($this->con);
+        $this->assertSame(300, $s['device_idle_timeout_sec']);
+        $this->assertSame(30, $s['device_refresh_interval_sec']);
+        $this->assertSame(1800, $s['device_wake_interval_sec']);
+        $this->assertSame(22, $s['device_quiet_start_hour']);
+        $this->assertSame(7, $s['device_quiet_end_hour']);
+    }
+
+    public function test_device_timing_defaults_match_the_previous_firmware_constants(): void
+    {
+        // Wer nichts einstellt, bekommt genau das Verhalten von vorher.
+        $s = \board_settings_load($this->con);
+        $this->assertSame(600, $s['device_idle_timeout_sec'], 'ACTIVE_IDLE_TIMEOUT_MS war 10 min');
+        $this->assertSame(25, $s['device_refresh_interval_sec'], 'REFRESH_INTERVAL_MS war 25 s');
+        $this->assertSame(3600, $s['device_wake_interval_sec'], 'stuendlich');
+        $this->assertSame(0, $s['device_quiet_start_hour']);
+        $this->assertSame(6, $s['device_quiet_end_hour'], 'Nacht bis 06:00');
+    }
+
+    public function test_refresh_interval_may_not_undercut_the_time_one_fetch_takes(): void
+    {
+        // Ein vollstaendiger Abruf dauert am Geraet 3-4 s. Darunter beginnt
+        // der naechste, bevor der vorige fertig ist -- die Aktiv-Session
+        // waere dauerbeschaeftigt und reagierte nicht mehr auf Beruehrungen.
+        $this->assertNotNull(\board_settings_save_device_timing($this->con, 600, 5, 3600, 0, 6));
+        $this->assertNull(\board_settings_save_device_timing($this->con, 600, 10, 3600, 0, 6));
+    }
+
+    public function test_device_timing_rejects_values_outside_the_sane_range(): void
+    {
+        $this->assertNotNull(\board_settings_save_device_timing($this->con, 10, 25, 3600, 0, 6), 'Frist zu kurz');
+        $this->assertNotNull(\board_settings_save_device_timing($this->con, 99999, 25, 3600, 0, 6), 'Frist zu lang');
+        $this->assertNotNull(\board_settings_save_device_timing($this->con, 600, 25, 60, 0, 6), 'Weckintervall zu kurz');
+        $this->assertNotNull(\board_settings_save_device_timing($this->con, 600, 25, 3600, 24, 6), 'Stunde ausserhalb 0..23');
+    }
+
+    public function test_equal_quiet_hours_are_accepted_as_no_quiet_period(): void
+    {
+        // Gueltige Einstellung, keine Fehleingabe: rund um die Uhr wecken.
+        $this->assertNull(\board_settings_save_device_timing($this->con, 600, 25, 3600, 0, 0));
+    }
 }

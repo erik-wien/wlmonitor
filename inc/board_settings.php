@@ -31,6 +31,9 @@ const BOARD_SETTINGS_MQTT_PASSWD_FILE = '/opt/homebrew/etc/mosquitto/passwd';
  *   wifi_ssid: string, wifi_password: string, wifi_encryption: string, wifi_hidden: bool,
  *   battery_empty_mv: int, battery_full_mv: int, battery_charging_mv: int,
  *   battery_display_mode: 'percent'|'volt',
+ *   device_idle_timeout_sec: int, device_refresh_interval_sec: int,
+ *   device_wake_interval_sec: int,
+ *   device_quiet_start_hour: int, device_quiet_end_hour: int,
  *   mqtt_sender_user: string, mqtt_sender_password: string
  * }
  */
@@ -45,6 +48,11 @@ function board_settings_load(mysqli $con): array
         'battery_full_mv' => BOARD_BATTERY_FULL_MV_DEFAULT,
         'battery_charging_mv' => BOARD_BATTERY_CHARGING_MV_DEFAULT,
         'battery_display_mode' => 'percent',
+        'device_idle_timeout_sec' => 600,
+        'device_refresh_interval_sec' => 25,
+        'device_wake_interval_sec' => 3600,
+        'device_quiet_start_hour' => 0,
+        'device_quiet_end_hour' => 6,
         'mqtt_sender_user' => 'sender',
         'mqtt_sender_password' => '',
     ];
@@ -62,6 +70,9 @@ function board_settings_load(mysqli $con): array
             'SELECT wifi_ssid, wifi_password, wifi_encryption, wifi_hidden,
                     battery_empty_mv, battery_full_mv, battery_charging_mv,
                     battery_display_mode,
+                    device_idle_timeout_sec, device_refresh_interval_sec,
+                    device_wake_interval_sec,
+                    device_quiet_start_hour, device_quiet_end_hour,
                     mqtt_sender_user, mqtt_sender_password
              FROM wl_board_settings WHERE id = 1'
         );
@@ -85,6 +96,11 @@ function board_settings_load(mysqli $con): array
         'battery_full_mv' => (int) ($row['battery_full_mv'] ?? BOARD_BATTERY_FULL_MV_DEFAULT),
         'battery_charging_mv' => (int) ($row['battery_charging_mv'] ?? BOARD_BATTERY_CHARGING_MV_DEFAULT),
         'battery_display_mode' => ($row['battery_display_mode'] ?? 'percent') === 'volt' ? 'volt' : 'percent',
+        'device_idle_timeout_sec' => (int) ($row['device_idle_timeout_sec'] ?? 600),
+        'device_refresh_interval_sec' => (int) ($row['device_refresh_interval_sec'] ?? 25),
+        'device_wake_interval_sec' => (int) ($row['device_wake_interval_sec'] ?? 3600),
+        'device_quiet_start_hour' => (int) ($row['device_quiet_start_hour'] ?? 0),
+        'device_quiet_end_hour' => (int) ($row['device_quiet_end_hour'] ?? 6),
         'mqtt_sender_user' => (string) ($row['mqtt_sender_user'] ?? 'sender'),
         'mqtt_sender_password' => (string) ($row['mqtt_sender_password'] ?? ''),
     ];
@@ -217,6 +233,66 @@ function board_settings_save_battery(
     } catch (mysqli_sql_exception $e) {
         return 'Speichern nicht moeglich - vermutlich fehlt die Migration '
              . '007_board_battery_volts.sql auf diesem Server. Bis dahin gelten die Vorgabewerte.';
+    }
+
+    return null;
+}
+
+/**
+ * Zeitverhalten des Geraets speichern (Migration 008). Alle Werte gehen als
+ * Antwort-Header an die Firmware, s. web/board.php.
+ *
+ * Die Untergrenzen sind keine Willkuer, sondern die gemessenen Kosten eines
+ * Abrufs: ein kompletter Zyklus (TLS-Handshake, WL-API, Bildaufbau, Zeichnen)
+ * dauert am Geraet 3-4 Sekunden. Ein Nachladeintervall darunter hiesse, dass
+ * der naechste Abruf beginnt, bevor der vorige fertig ist -- die Aktiv-Session
+ * waere dauerbeschaeftigt und reagierte nicht mehr auf Beruehrungen.
+ *
+ * Obergrenzen: 3600 s Untaetigkeit ist eine Stunde wach ohne Eingabe (der
+ * Akku haelt keinen Dauerbetrieb aus), 86400 s Weckintervall ist ein Tag.
+ */
+function board_settings_save_device_timing(
+    mysqli $con,
+    int $idleTimeoutSec,
+    int $refreshIntervalSec,
+    int $wakeIntervalSec,
+    int $quietStartHour,
+    int $quietEndHour
+): ?string {
+    board_settings_ensure_row($con);
+
+    if ($idleTimeoutSec < 30 || $idleTimeoutSec > 3600) {
+        return 'Einschlaf-Frist muss zwischen 30 s und 3600 s liegen.';
+    }
+    if ($refreshIntervalSec < 10 || $refreshIntervalSec > 600) {
+        return 'Nachladeintervall muss zwischen 10 s und 600 s liegen -- ein Abruf dauert am Geraet 3-4 s.';
+    }
+    if ($wakeIntervalSec < 300 || $wakeIntervalSec > 86400) {
+        return 'Weckintervall muss zwischen 300 s und 86400 s liegen.';
+    }
+    foreach ([$quietStartHour, $quietEndHour] as $stunde) {
+        if ($stunde < 0 || $stunde > 23) {
+            return 'Ruhezeit-Stunden muessen zwischen 0 und 23 liegen.';
+        }
+    }
+    // Nicht geprueft: start == end. Das heisst bewusst "keine Ruhezeit"
+    // (rund um die Uhr wecken) und ist eine gueltige Einstellung, keine
+    // Fehleingabe -- s. secondsUntilNextAutomaticWake() in der Firmware.
+
+    try {
+        $stmt = $con->prepare(
+            'UPDATE wl_board_settings
+             SET device_idle_timeout_sec = ?, device_refresh_interval_sec = ?,
+                 device_wake_interval_sec = ?, device_quiet_start_hour = ?,
+                 device_quiet_end_hour = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE id = 1'
+        );
+        $stmt->bind_param('iiiii', $idleTimeoutSec, $refreshIntervalSec, $wakeIntervalSec, $quietStartHour, $quietEndHour);
+        $stmt->execute();
+        $stmt->close();
+    } catch (mysqli_sql_exception $e) {
+        return 'Speichern nicht moeglich - vermutlich fehlt die Migration '
+             . '008_board_device_timing.sql auf diesem Server. Bis dahin gelten die Vorgabewerte.';
     }
 
     return null;
