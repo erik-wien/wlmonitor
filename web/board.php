@@ -240,6 +240,7 @@ try {
         // Stoerungsseite zeigen.
         $disruptionsPage = $filteredAlerts !== [] ? $totalDeparturePages + 1 : null;
         $calendarPage = $hasCalendar ? $totalDeparturePages + ($filteredAlerts !== [] ? 1 : 0) + 1 : null;
+        $kalenderStand = null;
         if ($requestedPage <= $totalDeparturePages) {
             $mainOnlySvg = board_render_departures_svg(
                 board_paginate_departures($activeFavorite, $requestedPage, $filteredAlerts)['items']
@@ -247,15 +248,22 @@ try {
         } elseif ($requestedPage === $disruptionsPage) {
             $mainOnlySvg = board_render_disruptions_svg(board_layout_disruptions($filteredAlerts));
         } elseif ($requestedPage === $calendarPage) {
-            $mainOnlySvg = board_calendar_render_svg(board_calendar_layout($calendar));
+            $kalenderItems = board_calendar_layout($calendar);
+            $mainOnlySvg = board_calendar_render_svg($kalenderItems);
+            // Wie im echten Rendering: Kalenderstand statt WL-"Stand HH:MM".
+            $kalenderStand = board_calendar_status_text($kalenderItems) ?: null;
         } else {
             // $count wie im echten Rendering (inc/board_template.php) -- ohne
-            // ihn zeigte der Debug-Schnitt die Seite OHNE "Nachrichten (N)"
+            // ihn zeigte der Debug-Schnitt die Seite OHNE "6 von 8 Nachrichten"
             // und taugte damit nicht mehr zum Vergleich (Audit 2026-09-03).
             $mainOnlySvg = board_mqtt_render_svg(board_mqtt_layout($mqtt), count($mqtt['messages']));
         }
         $pageCategories = board_pagination_categories($totalDeparturePages, $filteredAlerts !== [], $hasCalendar, $hasMqtt);
-        $standSvg = board_render_stand_and_pagination_svg($dataStand, $requestedPage, $totalPages, true, $pageCategories);
+        $standSvg = board_render_stand_and_pagination_svg(
+            $dataStand, $requestedPage, $totalPages, true, $pageCategories,
+            $hasMqtt ? count($mqtt['messages']) : null,
+            $kalenderStand
+        );
         $defs = board_svg_defs();
 
         $svg = <<<SVG

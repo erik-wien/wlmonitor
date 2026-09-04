@@ -190,6 +190,22 @@ function board_calendar_select_display(array $cache, DateTimeImmutable $now): ar
     ];
 }
 
+/**
+ * Holt den Statustext ("Kalender 16:06" / "Kalender veraltet - ..." /
+ * "Keine Kalenderdaten") aus den Layout-Items. Der Aufrufer reicht ihn an
+ * board_render_stand_and_pagination_svg() weiter, wo er das generische
+ * "Stand HH:MM" der Fusszeile ersetzt.
+ */
+function board_calendar_status_text(array $items): string
+{
+    foreach ($items as $item) {
+        if (($item['type'] ?? '') === 'status') {
+            return (string) ($item['text'] ?? '');
+        }
+    }
+    return '';
+}
+
 /** "Stand"-Text: heute nur Uhrzeit, sonst mit Wochentag/Datum. */
 function board_calendar_format_stand(DateTimeImmutable $empfangen, DateTimeImmutable $jetzt): string
 {
@@ -480,6 +496,102 @@ function board_calendar_layout_with(array $selected, array $m): array
     return ['items' => $items, 'overflow' => $overflow];
 }
 
+
+// --- Kalenderkuerzel als gefuellte Plakette --------------------------------
+//
+// Nutzerwunsch 2026-09-04: "invertiere das Kalendersymbol und mach es fett"
+// -- als duenne Outline (\u{24BA}) war das Kuerzel aus Zimmerentfernung kaum vom
+// Titeltext zu unterscheiden.
+//
+// Selbst GEZEICHNET statt als Schriftzeichen ausgegeben, und das loest
+// nebenbei ein zweites Problem: ob Atkinson Hyperlegible die umkreisten
+// Grossbuchstaben (U+24B6..U+24CF) ueberhaupt in ihrer cmap fuehrt, ist
+// ungeprueft -- fehlt das Glyph, zeigt rsvg-convert ein leeres Kaestchen oder
+// faellt still auf eine andere Schrift zurueck. Ein Kreis und ein "E" sind
+// dagegen immer da.
+//
+// Nicht auf "\u{24BA}" festgenagelt: JEDER umkreiste Buchstabe, den jemand in
+// board_settings.php als Kuerzel setzt, bekommt die Behandlung. Kuerzel ohne
+// umkreisten Buchstaben (etwa "(A)") bleiben schlichter Text -- wer Klammern
+// tippt, will Klammern sehen.
+
+/**
+ * Zerlegt eine Titelzeile in [umkreister Buchstabe, Rest]. Ohne solchen
+ * Anfang: [null, unveraenderte Zeile].
+ *
+ * @return array{0: ?string, 1: string}
+ */
+function board_calendar_split_circled_marker(string $zeile): array
+{
+    $erstes = mb_substr($zeile, 0, 1, 'UTF-8');
+    // mb_ord('') WIRFT (ValueError), es liefert nicht false -- eine leere
+    // Titelzeile ist damit ein Fatal mitten in einer PNG-Antwort. Genau der
+    // Fehlertyp, den dieses Modul sonst ueberall vermeidet.
+    if ($erstes === '') {
+        return [null, $zeile];
+    }
+    $code = mb_ord($erstes, 'UTF-8');
+    if ($code === false) {
+        return [null, $zeile];
+    }
+
+    if ($code >= 0x24B6 && $code <= 0x24CF) {          // \u{24B6}..\u{24CF}
+        $buchstabe = chr(ord('A') + $code - 0x24B6);
+    } elseif ($code >= 0x24D0 && $code <= 0x24E9) {     // \u{24D0}..\u{24E9}
+        $buchstabe = chr(ord('A') + $code - 0x24D0);
+    } else {
+        return [null, $zeile];
+    }
+
+    // Das trennende Leerzeichen entfaellt: den Abstand macht die Plakette
+    // selbst (board_calendar_marker_badge_width()).
+    return [$buchstabe, ltrim(mb_substr($zeile, 1, null, 'UTF-8'))];
+}
+
+/**
+ * Breite, die die Plakette dem Titel wegnimmt (Kreis + Abstand).
+ *
+ * Bewusst auf die Breite der ZWEI Zeichen geeicht, die das Kuerzel vorher im
+ * Text belegte ("\u{24BA}" + Leerzeichen): board_calendar_fit_title() rechnet den
+ * Umbruch weiterhin auf dem Titelstring MIT Kuerzel, kennt die Plakette also
+ * nicht. Waere sie breiter, liefe jede markierte Zeile genau um die Differenz
+ * ueber die Spaltenkante. 17,37px/Zeichen bei 39px (die durchgaengige
+ * Herleitung dieses Projekts), also 2 * 17,37/39 = 0,891 je Punkt
+ * Schriftgroesse.
+ */
+function board_calendar_marker_badge_width(int $titleSize): int
+{
+    return (int) round($titleSize * 0.891);
+}
+
+/**
+ * Gefuellter Kreis mit weissem, fettem Buchstaben, linksbuendig ab $x auf der
+ * Grundlinie $y.
+ */
+function board_calendar_render_marker_badge(string $buchstabe, int $x, int $y, int $titleSize): string
+{
+    // Durchmesser knapp auf Versalhoehe (0,72 * Schriftgroesse), damit die
+    // Plakette in der Zeile sitzt und nicht darueber hinausragt.
+    $r = (int) round($titleSize * 0.36);
+    $cx = $x + $r;
+    // Versalien laufen von der Grundlinie nach OBEN -- ihre optische Mitte
+    // liegt eine halbe Versalhoehe darueber, also genau $r.
+    $cy = $y - $r;
+
+    // 0,60 statt 0,55: im gerenderten Bild wirkte der Buchstabe im Kreis
+    // verloren. Mehr geht nicht -- die Versalhoehe waere sonst breiter als
+    // die Kreissehne auf ihrer Hoehe, und das "E" stiesse am Rand an.
+    $schrift = (int) round($titleSize * 0.60);
+
+    return sprintf(
+        '<circle cx="%d" cy="%d" r="%d" fill="black"/>'
+        . '<text x="%d" y="%d" text-anchor="middle" font-weight="bold" font-size="%d" fill="white">%s</text>',
+        $cx, $cy, $r,
+        $cx, $cy + (int) round($schrift * 0.36), $schrift,
+        htmlspecialchars($buchstabe, ENT_XML1)
+    );
+}
+
 /** Titel umbrechen, auf maxLines kuerzen, letzte Zeile mit Auslassungszeichen. */
 function board_calendar_fit_title(string $titel, int $chars, int $maxLines): array
 {
@@ -511,10 +623,17 @@ function board_calendar_render_svg(array $items): string
     foreach ($items as $item) {
         switch ($item['type']) {
             case 'status':
-                $out .= sprintf(
-                    '<text x="1856" y="%d" text-anchor="end" font-size="29" fill="black">%s</text>',
-                    $item['y'], $e($item['text'])
-                );
+                // Wird NICHT mehr hier gezeichnet: der Kalenderstand steht
+                // seit 2026-09-04 unten links in der Fusszeile, wo auf allen
+                // anderen Seiten "Stand HH:MM" steht (Nutzerbefund: oben
+                // rechts der Kalenderstand und unten links der Monitorstand
+                // war "ueberraschend" -- zwei Stand-Angaben auf einer Seite,
+                // von denen die prominentere sich auf Daten bezog, die auf
+                // dieser Seite gar nicht vorkommen).
+                //
+                // Das Item bleibt im Layout: board_calendar_status_text()
+                // holt den Text dort ab und reicht ihn an die Fusszeile
+                // weiter (board_render_stand_and_pagination_svg()).
                 break;
 
             case 'col_divider':
@@ -540,10 +659,24 @@ function board_calendar_render_svg(array $items): string
                     );
                 }
                 $y = $item['y'];
-                foreach ($item['lines'] as $zeile) {
+                foreach ($item['lines'] as $index => $zeile) {
+                    $x = $item['title_x'];
+
+                    // Nur die ERSTE Zeile kann das Kalenderkuerzel tragen --
+                    // es steht am Titelanfang, und der Umbruch trennt es nie
+                    // vom ersten Wort ab (board_calendar_fit_title() bricht an
+                    // Leerzeichen, das Kuerzel ist ein einzelnes Zeichen).
+                    if ($index === 0) {
+                        [$marke, $zeile] = board_calendar_split_circled_marker($zeile);
+                        if ($marke !== null) {
+                            $out .= board_calendar_render_marker_badge($marke, $x, $y, $item['title_size']);
+                            $x += board_calendar_marker_badge_width($item['title_size']);
+                        }
+                    }
+
                     $out .= sprintf(
                         '<text x="%d" y="%d" font-weight="500" font-size="%d" fill="black">%s</text>',
-                        $item['title_x'], $y, $item['title_size'], $e($zeile)
+                        $x, $y, $item['title_size'], $e($zeile)
                     );
                     $y += $item['wrap_lead'];
                 }

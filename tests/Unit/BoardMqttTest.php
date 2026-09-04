@@ -192,9 +192,16 @@ class BoardMqttTest extends TestCase
     public function test_layout_short_message_keeps_the_postit_minimum_height(): void
     {
         // Ein einzeiliger Zettel soll ein Zettel bleiben, kein Streifen.
-        $items = board_mqtt_layout(['messages' => [['title' => 'T', 'body' => 'kurz', 'age' => '']]]);
+        $mitTitel = board_mqtt_layout(['messages' => [['title' => 'T', 'body' => 'kurz', 'age' => '']]]);
+        $this->assertGreaterThanOrEqual(BOARD_MQTT_CARD_MIN_H, $mitTitel[0]['height']);
 
-        $this->assertSame(BOARD_MQTT_CARD_MIN_H, $items[0]['height']);
+        // Ohne Titel (kaputtes JSON) traegt allein die Mindesthoehe -- die
+        // natuerliche Hoehe waere hier nur knapp 200px, also wirklich ein
+        // Streifen. Seit die Innenabstaende fuer die 2-Spalten-Fassung
+        // gekuerzt wurden (2026-09-04), ist DAS der Fall, in dem die
+        // Mindesthoehe ueberhaupt noch greift.
+        $ohneTitel = board_mqtt_layout(['messages' => [['title' => '', 'body' => 'kurz', 'age' => '']]]);
+        $this->assertSame(BOARD_MQTT_CARD_MIN_H, $ohneTitel[0]['height']);
     }
 
     public function test_layout_timestamp_always_sits_at_the_card_foot(): void
@@ -218,10 +225,13 @@ class BoardMqttTest extends TestCase
         $this->assertStringEndsWith('…', end($items[0]['lines']));
     }
 
-    public function test_layout_overflow_adds_a_remaining_count_note(): void
+    public function test_layout_stops_at_the_page_bottom_without_a_note(): void
     {
-        // Viele hohe Nachrichten, bis die Seite voll ist -- der Rest muss als
-        // "+ N weitere" zusammengefasst werden, nicht abrupt verschwinden.
+        // Frueher endete das Raster mit "+ N weitere". Seit den 2-Spalten-
+        // Karten (Nutzervorgabe 2026-09-04) kostete der dafuer reservierte
+        // Platz eine ganze Kartenreihe -- bei 8 Nachrichten passten nur 4,
+        // obwohl 6 hingepasst haetten. Wieviele fehlen, sagt jetzt der
+        // Seitenkopf (s. test_render_svg_..._truncated).
         $langerText = str_repeat('Wortwiederholung ', 40);
         $roh = [];
         for ($i = 0; $i < 30; $i++) {
@@ -229,17 +239,15 @@ class BoardMqttTest extends TestCase
         }
         $items = board_mqtt_layout(['messages' => $roh]);
 
-        $letztes = end($items);
-        $this->assertSame('note', $letztes['type']);
-        $this->assertStringContainsString('weitere', $letztes['text']);
-
-        // Keine Karte (inkl. Schlagschatten) darf ueber BOARD_DEPARTURES_MAX_Y
-        // hinausragen.
+        $this->assertNotEmpty($items);
         foreach ($items as $item) {
-            $ende = $item['type'] === 'card'
-                ? $item['y'] + $item['height'] + BOARD_MQTT_SHADOW
-                : $item['y'];
-            $this->assertLessThanOrEqual(BOARD_DEPARTURES_MAX_Y, $ende);
+            $this->assertSame('card', $item['type'], 'kein Notiz-Item mehr');
+            // Keine Karte (inkl. Schlagschatten) darf ueber
+            // BOARD_DEPARTURES_MAX_Y hinausragen.
+            $this->assertLessThanOrEqual(
+                BOARD_DEPARTURES_MAX_Y,
+                $item['y'] + $item['height'] + BOARD_MQTT_SHADOW
+            );
         }
     }
 
@@ -296,15 +304,30 @@ class BoardMqttTest extends TestCase
         $this->assertStringContainsString('Keine Nachrichten', $svg);
     }
 
-    public function test_render_svg_shows_message_count_header_when_count_given(): void
+    public function test_render_svg_has_no_header_when_every_message_is_visible(): void
     {
-        // Nutzerwunsch 2026-09-01: Anzahl der Nachrichten im Seitenkopf.
-        // Optionaler Parameter statt Teil von $items, damit board_mqtt_layout()s
-        // indexbasiert gepruefte Rueckgabe unveraendert bleibt (s. Kommentar an
-        // board_mqtt_render_svg()).
-        $svg = board_mqtt_render_svg([], 6);
+        // Nutzerbefund 2026-09-04: "Die Ueberschrift 'Nachrichten (1)' kannst
+        // Du Dir schenken. Die ist redundant" -- die sichtbaren Zettel sind
+        // ihre eigene Anzahl.
+        $items = board_mqtt_layout(['messages' => array_fill(0, 6, ['title' => 'T', 'body' => 'B', 'age' => ''])]);
+        $svg = board_mqtt_render_svg($items, 6);
 
-        $this->assertStringContainsString('Nachrichten (6)', $svg);
+        $this->assertStringNotContainsString('Nachrichten', $svg);
+    }
+
+    public function test_render_svg_header_names_how_many_of_the_messages_fit(): void
+    {
+        // Passen nicht alle auf die Seite, muss das im Kopf stehen -- sonst
+        // sieht das Board schlicht so aus, als gaebe es die anderen nicht.
+        // Das ist der EINZIGE Fall, in dem der Kopf noch erscheint.
+        $langerText = str_repeat('Wortwiederholung ', 40);
+        $roh = array_fill(0, 30, ['title' => 'Titel', 'body' => trim($langerText), 'age' => '']);
+        $items = board_mqtt_layout(['messages' => $roh]);
+
+        $svg = board_mqtt_render_svg($items, 30);
+
+        $this->assertStringContainsString(sprintf('%d von 30 Nachrichten', count($items)), $svg);
+        $this->assertLessThan(30, count($items), 'Testvoraussetzung: es passen nicht alle');
     }
 
     public function test_render_svg_omits_header_when_count_not_given(): void

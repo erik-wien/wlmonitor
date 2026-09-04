@@ -131,4 +131,42 @@ class BoardTemplateStandPaginationTest extends TestCase
         $svg = board_render_stand_and_pagination_svg(new DateTimeImmutable('19:13'), 1, 2, true, [1 => 'monitor']);
         $this->assertStringContainsString('x="176" y="1370" text-anchor="middle" font-size="38" fill="black">2<', $svg);
     }
+
+    // --- Nachrichtenanzahl in der Pille (Nutzerwunsch 2026-09-04) ------------
+
+    public function test_message_count_appears_next_to_the_mqtt_icon(): void
+    {
+        $categories = board_pagination_categories(1, false, false, true);
+        // Seite 1 (Monitor) aktiv, der MQTT-Slot also inaktiv.
+        $svg = board_render_stand_and_pagination_svg(new DateTimeImmutable('19:13'), 1, 3, true, $categories, 8);
+
+        $this->assertStringContainsString('>8</text>', $svg);
+    }
+
+    public function test_message_count_is_hidden_on_the_active_mqtt_slot(): void
+    {
+        // Dort liegt der schwarze Kreis (r=30) darunter; Icon + Zahl sind
+        // zusammen breiter und ragten sichtbar darueber hinaus. Die Anzahl
+        // steht auf dieser Seite ohnehin im Kopf ("Nachrichten (6 von 8)").
+        $categories = board_pagination_categories(1, false, false, true);
+        $mqttSeite = array_search('mqtt', $categories, true);
+        $svg = board_render_stand_and_pagination_svg(
+            new DateTimeImmutable('19:13'), (int) $mqttSeite, 3, true, $categories, 8
+        );
+
+        $this->assertStringNotContainsString('>8</text>', $svg);
+    }
+
+    public function test_pill_geometry_is_unchanged_by_the_message_count(): void
+    {
+        // Die Firmware rechnet die Pillenbreite unabhaengig aus totalPages
+        // nach (touch_zone.cpp) und kennt den Slotinhalt nicht -- waechst die
+        // Pille durch die Zahl, wandern die Touchzonen unter den Fingern weg.
+        $categories = board_pagination_categories(1, false, false, true);
+        $ohne = board_render_stand_and_pagination_svg(new DateTimeImmutable('19:13'), 1, 3, true, $categories);
+        $mit  = board_render_stand_and_pagination_svg(new DateTimeImmutable('19:13'), 1, 3, true, $categories, 12);
+
+        $rect = static fn (string $svg): string => (string) preg_replace('/^.*?(<rect [^>]*>).*$/s', '$1', $svg);
+        $this->assertSame($rect($ohne), $rect($mit));
+    }
 }

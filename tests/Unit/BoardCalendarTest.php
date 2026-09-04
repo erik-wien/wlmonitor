@@ -250,4 +250,94 @@ class BoardCalendarTest extends TestCase
         $texte = array_column(array_filter($items, static fn ($i) => ($i['type'] ?? '') === 'note'), 'text');
         $this->assertContains('Keine Termine', $texte);
     }
+
+    // --- Kalenderstand gehoert in die Fusszeile (Nutzerbefund 2026-09-04) ----
+
+    public function test_calendar_status_is_not_drawn_on_the_page_itself(): void
+    {
+        // Frueher oben rechts (x=1856). Zusammen mit dem "Stand HH:MM" unten
+        // links standen damit ZWEI Stand-Angaben auf einer Seite, und die
+        // prominentere bezog sich auf die WL-Abfrage -- Daten, die auf der
+        // Kalenderseite gar nicht vorkommen.
+        $sicht = board_calendar_select_display($this->cache([0 => 'Termin heute']), $this->heute());
+        $items = board_calendar_layout($sicht);
+
+        $this->assertNotSame('', board_calendar_status_text($items), 'Text bleibt im Layout abrufbar');
+        $this->assertStringNotContainsString(
+            board_calendar_status_text($items),
+            board_calendar_render_svg($items),
+            'aber er wird nicht mehr auf der Seite selbst gezeichnet'
+        );
+    }
+
+    public function test_footer_shows_the_calendar_stand_instead_of_the_monitor_stand(): void
+    {
+        $svg = board_render_stand_and_pagination_svg(
+            new DateTimeImmutable('19:13'), 1, 2, true, [], null, 'Kalender 16:06'
+        );
+
+        $this->assertStringContainsString('Kalender 16:06', $svg);
+        $this->assertStringNotContainsString('Stand 19:13', $svg);
+    }
+
+    // --- Kalenderkuerzel als Plakette (Nutzerwunsch 2026-09-04) -------------
+
+    public function test_circled_letter_marker_is_drawn_as_a_filled_badge(): void
+    {
+        // "invertiere das Kalendersymbol und mach es fett": weisser fetter
+        // Buchstabe auf gefuelltem Kreis, selbst gezeichnet statt als
+        // Schriftzeichen -- ob die Schrift U+24B6..U+24CF fuehrt, ist ungeprueft.
+        [$marke, $rest] = board_calendar_split_circled_marker("\u{24BA} Friseur Dante");
+
+        $this->assertSame('E', $marke);
+        $this->assertSame('Friseur Dante', $rest, 'Trennzeichen faellt weg, den Abstand macht die Plakette');
+
+        $svg = board_calendar_render_marker_badge('E', 218, 300, 48);
+        $this->assertStringContainsString('<circle', $svg);
+        $this->assertStringContainsString('fill="black"', $svg);
+        $this->assertStringContainsString('font-weight="bold"', $svg);
+        $this->assertStringContainsString('fill="white">E</text>', $svg);
+    }
+
+    public function test_markers_without_a_circled_letter_stay_plain_text(): void
+    {
+        // "(A)" hat jemand bewusst mit Klammern getippt -- wer Klammern
+        // tippt, will Klammern sehen.
+        $this->assertSame([null, '(A) Passservice'], board_calendar_split_circled_marker('(A) Passservice'));
+        $this->assertSame([null, 'Ohne Kuerzel'], board_calendar_split_circled_marker('Ohne Kuerzel'));
+        $this->assertSame([null, ''], board_calendar_split_circled_marker(''));
+    }
+
+    public function test_badge_is_exactly_as_wide_as_the_two_characters_it_replaces(): void
+    {
+        // board_calendar_fit_title() bricht den Titel MIT Kuerzel um und kennt
+        // die Plakette nicht. Waere sie breiter als "\u{24BA}" + Leerzeichen, liefe
+        // jede markierte Zeile genau um die Differenz ueber die Spaltenkante.
+        foreach ([38, 48] as $titleSize) {
+            $zweiZeichen = 2 * 17.37 * $titleSize / 39;
+            $this->assertEqualsWithDelta(
+                $zweiZeichen,
+                board_calendar_marker_badge_width($titleSize),
+                1.0,
+                "Plakettenbreite bei title_size=$titleSize"
+            );
+        }
+    }
+
+    public function test_event_line_with_a_marker_renders_badge_and_shifted_text(): void
+    {
+        $svg = board_calendar_render_svg([[
+            'type' => 'event', 'time_end' => 190, 'title_x' => 218, 'y' => 300,
+            'time' => '14:00', 'lines' => ["\u{24BA} Friseur Dante"],
+            'title_size' => 48, 'time_size' => 30, 'wrap_lead' => 53,
+        ]]);
+
+        $this->assertStringContainsString('<circle', $svg);
+        $this->assertStringNotContainsString("\u{24BA}", $svg, 'das Schriftzeichen selbst kommt nicht mehr vor');
+        // Text beginnt hinter der Plakette, nicht mehr auf title_x.
+        $this->assertStringContainsString(
+            sprintf('<text x="%d"', 218 + board_calendar_marker_badge_width(48)),
+            $svg
+        );
+    }
 }

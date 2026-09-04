@@ -242,31 +242,45 @@ function board_mqtt_format_age(DateTimeImmutable $empfangen, DateTimeImmutable $
 //
 // Zeichenbudget nach der etablierten Herleitung (0,44538 px/Zeichen bei 1px
 // Schriftgroesse, 8% Sicherheitsabstand, s. BOARD_DEPARTURE_DESTINATION_MAX_CHARS),
-// Innenbreite 897 - 2*32 = 833:
-//   Body  38px:  floor(833 / (38*0.44538) * 0.92) = 45
-//   Titel 34px:  floor(833 / (34*0.44538) * 0.92) = 50
+// Innenbreite 899 - 2*48 = 803:
+//   Body  54px:  floor(803 / (54*0.44538) * 0.92) = 30
+//   Titel 48px:  floor(803 / (48*0.44538) * 0.92) = 34; davon gehen rechts
+//                nochmal ~90px fuers Loesch-X ab -> 30
 
-// DREI Spalten randbuendig (Nutzerwunsch 2026-08-29). Bei zwei Spalten ueber
-// die volle Breite waere jede Karte ~900px breit und bei realistischen
-// Textmengen nur ~300px hoch -- ein 3:1-Band, das wie eine Tabellenzeile
-// aussieht, nicht wie ein Klebezettel. Drei Spalten loesen beides zugleich:
-// randbuendig UND nah an der quadratischen Post-it-Form.
-const BOARD_MQTT_CARD_W = 586;
-const BOARD_MQTT_COL_GAP = 41;
-const BOARD_MQTT_COLUMNS = 3;
+// ZWEI Spalten (Nutzervorgabe 2026-09-04: "Doch nur zwei Spalten und alle
+// Fonts um jeweils 50% groesser"). Die drei Spalten von 2026-08-29 waren der
+// quadratischen Post-it-Form geschuldet; mit 50% groesserer Schrift blieben
+// dort nur noch ~20 Zeichen je Zeile, was jeden zweiten Titel umgebrochen
+// haette. Lesbarkeit aus Zimmerentfernung schlaegt hier die Zettel-Anmutung.
+//
+// Die Karten sind dadurch breite Baender statt Quadrate -- deshalb ist auch
+// BOARD_MQTT_CARD_MIN_H nicht mitgewachsen (280 -> 260 statt 420): eine
+// kuenstlich aufgeblasene Mindesthoehe kostete bei 899px Breite nur Platz,
+// ohne die Form zu retten.
+//
+// Die INNENABSTAENDE sind bewusst NICHT mit 1,5 skaliert, obwohl die Schriften
+// es sind. Gemessen: mit 1,5-fachem Rand/Zeilenabstand wurde eine zweizeilige
+// Karte 368px hoch, und 3*368 + 2*60 = 1224 > 1100 verfuegbare Hoehe -- es
+// passten nur noch 4 Nachrichten (zwei Reihen), bei sichtbar leerem unteren
+// Drittel. Mit den Werten unten ist dieselbe Karte 330px hoch:
+// 3*330 + 2*48 = 1086 <= 1100, also 6 Karten. Die Schrift bleibt dabei
+// unangetastet gross -- gekuerzt wird nur Luft.
+const BOARD_MQTT_CARD_W = 899;
+const BOARD_MQTT_COL_GAP = 42;
+const BOARD_MQTT_COLUMNS = 2;
 /** Randbuendig wie die uebrigen Seiten (Abfahrtenliste, Touch-Leiste):
  *  16 .. 1856, also 3*586 + 2*41 = 1840 (Nutzerwunsch 2026-08-29:
  *  "dreispaltig von Displayrand zu Rand"). */
 const BOARD_MQTT_GRID_X = 16;
 const BOARD_MQTT_GRID_TOP = 150;
-const BOARD_MQTT_ROW_GAP = 40;
-const BOARD_MQTT_CARD_PADDING = 32;
+const BOARD_MQTT_ROW_GAP = 48;
+const BOARD_MQTT_CARD_PADDING = 40;
 /** Ein einzeiliger Zettel soll ein Zettel bleiben, kein Streifen. */
-const BOARD_MQTT_CARD_MIN_H = 280;
+const BOARD_MQTT_CARD_MIN_H = 260;
 /** Groesse der umgeknickten Ecke unten rechts ("dog ear") -- das eine
  *  Merkmal, an dem ein Post-it auch in reinem Schwarzweiss sofort erkennbar
  *  ist (Farbe steht auf 1bpp nicht zur Verfuegung). */
-const BOARD_MQTT_FOLD = 44;
+const BOARD_MQTT_FOLD = 66;
 /** Schatten als GERASTERTE Flaeche statt Volltonschwarz (Nutzerwunsch
  *  2026-08-29: "Schatten soll die Grauschattierungen nuetzen").
  *
@@ -277,47 +291,43 @@ const BOARD_MQTT_FOLD = 44;
  *  steht die Schwelle dagegen unveraendert und liest sich aus Zimmer-
  *  entfernung als Grau (~230 dpi Panel). Breiter als der alte Volltonschatten,
  *  weil eine gerasterte Flaeche optisch leichter wirkt. */
-const BOARD_MQTT_SHADOW = 12;
+const BOARD_MQTT_SHADOW = 18;
 /** Kantenlaenge der Musterkachel in Pixeln. 2 = feinstes Raster, das der
  *  1bpp-Wandler noch exakt wiedergibt. */
 const BOARD_MQTT_SHADOW_TILE = 2;
 const BOARD_MQTT_SHADOW_PATTERN_ID = 'mqttShadowHatch';
 
-// Zeichenbudget nach der etablierten Herleitung (0,44538 px/Zeichen bei 1px
-// Schriftgroesse, 8% Sicherheitsabstand), Innenbreite 700 - 2*40 = 620:
-//   Body  36px:  floor(522 / (36*0.44538) * 0.92) = 29
-//   Titel 32px:  floor(522 / (32*0.44538) * 0.92) = 33; davon gehen rechts
-//                nochmal ~60px fuers Loesch-X ab -> 29
+
 /** Loesch-X oben rechts auf jeder Karte (Nutzerwunsch 2026-08-29: "auf den
  *  einzelnen Karten ein lösch-x"). Oben rechts, weil unten rechts die
  *  umgeknickte Ecke sitzt. Die Trefferflaeche ist deutlich groesser als das
  *  gezeichnete Kreuz -- getippt wird mit dem Finger, nicht mit dem Mauszeiger
  *  (gleiche Ueberlegung wie bei der auf den Bildschirmrand ausgedehnten
  *  Favoritenleiste, s. touch_zone.cpp FAVORITE_ROW_BOTTOM). */
-const BOARD_MQTT_CLOSE_TOUCH = 72;
+const BOARD_MQTT_CLOSE_TOUCH = 108;
 /** Halbe Kantenlaenge des gezeichneten Kreuzes. */
-const BOARD_MQTT_CLOSE_ARM = 11;
+const BOARD_MQTT_CLOSE_ARM = 17;
 /** Mittelpunkt des Kreuzes, gemessen von der rechten/oberen Kartenkante. */
-const BOARD_MQTT_CLOSE_INSET = 34;
+const BOARD_MQTT_CLOSE_INSET = 51;
 
-const BOARD_MQTT_TITLE_SIZE = 32;
-const BOARD_MQTT_TITLE_MAX_CHARS = 29;
-const BOARD_MQTT_AGE_SIZE = 24;
-const BOARD_MQTT_BODY_SIZE = 36;
-const BOARD_MQTT_BODY_MAX_CHARS = 29;
+const BOARD_MQTT_TITLE_SIZE = 48;
+const BOARD_MQTT_TITLE_MAX_CHARS = 30;
+const BOARD_MQTT_AGE_SIZE = 36;
+const BOARD_MQTT_BODY_SIZE = 54;
+const BOARD_MQTT_BODY_MAX_CHARS = 30;
 const BOARD_MQTT_MAX_BODY_LINES = 5;
-const BOARD_MQTT_BODY_LEAD = 46;
+const BOARD_MQTT_BODY_LEAD = 69;
 
 // Baselines als feste Versaetze statt Boxmodell (wie im Rest der Codebasis,
 // s. Datei-Kommentar board_calendar.php); 0,8 * Schriftgroesse naehert die
 // Versalhoehe an.
-const BOARD_MQTT_TITLE_ASCENT = 26; // round(32 * 0.8)
-const BOARD_MQTT_BODY_ASCENT  = 29; // round(36 * 0.8)
-const BOARD_MQTT_AGE_DESCENT  = 10;
+const BOARD_MQTT_TITLE_ASCENT = 38; // round(48 * 0.8)
+const BOARD_MQTT_BODY_ASCENT  = 43; // round(54 * 0.8)
+const BOARD_MQTT_AGE_DESCENT  = 15;
 /** Abstand Titel-Baseline -> erste Body-Baseline. */
-const BOARD_MQTT_TITLE_TO_BODY = 52;
+const BOARD_MQTT_TITLE_TO_BODY = 70;
 /** Mindestabstand letzte Body-Baseline -> Zeitstempel-Baseline. */
-const BOARD_MQTT_BODY_TO_AGE = 48;
+const BOARD_MQTT_BODY_TO_AGE = 58;
 
 function board_mqtt_truncate_title(string $text): string
 {
@@ -337,7 +347,7 @@ function board_mqtt_column_x(int $col): int
 /**
  * Baut die Post-it-Wand. Zwei Spalten, Hoehe je Karte nach Textmenge, neue
  * Karte immer in die kuerzere Spalte (Masonry). Passt eine Karte nicht mehr,
- * endet das Raster mit "+ N weitere" -- dieselbe Ueberlauf-Idee wie beim
+ * endet das Raster schlicht -- wieviele fehlen, sagt der Seitenkopf. Frueher
  * Kalender: VOR dem Setzen pruefen, ob danach der Hinweis selbst noch passt,
  * sonst waere ausgerechnet der Hinweis das, was ueberlaeuft.
  *
@@ -358,7 +368,6 @@ function board_mqtt_layout(array $selected): array
     // Laufender Fuss je Spalte (naechste freie y-Position).
     $columnY = array_fill(0, BOARD_MQTT_COLUMNS, BOARD_MQTT_GRID_TOP);
     $anzahl = count($nachrichten);
-    $noteHeight = BOARD_MQTT_BODY_SIZE + BOARD_MQTT_ROW_GAP;
     $gesetzt = 0;
 
     foreach ($nachrichten as $i => $msg) {
@@ -399,9 +408,13 @@ function board_mqtt_layout(array $selected): array
         // kurzer Zettel den Stempel mitten im leeren Feld stehen.
         $ageBaseline = $y + $hoehe - BOARD_MQTT_CARD_PADDING;
 
-        $restNachDieser = $anzahl - $i - 1;
-        $reserve = $restNachDieser > 0 ? $noteHeight : 0;
-        if ($y + $hoehe + BOARD_MQTT_SHADOW + $reserve > BOARD_DEPARTURES_MAX_Y) {
+        // Kein Platz mehr reserviert fuer einen "+ N weitere"-Hinweis: der
+        // kostete eine ganze Kartenreihe (Hinweishoehe + Reihenabstand) --
+        // fuer eine Information, die ohnehin im Seitenkopf steht
+        // ("Nachrichten (6 von 8)"). Zwei zusaetzliche Nachrichten sind mehr
+        // wert als eine Zeile darueber, dass welche fehlen
+        // (Nutzervorgabe 2026-09-04).
+        if ($y + $hoehe + BOARD_MQTT_SHADOW > BOARD_DEPARTURES_MAX_Y) {
             break;
         }
 
@@ -422,14 +435,6 @@ function board_mqtt_layout(array $selected): array
         ];
         $columnY[$col] = $y + $hoehe + BOARD_MQTT_ROW_GAP;
         $gesetzt++;
-    }
-
-    if ($anzahl > $gesetzt) {
-        $items[] = [
-            'type' => 'note',
-            'y'    => max($columnY) + BOARD_MQTT_BODY_ASCENT,
-            'text' => '+ ' . ($anzahl - $gesetzt) . ' weitere',
-        ];
     }
 
     return $items;
@@ -504,21 +509,28 @@ function board_mqtt_shadow_pattern_svg(): string
 
 /**
  * @param list<array> $items von board_mqtt_layout()
- * @param int|null $count Gesamtzahl der Nachrichten fuer den Seitenkopf
- *        (Nutzerwunsch 2026-09-01); optional statt in $items gemischt, damit
- *        board_mqtt_layout()s Rueckgabe (Karten/Notiz-Items, von vielen Tests
- *        indexbasiert geprueft) unveraendert bleibt. null = kein Kopf (z.B.
- *        isolierte Render-Tests einzelner Karten).
+ * @param int|null $count Gesamtzahl der Nachrichten. Wird NUR gebraucht, um zu
+ *        erkennen, dass nicht alle auf die Seite gepasst haben; null = diese
+ *        Pruefung entfaellt (isolierte Render-Tests einzelner Karten).
+ *        Uebergeben statt in $items gemischt, damit board_mqtt_layout()s
+ *        Rueckgabe (von vielen Tests indexbasiert geprueft) unveraendert bleibt.
  */
 function board_mqtt_render_svg(array $items, ?int $count = null): string
 {
     $e = static fn (string $s): string => htmlspecialchars($s, ENT_XML1);
     $out = board_mqtt_shadow_pattern_svg() . '<g font-family="Atkinson Hyperlegible Next">';
 
-    if ($count !== null) {
+    // Kopfzeile NUR bei Ueberlauf. "Nachrichten (6)" ueber sechs sichtbaren
+    // Zetteln war redundant -- man zaehlt sie ab (Nutzerbefund 2026-09-04).
+    // "6 von 8" dagegen steht nirgends sonst: die zwei fehlenden Zettel sind
+    // per Definition nicht zu sehen. Frueher trug diese Information ein
+    // "+ N weitere" unter den Karten, das eine ganze Kartenreihe kostete
+    // (s. board_mqtt_layout()).
+    $gezeigt = count(array_filter($items, static fn ($i): bool => ($i['type'] ?? '') === 'card'));
+    if ($count !== null && $gezeigt < $count) {
         $out .= sprintf(
             '<text x="%d" y="130" font-weight="bold" font-size="28">%s</text>',
-            BOARD_MQTT_GRID_X, $e(sprintf('Nachrichten (%d)', $count))
+            BOARD_MQTT_GRID_X, $e(sprintf('%d von %d Nachrichten', $gezeigt, $count))
         );
     }
 

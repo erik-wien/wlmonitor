@@ -107,6 +107,20 @@ function board_svg_defs(): string
         fill="black" text-anchor="middle">!</text>
 </g>
 
+<!-- Dieselbe Form wie iconWarn, aber in Textgroesse: das Warndreieck steht
+     seit 2026-09-04 als eigenes Zeichen VOR dem Zielnamen, nicht mehr als
+     Index an der Ecke der Linien-Badge (Nutzerbefund: "zu klein"). Auf 26px
+     Gesamthoehe war es aus Zimmerentfernung nicht als Dreieck erkennbar; hier
+     ist es 39px hoch und damit so gross wie die Versalhoehe des 55px-Ziel-
+     namens daneben. Eigenes Symbol statt <use> mit scale(): der Strich soll
+     NICHT mitwachsen (bei 1,5-facher Skalierung waere er 3,75px und wirkte
+     ploetzlich fett gegenueber den anderen Umrissen auf der Seite). -->
+<g id="iconWarnBig">
+  <polygon points="0,-20 22,17 -22,17" fill="white" stroke="black" stroke-width="3" stroke-linejoin="round"/>
+  <text x="0" y="14" font-family="Atkinson Hyperlegible Next" font-weight="bold" font-size="24"
+        fill="black" text-anchor="middle">!</text>
+</g>
+
 <g id="badgeTram"><circle r="34" fill="black"/></g>
 <g id="badgeBus"><rect x="-34" y="-34" width="68" height="68" rx="14" fill="#404040"/></g>
 <g id="badgeMetro"><rect x="-34" y="-34" width="68" height="68" fill="black"/></g>
@@ -645,20 +659,28 @@ function board_render_svg(
     );
     $weatherSvg = $istVollbreiteSeite ? '' : board_render_weather_svg($weather, $firmwareBuild, $sun);
 
+    $kalenderStand = null;
     if ($requestedPage <= $totalDeparturePages) {
         $items = board_paginate_departures($activeFavorite, $requestedPage, $filteredAlerts)['items'];
         $mainSvg = board_render_departures_svg($items);
     } elseif ($requestedPage === $disruptionsPage) {
         $mainSvg = board_render_disruptions_svg(board_layout_disruptions($filteredAlerts));
     } elseif ($istKalenderSeite) {
-        $mainSvg = board_calendar_render_svg(board_calendar_layout($calendar));
+        $kalenderItems = board_calendar_layout($calendar);
+        $mainSvg = board_calendar_render_svg($kalenderItems);
+        // Statt "Stand HH:MM" (WL-Abfrage) unten links: der Kalenderstand.
+        $kalenderStand = board_calendar_status_text($kalenderItems) ?: null;
     } else {
         // Nur erreichbar wenn $hasMqtt -- $requestedPage ist hier bereits
         // gegen $totalContentPages geklemmt.
         $mainSvg = board_mqtt_render_svg(board_mqtt_layout($mqtt), count($mqtt['messages']));
     }
 
-    $standAndPagination = board_render_stand_and_pagination_svg($dataStand, $requestedPage, $totalPages, true, $pageCategories);
+    $standAndPagination = board_render_stand_and_pagination_svg(
+        $dataStand, $requestedPage, $totalPages, true, $pageCategories,
+        $hasMqtt ? count($mqtt['messages']) : null,
+        $kalenderStand
+    );
 
     return <<<SVG
 <svg xmlns="http://www.w3.org/2000/svg" width="1872" height="1404" viewBox="0 0 1872 1404">
@@ -993,6 +1015,14 @@ const BOARD_PAGINATION_SIDE_PADDING = 20; // Luft links/rechts der aeussersten Z
 const BOARD_PAGINATION_CIRCLE_RADIUS = 30; // war 20 -- passt zur 74px-Zeile
 const BOARD_PAGINATION_ICON_SCALE  = 1.5;  // Icons sind auf ~26px gezeichnet (+-13)
 const BOARD_PAGINATION_FONT_SIZE   = 38;   // war 30
+/** Nachrichtenanzahl neben dem Sprechblasen-Icon (Nutzerwunsch 2026-09-04):
+ *  Icon um diesen Betrag nach links, Zahl um denselben nach rechts. 20px hält
+ *  beides in der fixen 100px-Slotbreite -- die Firmware rechnet die
+ *  Pillenbreite unabhängig aus totalPages nach und kennt den Inhalt nicht. */
+const BOARD_PAGINATION_BADGE_SHIFT     = 20;
+/** Kleiner als die Seitenziffern: die Zahl steht neben einem Icon im selben
+ *  Slot, nicht allein darin. */
+const BOARD_PAGINATION_BADGE_FONT_SIZE = 30;
 /** Linke Kante der Pille -- sie waechst jetzt nach RECHTS (vorher rechtsbuendig
  *  auf x=1083 verankert und nach links gewachsen). */
 const BOARD_PAGINATION_LEFT_EDGE   = BOARD_NAV_MARGIN;
@@ -1152,14 +1182,36 @@ function board_render_departure_header(array $item): string
  */
 const BOARD_DEPARTURE_DESTINATION_MAX_CHARS = 28;
 
-function board_truncate_destination(string $text): string
+/** Linke Kante des Zielnamens (und, bei Stoerung, des Warndreiecks davor). */
+const BOARD_DEPARTURE_DESTINATION_X = 145;
+/**
+ * Platz, den das vorangestellte Warndreieck dem Zielnamen wegnimmt: 44px
+ * Symbolbreite (iconWarnBig, +-22) + 22px Abstand zum Text. Der Abstand ist
+ * bewusst grosszuegig: mit 14px klebte das Dreieck im gerenderten Bild am
+ * ersten Buchstaben und las sich wie ein Teil des Wortes.
+ */
+const BOARD_DEPARTURE_WARN_WIDTH = 66;
+/**
+ * Zeichenbudget einer gestoerten Zeile. Das Dreieck kostet 66px der 755px
+ * Textbreite; mit derselben Herleitung wie oben:
+ * floor((755 - 66) / 24,5 * 0.92) = 25. Ohne diese Absenkung liefe ein langer
+ * Zielname bei gestoerten Linien genau um die Symbolbreite in die
+ * Minutenanzeige hinein -- also ausgerechnet der Fehler, den
+ * BOARD_DEPARTURE_DESTINATION_MAX_CHARS verhindern soll.
+ */
+const BOARD_DEPARTURE_DESTINATION_MAX_CHARS_WARN = 25;
+
+function board_truncate_destination(string $text, bool $disrupted = false): string
 {
-    if (mb_strlen($text, 'UTF-8') <= BOARD_DEPARTURE_DESTINATION_MAX_CHARS) {
+    $max = $disrupted
+        ? BOARD_DEPARTURE_DESTINATION_MAX_CHARS_WARN
+        : BOARD_DEPARTURE_DESTINATION_MAX_CHARS;
+
+    if (mb_strlen($text, 'UTF-8') <= $max) {
         return $text;
     }
 
-    $budget = BOARD_DEPARTURE_DESTINATION_MAX_CHARS - 1; // Platz fuer "…"
-    return rtrim(mb_substr($text, 0, $budget, 'UTF-8')) . '…';
+    return rtrim(mb_substr($text, 0, $max - 1, 'UTF-8')) . '…'; // -1: Platz fuer "…"
 }
 
 function board_render_departure_row(array $item): string
@@ -1184,20 +1236,30 @@ function board_render_departure_row(array $item): string
             $r + 9, $labelSize, htmlspecialchars($item['label'], ENT_XML1)
         );
     }
-    if ($item['disrupted'] ?? false) {
-        // Ecke oben rechts an der Linien-Badge (Box 20..88 x, r-34..r+34) --
-        // einziger Platz in der 96px-Zeile ohne Kollision mit Plattform- oder
-        // Zieltext (Nutzerwunsch 2026-08-26, Analog zum "⚠️"-Marker im Web,
-        // web/js/wl-monitor.js createAlertMarker()).
-        $out .= sprintf('<use href="#iconWarn" transform="translate(86,%d)"/>', $r - 26);
+    $isDisrupted = (bool) ($item['disrupted'] ?? false);
+    if ($isDisrupted) {
+        // Eigenes Zeichen VOR dem Zielnamen (Nutzervorgabe 2026-09-04: "Das
+        // Warndreieck als Index der Linie ist zu klein - bitte als eigenes
+        // Zeichen vor den Stationsnamen"). Vorher sass es als 26px-Index an
+        // der Ecke der Linien-Badge; dort war die Flaeche zwar frei, aber zu
+        // klein, um die Dreiecksform noch zu erkennen.
+        //
+        // Vertikal auf die Versalhoehe des Zielnamens gesetzt: dessen
+        // Grundlinie ist $r+19, die Versalhoehe reicht bis etwa $r-20. Das
+        // Symbol laeuft von -20 bis +17 um seinen Ursprung, also Ursprung auf
+        // $r+2.
+        $out .= sprintf('<use href="#iconWarnBig" transform="translate(%d,%d)"/>',
+            BOARD_DEPARTURE_DESTINATION_X + BOARD_DEPARTURE_WARN_WIDTH / 2, $r + 2);
     }
     $out .= sprintf(
         '<text x="110" y="%d" font-weight="bold" font-size="22" fill="%s">%s</text>',
         $r + 8, $fill, htmlspecialchars($item['platform'], ENT_XML1)
     );
     $out .= sprintf(
-        '<text x="145" y="%d" font-size="55" fill="%s">%s</text>',
-        $r + 19, $fill, htmlspecialchars(board_truncate_destination($item['destination']), ENT_XML1)
+        '<text x="%d" y="%d" font-size="55" fill="%s">%s</text>',
+        $isDisrupted ? BOARD_DEPARTURE_DESTINATION_X + BOARD_DEPARTURE_WARN_WIDTH : BOARD_DEPARTURE_DESTINATION_X,
+        $r + 19, $fill,
+        htmlspecialchars(board_truncate_destination($item['destination'], $isDisrupted), ENT_XML1)
     );
 
     if ($isDelayed) {
@@ -1390,11 +1452,21 @@ function board_render_stand_and_pagination_svg(
     // Seitenzahl -> 'monitor'|'stoerung'|'kalender'|'wetter' (board_pagination_categories()).
     // Leer = alte Ziffernpille (Faellt zurueck, kein Bruch fuer Aufrufer/Tests,
     // die die Seitenstruktur nicht kennen -- s. Funktionskommentar unten).
-    array $pageCategories = []
+    array $pageCategories = [],
+    // Anzahl wartender Nachrichten, neben dem Sprechblasen-Icon (Nutzerwunsch
+    // 2026-09-04). null = nicht anzeigen. Steht IM Slot, nicht daneben: die
+    // Slotbreite ist fix und wird von der Firmware unabhaengig nachgerechnet
+    // (s. Funktionskommentar) -- eine breitere Pille verschoebe die Touchzonen.
+    ?int $mqttCount = null,
+    // Ersetzt das generische "Stand HH:MM". Gebraucht von der Kalenderseite:
+    // dort bezieht sich $dataStand (Zeitpunkt der WL-Abfrage) auf Daten, die
+    // auf der Seite gar nicht vorkommen -- gezeigt gehoert der Kalenderstand
+    // (Nutzerbefund 2026-09-04). null = Regelfall.
+    ?string $standText = null
 ): string {
     $standSvg = sprintf(
-        '<text x="16" y="1286" font-family="Atkinson Hyperlegible Next" font-size="24" fill="black">Stand %s</text>',
-        $dataStand->format('H:i')
+        '<text x="16" y="1286" font-family="Atkinson Hyperlegible Next" font-size="24" fill="black">%s</text>',
+        htmlspecialchars($standText ?? ('Stand ' . $dataStand->format('H:i')), ENT_XML1)
     );
 
     // $showPagination=false: der Schlafschirm auf dem Weg in den ECHTEN
@@ -1432,14 +1504,36 @@ function board_render_stand_and_pagination_svg(
         }
 
         if ($iconSvg !== '') {
+            // Nachrichten-Slot mit Anzahl: Icon nach links ruecken, Zahl
+            // rechts daneben -- beides bleibt innerhalb der fixen Slotbreite
+            // (100px; Icon ~39px breit nach Skalierung, Zahl <= 2 Stellen).
+            //
+            // NICHT auf der aktiven Seite: dort liegt ein schwarzer Kreis mit
+            // r=30 unter dem Slot, Icon und Zahl nebeneinander sind zusammen
+            // aber ~80px breit und ragten sichtbar ueber seinen Rand hinaus
+            // (im gerenderten Bild geprueft). Verlust ist keiner -- wer auf der
+            // Nachrichtenseite steht, liest die Anzahl im Seitenkopf
+            // ("Nachrichten (6 von 8)"). Gebraucht wird sie genau dann, wenn
+            // man WOANDERS ist.
+            $zeigtAnzahl = ($pageCategories[$p] ?? '') === 'mqtt' && $mqttCount !== null && !$isActive;
+            $iconX = $zeigtAnzahl ? $x - BOARD_PAGINATION_BADGE_SHIFT : $x;
+
             // Die Icons sind auf ~26px gezeichnet (+-13 um den Ursprung) und
             // waren fuer das alte 48px-Band gedacht; in der 74px-Zeile wirken
             // sie ohne Skalierung verloren. Skalieren statt neu zeichnen haelt
             // sie deckungsgleich mit drawStatusIcon() in der Firmware.
             $pagesSvg .= sprintf(
                 '<g transform="translate(%d,%d) scale(%s)">%s</g>',
-                $x, $cy, rtrim(rtrim(number_format(BOARD_PAGINATION_ICON_SCALE, 2, '.', ''), '0'), '.'), $iconSvg
+                $iconX, $cy, rtrim(rtrim(number_format(BOARD_PAGINATION_ICON_SCALE, 2, '.', ''), '0'), '.'), $iconSvg
             );
+
+            if ($zeigtAnzahl) {
+                $pagesSvg .= sprintf(
+                    '<text x="%d" y="%d" text-anchor="middle" font-weight="bold" font-size="%d" fill="%s">%d</text>',
+                    $x + BOARD_PAGINATION_BADGE_SHIFT, $baselineY - 3,
+                    BOARD_PAGINATION_BADGE_FONT_SIZE, $color, $mqttCount
+                );
+            }
         } elseif ($isActive) {
             $pagesSvg .= sprintf(
                 '<text x="%d" y="%d" text-anchor="middle" font-weight="bold" font-size="%d" fill="white">%d</text>',
@@ -1464,23 +1558,36 @@ function board_render_stand_and_pagination_svg(
 }
 
 /**
+ * Schriftgroessen der Stoerungsseite. 46px ist EXAKT die Groesse des
+ * Wetter-Fliesstextes (board_render_weather_svg(), s.
+ * BOARD_WEATHER_TEXT_MAX_CHARS_PER_LINE) -- Nutzervorgabe 2026-09-04:
+ * "Betriebsstoerung: Gleich Schriftgroesse wie Wettervorhersage". Vorher 32px,
+ * und damit die kleinste Schrift auf dem ganzen Board, obwohl es die Seite mit
+ * dem wichtigsten Text ist. Der Titel waechst mit (40 -> 54), sonst waere die
+ * Ueberschrift kleiner als der Fliesstext darunter.
+ */
+const BOARD_DISRUPTIONS_TITLE_SIZE = 54;
+const BOARD_DISRUPTIONS_TEXT_SIZE  = 46;
+/** Zeilenabstand der Beschreibung, mit der Schrift mitskaliert (42 * 46/32). */
+const BOARD_DISRUPTIONS_LINE_HEIGHT = 60;
+
+/**
  * Verfuegbare Spaltenbreite der Abfahrten-/Stoerungsspalte (1067px, x=16
  * bis x=1083) geteilt durch die bei 39px gemessene mittlere Zeichenbreite
- * (17,37px/Zeichen, s. Task 4), linear auf 32px skaliert, 8% Sicherheits-
- * abstand: floor(1067 / (17.37 * 32/39) * 0.92) = 68, hier auf 67 abgerundet
- * (Review-Befund: die urspruengliche Formel im Plan ergab bereits 68, nicht
- * 67 -- 67 ist die konservativere, schmalere Wahl und kann daher nie zum
- * Ueberlauf ueber x=1083 fuehren, nutzt die verfuegbare Breite nur minimal
- * weniger aus).
+ * (17,37px/Zeichen, s. Task 4), linear auf BOARD_DISRUPTIONS_TEXT_SIZE
+ * skaliert, 8% Sicherheitsabstand:
+ * floor(1067 / (17.37 * 46/39) * 0.92) = 47. Mit den frueheren 32px waren es
+ * 67 Zeichen -- wer die Schriftgroesse aendert, MUSS diesen Wert mitrechnen,
+ * sonst laeuft die Zeile ueber x=1083 hinaus.
  */
-const BOARD_DISRUPTIONS_MAX_CHARS_PER_LINE = 67;
+const BOARD_DISRUPTIONS_MAX_CHARS_PER_LINE = 47;
 
 /**
  * Abstand von der Titel-Grundlinie bis zur ersten Beschreibungszeile.
- * 32px (2x16) waren bei 32px Schrift optisch fast auf Stoss -- plus eine
- * halbe Beschreibungszeile (42/2 = 21px) Luft, Nutzerwunsch 2026-08-22.
+ * Mit der Schrift mitgewachsen (53 * 46/32 = 76): der alte Wert war fuer
+ * 32px-Text bemessen und liesse den 46px-Fliesstext am Titel kleben.
  */
-const BOARD_DISRUPTIONS_TITLE_GAP = 53;
+const BOARD_DISRUPTIONS_TITLE_GAP = 76;
 
 /**
  * Wie board_wrap_text() (Task 4), aber mit hartem Zeilenlimit: ORF-
@@ -1510,9 +1617,10 @@ function board_wrap_disruption_text(string $text, int $maxLines): array
 }
 
 /**
- * Cursor-Layout der Stoerungsseite: Titel fett (40px) + Beschreibung (32px),
- * 50px Abstand vor jedem Titel, BOARD_DISRUPTIONS_TITLE_GAP zwischen Titel
- * und Beschreibung, 42px Zeilenabstand innerhalb der Beschreibung, 40px nach
+ * Cursor-Layout der Stoerungsseite: Titel fett (BOARD_DISRUPTIONS_TITLE_SIZE)
+ * + Beschreibung (BOARD_DISRUPTIONS_TEXT_SIZE), 50px Abstand vor jedem Titel,
+ * BOARD_DISRUPTIONS_TITLE_GAP zwischen Titel und Beschreibung,
+ * BOARD_DISRUPTIONS_LINE_HEIGHT Zeilenabstand in der Beschreibung, 40px nach
  * der letzten Beschreibungszeile bis zum Trennstrich. $alerts ist bereits auf
  * die Linien des aktiven Favoriten gefiltert (Aufgabe des Aufrufers, s.
  * Interfaces).
@@ -1537,7 +1645,10 @@ function board_layout_disruptions(array $alerts): array
 
     foreach ($alerts as $alert) {
         $titleTop = $cursor + 50;
-        $titleBaseline = $titleTop + 20;
+        // Grundlinie = Oberkante + Versalhoehe (~0,8 der Schriftgroesse).
+        // Frueher fix +20 fuer 40px Schrift; mit 54px saesse der Titel sonst
+        // teilweise oberhalb seines eigenen Startpunkts.
+        $titleBaseline = $titleTop + (int) round(BOARD_DISRUPTIONS_TITLE_SIZE * 0.8);
 
         // Wieviele Beschreibungszeilen passen ab hier noch auf die Seite?
         // Frueher pauschal 3 -- der Text wurde damit fast immer gekuerzt,
@@ -1548,7 +1659,7 @@ function board_layout_disruptions(array $alerts): array
         // nicht auf eine Folgeseite um (s. Funktionskopf).
         $firstLineY = $titleBaseline + BOARD_DISRUPTIONS_TITLE_GAP;
         $available = BOARD_DEPARTURES_MAX_Y - $firstLineY;
-        $maxLines = max(1, (int) floor($available / 42) + 1);
+        $maxLines = max(1, (int) floor($available / BOARD_DISRUPTIONS_LINE_HEIGHT) + 1);
 
         $items[] = ['type' => 'disruption_title', 'y' => $titleBaseline, 'text' => $alert['title']];
 
@@ -1556,10 +1667,10 @@ function board_layout_disruptions(array $alerts): array
         $y = $firstLineY;
         foreach ($descLines as $line) {
             $items[] = ['type' => 'disruption_line', 'y' => $y, 'text' => $line];
-            $y += 42;
+            $y += BOARD_DISRUPTIONS_LINE_HEIGHT;
         }
 
-        $dividerY = $y - 42 + 40;
+        $dividerY = $y - BOARD_DISRUPTIONS_LINE_HEIGHT + 40;
         $items[] = ['type' => 'disruption_divider', 'y' => $dividerY];
         $cursor = $dividerY;
     }
@@ -1577,12 +1688,12 @@ function board_render_disruptions_svg(array $items): string
     foreach ($items as $item) {
         $out .= match ($item['type']) {
             'disruption_title' => sprintf(
-                '<text x="16" y="%d" font-weight="bold" font-size="40" fill="black">%s</text>',
-                $item['y'], htmlspecialchars($item['text'], ENT_XML1)
+                '<text x="16" y="%d" font-weight="bold" font-size="%d" fill="black">%s</text>',
+                $item['y'], BOARD_DISRUPTIONS_TITLE_SIZE, htmlspecialchars($item['text'], ENT_XML1)
             ),
             'disruption_line' => sprintf(
-                '<text x="16" y="%d" font-size="32" fill="black">%s</text>',
-                $item['y'], htmlspecialchars($item['text'], ENT_XML1)
+                '<text x="16" y="%d" font-size="%d" fill="black">%s</text>',
+                $item['y'], BOARD_DISRUPTIONS_TEXT_SIZE, htmlspecialchars($item['text'], ENT_XML1)
             ),
             'disruption_divider' => sprintf(
                 '<line x1="16" y1="%d" x2="1083" y2="%d" stroke="black" stroke-width="1"/>',

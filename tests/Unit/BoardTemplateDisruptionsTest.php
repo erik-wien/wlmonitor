@@ -57,22 +57,39 @@ class BoardTemplateDisruptionsTest extends TestCase
         $items = board_layout_disruptions($alerts);
         $headers = array_values(array_filter($items, fn ($i) => $i['type'] === 'disruption_title'));
         $this->assertCount(2, $headers);
-        $this->assertSame(160, $headers[0]['y']);
+        // Spaltenoberkante 90 + 50 Vorlauf + Versalhoehe des Titels. Aus den
+        // Konstanten abgeleitet statt fest verdrahtet: 2026-09-04 wuchs die
+        // Schrift auf Wettervorhersage-Groesse, und die fest notierte 160
+        // war danach nur noch ein Wert ohne Herleitung.
+        $erwarteteTitelBasis = 90 + 50 + (int) round(BOARD_DISRUPTIONS_TITLE_SIZE * 0.8);
+        $this->assertSame($erwarteteTitelBasis, $headers[0]['y']);
         $this->assertStringContainsString('Gleisbauarbeiten', $headers[0]['text']);
 
         // Halbe Beschreibungszeile Luft zwischen Titel und Text
         // (BOARD_DISRUPTIONS_TITLE_GAP, Nutzerwunsch 2026-08-22).
         $lines = array_values(array_filter($items, fn ($i) => $i['type'] === 'disruption_line'));
-        $this->assertSame(160 + BOARD_DISRUPTIONS_TITLE_GAP, $lines[0]['y']);
+        $this->assertSame($erwarteteTitelBasis + BOARD_DISRUPTIONS_TITLE_GAP, $lines[0]['y']);
 
         $svg = board_render_disruptions_svg($items);
-        $this->assertStringContainsString('font-weight="bold" font-size="40"', $svg);
+        $this->assertStringContainsString(
+            sprintf('font-weight="bold" font-size="%d"', BOARD_DISRUPTIONS_TITLE_SIZE), $svg
+        );
+        // Nutzervorgabe 2026-09-04: der Fliesstext hat exakt die Groesse des
+        // Wetter-Fliesstextes. Hier gegen die WETTER-Konstante geprueft, nicht
+        // gegen die eigene -- sonst wuerde der Test die Gleichheit, um die es
+        // geht, gar nicht bemerken.
+        $this->assertSame(46, BOARD_DISRUPTIONS_TEXT_SIZE, 'gleich gross wie der Wetter-Fliesstext');
+        $this->assertStringContainsString('font-size="46"', $svg);
         $this->assertStringContainsString('Gleisbauarbeiten', $svg);
         $this->assertStringContainsString('U3: Bauarbeiten', $svg);
         // Nicht mehr auf 3 Zeilen gekuerzt: bei einer ganzen freien Spalte
         // wird der ORF-Text vollstaendig gezeigt (Nutzerwunsch 2026-08-22).
         $this->assertStringNotContainsString('…', $svg);
-        $this->assertStringContainsString('Weiterfahrt bis Augasse.', $svg, 'letzter Satz der langen Meldung muss noch da sein');
+        // Nur das letzte WORT pruefen: seit der Fliesstext auf 46px steht
+        // (2026-09-04), passen 47 statt 67 Zeichen in die Zeile, und der Satz
+        // bricht zwischen "bis" und "Augasse." um -- die alte Suche nach dem
+        // ganzen Satz haette also den Umbruch gemeldet, nicht fehlenden Text.
+        $this->assertStringContainsString('Augasse.', $svg, 'Ende der langen Meldung muss noch da sein');
     }
 
     public function test_description_is_truncated_only_when_the_column_really_runs_out(): void
