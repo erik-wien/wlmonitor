@@ -4,7 +4,7 @@ title: Lösch-X der Board-Nachrichten am Gerät funktionsfähig machen
 status: In Progress
 assignee: []
 created_date: '2026-09-04 05:49'
-updated_date: '2026-09-04 06:34'
+updated_date: '2026-09-04 19:46'
 labels: []
 dependencies: []
 priority: high
@@ -44,10 +44,10 @@ Erfordert einen Reflash.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 web/board.php sendet X-Board-Touch-Zones auch auf dem echten Geraetepfad (nicht nur bei debug=png und sim=1) -- nur auf der MQTT-Seite, damit der Header sonst keine Bytes kostet
-- [ ] #2 Firmware sammelt den Header (HEADER_NAMES in board_client.cpp) und legt die Zonen im RTC-Speicher ab, wie rtcLastFavoriteCount/rtcLastTotalPages: der Tipp erfolgt nach dem Deep Sleep und muss gegen die Zonen des LETZTEN Abrufs geprueft werden
-- [ ] #3 Beim Tippen werden zuerst die dynamischen Zonen geprueft, dann die feste Geometrie (mapTouchToZone). Treffer sendet X-Device-Touch: mqtt_del_<id>
-- [ ] #4 Obergrenze fuer Zonenzahl und id-Laenge in der Firmware, damit ein langer Header keinen festen Puffer sprengt; Ueberzaehlige werden verworfen statt zu ueberlaufen
+- [x] #1 web/board.php sendet X-Board-Touch-Zones auch auf dem echten Geraetepfad (nicht nur bei debug=png und sim=1) -- nur auf der MQTT-Seite, damit der Header sonst keine Bytes kostet
+- [x] #2 Firmware sammelt den Header (HEADER_NAMES in board_client.cpp) und legt die Zonen im RTC-Speicher ab, wie rtcLastFavoriteCount/rtcLastTotalPages: der Tipp erfolgt nach dem Deep Sleep und muss gegen die Zonen des LETZTEN Abrufs geprueft werden
+- [x] #3 Beim Tippen werden zuerst die dynamischen Zonen geprueft, dann die feste Geometrie (mapTouchToZone). Treffer sendet X-Device-Touch: mqtt_del_<id>
+- [x] #4 Obergrenze fuer Zonenzahl und id-Laenge in der Firmware, damit ein langer Header keinen festen Puffer sprengt; Ueberzaehlige werden verworfen statt zu ueberlaufen
 - [ ] #5 Am ECHTEN Geraet verifiziert: Nachricht antippen laesst sie beim naechsten Bildaufbau verschwinden; Gegenprobe: Tippen daneben loescht nichts
-- [ ] #6 Firmware neu geflasht; Tests fuer die Zonen-Auswertung ergaenzt (test_touch_zone), alle bestehenden Tests bleiben gruen
+- [x] #6 Firmware neu geflasht; Tests fuer die Zonen-Auswertung ergaenzt (test_touch_zone), alle bestehenden Tests bleiben gruen
 <!-- AC:END -->

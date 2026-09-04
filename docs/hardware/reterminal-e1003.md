@@ -1264,10 +1264,17 @@ auf den Ton. Zwei Nutzervorgaben 2026-08-23 beheben das:
 ESP_SLEEP_WAKEUP_TIMER` wird ganz am Anfang von `setup()` gesichert
 (`wokenByTimer`), bevor irgendetwas anderes passiert:
 
-| Weckgrund | Ablauf | Piep | Aktiv-Fenster |
-|---|---|---|---|
-| Taste (oder Kaltstart) | `runActiveSession()` | ja (`beepConfirm()`) | 10 Min., 25-s-Refresh (`ACTIVE_IDLE_TIMEOUT_MS`, war 5 Min.) |
-| Timer | **ein** `fetchAndRender()`, direkt `goToSleep()` | **nein** | keins |
+| Weckgrund | Ablauf | Piep | Vollbild | Aktiv-Fenster |
+|---|---|---|---|---|
+| Taste (oder Kaltstart) | `runActiveSession()` | ja (`beepConfirm()`) | nur auf Tastendruck | Frist + Refresh, s. u. |
+| Timer | **ein** `fetchAndRender()`, direkt `goToSleep()` | **nein** | **ja, immer** | keins |
+
+**Timer-Wecken zeichnet seit fw63 VOLLSTÄNDIG neu** (`forceFull = true`,
+Nutzervorgabe 2026-09-04). Das kehrt die Vorgabe vom 2026-08-23 um („ohne
+zusätzliches Geflacker") — in der Sache zu Recht: bei stündlichem Abstand ist
+ein Vollbild-Durchlauf (gemessen 1,0 s Panel-Schreibvorgang, Zyklus 2,2 s statt
+unter 1 s) nichts gegen die Geisterbilder, die sich sonst über einen Tag aus
+lauter Patches ansammeln. E-Ink braucht den vollen Durchlauf zum Löschen.
 
 `runActiveSession()` durchläuft der Timer-Pfad seit fw53 gar nicht mehr —
 der Piep dort ist deshalb wieder bedingungslos (kein Parameter, keine
@@ -1277,17 +1284,49 @@ Abfahrtszeit ist noch brauchbar, anders als nach stundenlanger Funkstille
 (dafür bleibt der Schlafschirm-Mechanismus am Ende einer manuellen
 Aktiv-Session unverändert zuständig, s. §20.10).
 
-**Der Zeitplan fürs Timer-Wecken selbst** steckt in
-`lib/boardlogic/wake_schedule.h`/`.cpp` — bewusst eine reine, native testbare
-Funktion (`secondsUntilNextAutomaticWake(hour, minute, second)`), analog zu
-`touch_zone`/`error_state`:
+**Alle vier Zeitwerte kommen seit fw63 VOM SERVER** (Nutzerwunsch
+2026-09-04: „Die Einschlaf-Frist gehört auch in board settings btw"). Vorher
+waren es Firmware-Konstanten — jede Änderung kostete Neubau und Flashen am
+Kabel, für Werte, die man durch Beobachten kalibriert.
 
-- **00:00–05:59:** kein Zwischenschritt, direkt bis 06:00 durchschlafen.
-- **06:00–22:59:** stündlich (`+3600 s`).
-- **ab 23:00:** die nächste volle Stunde würde nach Mitternacht fallen (immer
-  der Fall ab 23:00, da 23:00+3600 s=Mitternacht) — dann direkt bis 06:00
-  **morgen**, statt eines einzelnen verlorenen Wake-ups kurz nach Mitternacht
-  (z. B. 23:30 → nicht 00:30, sondern 06:00 morgen).
+| Wert | Header | Vorgabe | wirkt auf |
+|---|---|---|---|
+| Einschlaf-Frist | `X-Board-Idle-Timeout-Sec` | 600 | `runActiveSession()` |
+| Nachladen | `X-Board-Refresh-Interval-Sec` | 25 | `runActiveSession()` |
+| Weckintervall | `X-Board-Wake-Interval-Sec` | 3600 | `goToSleep()` |
+| Ruhezeit von/bis | `X-Board-Quiet-Start-Hour` / `-End-Hour` | 0 / 6 | `goToSleep()` |
+
+Gepflegt in `wl_board_settings` (Migration 008) über `board_settings.php`,
+bei **jeder** Antwort mitgeschickt und in `RTC_DATA_ATTR` über den Tiefschlaf
+gehalten — bei jeder Antwort, weil ein Stromausfall auch RTC löscht und das
+Gerät sonst bis zur nächsten zufälligen Einstellungsänderung nichts davon
+wüsste. Fehlende Header setzen die zuletzt bekannten Werte **nicht** auf
+null (das wäre ein Weckzyklus ohne Pause, der den Akku in Stunden leert);
+unterschieden über ein `present`-Flag, weil Stundenwerte 0 sein dürfen.
+
+**Der Zeitplan selbst** steckt in `lib/boardlogic/wake_schedule.h`/`.cpp` —
+eine reine, native testbare Funktion, analog zu `touch_zone`/`error_state`:
+
+```
+secondsUntilNextAutomaticWake(hour, minute, second,
+                              intervalSeconds, quietStartHour, quietEndHour)
+```
+
+1. Steckt **jetzt** schon in der Ruhezeit → bis zu deren Ende schlafen.
+2. Sonst wäre der nächste Weckpunkt `jetzt + interval`. Fällt **der** in die
+   Ruhezeit, entfällt er ersatzlos → ebenfalls bis zum Ruhezeit-Ende.
+3. Sonst schlicht das Intervall.
+
+Mit den Vorgaben (3600 s, Ruhe 0–6) ergibt das **exakt** das Verhalten von
+vorher: nachts still, tagsüber stündlich, und ab 23:00 durchschlafen bis 06:00
+— denn der Weckpunkt um Mitternacht liegt bereits in der Ruhezeit. Die sechs
+ursprünglichen Zeitplan-Tests laufen unverändert durch und belegen genau diese
+Äquivalenz.
+
+`quietStart == quietEnd` heißt **keine** Ruhezeit (rund um die Uhr wecken) —
+eine gültige Einstellung, keine Fehleingabe. Ein Intervall von 0 fällt auf die
+Vorgabe zurück: der Server lässt es nicht zu, aber der Wert kommt über das
+Netz herein.
 
 `goToSleep()` ruft diese Funktion mit der lokalen Zeit aus `getLocalTime()`
 auf und setzt `esp_sleep_enable_timer_wakeup()` entsprechend — **für jeden**

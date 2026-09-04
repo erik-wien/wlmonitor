@@ -4,7 +4,7 @@ title: Absolutes Antippen der Pagination-Icons (Monitor/Störung/Kalender/Wetter
 status: In Progress
 assignee: []
 created_date: '2026-08-27 10:50'
-updated_date: '2026-08-29 06:22'
+updated_date: '2026-09-04 19:46'
 labels: []
 dependencies: []
 priority: medium
@@ -19,14 +19,14 @@ Nutzerwunsch 2026-08-27: die Pagination-Pille zeigt 4 Kategorie-Icons, ist aber 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Antippen des Monitor-Icons springt direkt zur ersten Abfahrtenseite, unabhaengig von der aktuellen Seite
-- [ ] #2 Antippen des Stoerung-Icons springt direkt zur Stoerungsseite (nur sichtbar/tippbar wenn vorhanden)
-- [ ] #3 Antippen des Kalender-Icons springt direkt zur Kalenderseite (nur sichtbar/tippbar wenn vorhanden)
-- [ ] #4 Antippen des Wetter-Icons springt direkt zum Schlafschirm
-- [ ] #5 web/board.php?debug=ui (Browser-Simulator) zeigt 4 einzelne Zonen statt page_prev/page_next und sendet die neuen absoluten X-Device-Touch-Werte
-- [ ] #6 touch_zone.cpp erkennt Tipp-Position pro Icon-Slot und sendet den passenden absoluten Touch-Wert
+- [x] #1 Antippen des Monitor-Icons springt direkt zur ersten Abfahrtenseite, unabhaengig von der aktuellen Seite
+- [x] #2 Antippen des Stoerung-Icons springt direkt zur Stoerungsseite (nur sichtbar/tippbar wenn vorhanden)
+- [x] #3 Antippen des Kalender-Icons springt direkt zur Kalenderseite (nur sichtbar/tippbar wenn vorhanden)
+- [x] #4 Antippen des Wetter-Icons springt direkt zum Schlafschirm
+- [x] #5 web/board.php?debug=ui (Browser-Simulator) zeigt 4 einzelne Zonen statt page_prev/page_next und sendet die neuen absoluten X-Device-Touch-Werte
+- [x] #6 touch_zone.cpp erkennt Tipp-Position pro Icon-Slot und sendet den passenden absoluten Touch-Wert
 - [ ] #7 Firmware neu geflasht und am echten Geraet verifiziert
-- [ ] #8 Alle bestehenden Tests bleiben gruen, neue Tests fuer die absolute Navigation ergaenzt
+- [x] #8 Alle bestehenden Tests bleiben gruen, neue Tests fuer die absolute Navigation ergaenzt
 <!-- AC:END -->
 
 ## Implementation Plan
