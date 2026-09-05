@@ -70,7 +70,8 @@ if (empty($_SERVER['HTTP_AUTHORIZATION']) && empty($_SERVER['HTTP_X_AUTH_TOKEN']
 
 require_once __DIR__ . '/../inc/initialize.php';
 require_once __DIR__ . '/../inc/favorites.php';
-require_once __DIR__ . '/../inc/monitor.php';
+// monitor_get()/diva_info() kommen seit 2026-09-05 aus erikr/wl-client
+// (Composer files-Autoload, ueber initialize.php geladen).
 require_once __DIR__ . '/../inc/board.php';
 require_once __DIR__ . '/../inc/weather.php';
 require_once __DIR__ . '/../inc/board_render.php';
@@ -137,7 +138,7 @@ try {
         $divas = board_all_divas([$activeFavoriteRaw]);
 
         try {
-            $monitor = monitor_get($con, $divas, 2);
+            $monitor = monitor_get($divas, 2, APIKEY);
         } catch (RuntimeException $e) {
             // "Keine Abfahrten fuer keine der angefragten DIVAs" ist kein
             // Upstream-Ausfall, sondern ein gueltiger Zustand -- nur DIESE

@@ -9,12 +9,23 @@
         }
     ],
     "repositories": [
-        {"type": "path", "url": "../auth"},
-        {"type": "path", "url": "../chrome"}
+        {
+            "type": "path",
+            "url": "../auth"
+        },
+        {
+            "type": "path",
+            "url": "../chrome"
+        },
+        {
+            "type": "path",
+            "url": "../wl-client"
+        }
     ],
     "require": {
         "erikr/auth": "*",
-        "erikr/chrome": "*"
+        "erikr/chrome": "*",
+        "erikr/wl-client": "*"
     },
     "minimum-stability": "dev",
     "prefer-stable": true,

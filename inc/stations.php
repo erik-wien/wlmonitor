@@ -91,42 +91,12 @@ function stations_alpha(mysqli $con): array {
     return $rows;
 }
 
-/**
- * Look up station name, lines and direction for an array of DIVA numbers.
- *
- * Returns a map keyed by DIVA.  DIVAs not found in the DB are omitted.
- *
- * @param mysqli   $con   Active database connection.
- * @param string[] $divas DIVA numbers to look up.
- * @return array<string, array{diva:string, station:string, lines:string, directions:string}>
- */
-function diva_info(mysqli $con, array $divas): array {
-    if (empty($divas)) return [];
-    $ph    = implode(',', array_fill(0, count($divas), '?'));
-    $types = str_repeat('s', count($divas));
-    $sql   = "SELECT s.diva, s.Haltestelle AS station, s.Linien AS `lines`,
-                     GROUP_CONCAT(DISTINCT st.RICHTUNG ORDER BY st.RICHTUNG SEPARATOR '') AS directions
-              FROM ogd_stations s
-              JOIN ogd_steige st ON st.DIVA = s.diva
-              WHERE s.diva IN ($ph)
-              GROUP BY s.diva, s.Haltestelle, s.Linien";
-    $stmt = $con->prepare($sql);
-    $stmt->bind_param($types, ...$divas);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $map = [];
-    while ($row = $result->fetch_assoc()) {
-        $map[$row['diva']] = [
-            'diva'       => $row['diva'],
-            'station'    => $row['station'],
-            'lines'      => $row['lines'] ?? '',
-            'directions' => $row['directions'] ?? '',
-        ];
-    }
-    $result->free();
-    $stmt->close();
-    return $map;
-}
+// diva_info() wanderte 2026-09-05 nach erikr/wl-client (src/stations.php):
+// sie liest die ogd_*-Referenzdaten der Wiener Linien, die seither auch das
+// Display-Projekt braucht. Die uebrigen Funktionen hier sind reine
+// Web-Oberflaeche (Umkreissuche, alphabetische Liste, Positionsspeicher) und
+// bleiben.
+
 
 /**
  * Store the user's current geographic position in the session.

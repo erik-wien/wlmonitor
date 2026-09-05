@@ -16,7 +16,8 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../inc/initialize.php';
-require_once __DIR__ . '/../inc/monitor.php';
+// monitor_get()/diva_info() kommen seit 2026-09-05 aus erikr/wl-client
+// (Composer files-Autoload, ueber initialize.php geladen).
 
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
@@ -52,7 +53,7 @@ try {
     }
     $stmt->close();
 
-    $data = monitor_get($con, $diva, $maxDep);
+    $data = monitor_get($diva, $maxDep, APIKEY);
     echo json_encode($data, JSON_PRETTY_PRINT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_THROW_ON_ERROR);
 } catch (Throwable $e) {
     // Klartext geht nur ins Log (§21) — dem Client bleibt nur die Kennung.

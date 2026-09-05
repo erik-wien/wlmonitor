@@ -47,7 +47,8 @@
  */
 
 require_once(__DIR__ . '/../inc/initialize.php');
-require_once(__DIR__ . '/../inc/monitor.php');
+// monitor_get()/diva_info() kommen seit 2026-09-05 aus erikr/wl-client
+// (Composer files-Autoload, ueber initialize.php geladen).
 require_once(__DIR__ . '/../inc/stations.php');
 require_once(__DIR__ . '/../inc/favorites.php');
 require_once(__DIR__ . '/../inc/admin.php');
@@ -118,7 +119,7 @@ try {
             $_SESSION['diva'] = $diva;
             $maxDep = (int) ($_SESSION['departures'] ?? MAX_DEPARTURES);
             try {
-                $monitorData = monitor_get($con, $diva, $maxDep);
+                $monitorData = monitor_get($diva, $maxDep, APIKEY);
             } catch (Throwable $e) {
                 // monitor_get() throws precise RuntimeExceptions (WL API down,
                 // invalid JSON, no monitors for the given DIVAs) — surface the

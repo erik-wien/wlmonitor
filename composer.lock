@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "a9fe18002d5aa87bbcd0c24c4759f420",
+    "content-hash": "1152eef5647c0f9e2bd6847c3c8fd813",
     "packages": [
         {
             "name": "chillerlan/php-qrcode",
@@ -174,7 +174,7 @@
             "dist": {
                 "type": "path",
                 "url": "../auth",
-                "reference": "2f9a27b7acd8241d42e45ed841f7b0e089bd669c"
+                "reference": "b5ba8a67618430f9a7fae6439e39036f4d15ae93"
             },
             "require": {
                 "chillerlan/php-qrcode": "^5.0",
@@ -220,7 +220,7 @@
             "dist": {
                 "type": "path",
                 "url": "../chrome",
-                "reference": "8118e543ab7fd7caef275b3d8ad77ea3e4def5b9"
+                "reference": "0e4ecbcbf14cfaac284468118922293cd5e6ff68"
             },
             "require": {
                 "erikr/auth": "*",
@@ -233,6 +233,37 @@
                 }
             },
             "description": "Shared UI chrome: header, footer, user dropdown, avatar, admin partials",
+            "transport-options": {
+                "relative": true
+            }
+        },
+        {
+            "name": "erikr/wl-client",
+            "version": "dev-feat/e1003-firmware-seeed-gfx",
+            "dist": {
+                "type": "path",
+                "url": "../wl-client",
+                "reference": "7d91b22337165b7eb1749b67f156e27082667256"
+            },
+            "require": {
+                "ext-json": "*",
+                "ext-mysqli": "*",
+                "php": ">=8.2"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^11 || ^12 || ^13"
+            },
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "src/monitor.php",
+                    "src/stations.php"
+                ]
+            },
+            "license": [
+                "proprietary"
+            ],
+            "description": "Wiener Linien Realtime-API-Client und ogd_*-Referenzdaten. Geteilt von wlmonitor (Web-App) und Display (E-Paper-Board).",
             "transport-options": {
                 "relative": true
             }

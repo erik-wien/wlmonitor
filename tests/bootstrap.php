@@ -22,7 +22,7 @@ $GLOBALS['con'] = $con;
 require_once __DIR__ . '/../inc/favorites.php';
 require_once __DIR__ . '/../inc/stations.php';
 require_once __DIR__ . '/../inc/admin.php';
-require_once __DIR__ . '/../inc/monitor.php';
+// monitor.php kommt seit 2026-09-05 aus erikr/wl-client (Composer files-Autoload).
 require_once __DIR__ . '/../inc/board.php';
 require_once __DIR__ . '/../inc/weather.php';
 require_once __DIR__ . '/../inc/board_render.php';

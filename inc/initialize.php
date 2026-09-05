@@ -153,9 +153,11 @@ $username  = $loggedIn ? $_SESSION['username'] : '';
 /**
  * Strip everything except digits and commas from a DIVA/RBL input string.
  */
-function sanitizeDivaInput(string $divaGet): string {
-    return preg_replace('/[^0-9,]/', '', $divaGet);
-}
+// sanitizeDivaInput() wanderte 2026-09-05 nach erikr/wl-client: sie beschreibt
+// das Eingabeformat der Wiener-Linien-Schnittstelle, nicht diese App, und
+// monitor_get() ruft sie selbst auf. sanitizeRblInput() unten bleibt als
+// Rueckwaerts-Alias hier -- sie gehoert zur Altlast dieser App, nicht zur
+// Schnittstelle.
 
 /** Alias for sanitizeDivaInput() — backward compatibility. */
 function sanitizeRblInput(string $input): string {
