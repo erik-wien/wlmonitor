@@ -23,16 +23,6 @@ require_once __DIR__ . '/../inc/favorites.php';
 require_once __DIR__ . '/../inc/stations.php';
 require_once __DIR__ . '/../inc/admin.php';
 // monitor.php kommt seit 2026-09-05 aus erikr/wl-client (Composer files-Autoload).
-require_once __DIR__ . '/../inc/board.php';
-require_once __DIR__ . '/../inc/weather.php';
-require_once __DIR__ . '/../inc/board_render.php';
-require_once __DIR__ . '/../inc/board_template.php';
-require_once __DIR__ . '/../inc/board_state.php';
-require_once __DIR__ . '/../inc/board_sleep.php';
-require_once __DIR__ . '/../inc/board_guest_wifi.php';
-require_once __DIR__ . '/../inc/board_calendar.php';
-require_once __DIR__ . '/../inc/board_mqtt.php';
-require_once __DIR__ . '/../inc/board_settings.php';
 
 if (!file_exists(__DIR__ . '/../data')) {
     mkdir(__DIR__ . '/../data', 0755, true);

@@ -60,30 +60,13 @@ function render_header(bool $showSearch = false): void
     // ersetzt die frühere handgepflegte Liste (TASK-19).
     $appsMenu = \Erikr\Chrome\AppsMenu::build('wlmonitor', APP_ENV);
 
-    // App-eigene Navigation (Suite-Policy §1.1). web/mqtt/ ist bewusst kein
-    // eigenes PHP-Feature dieser Codebasis im Sinne von index.php/api.php --
-    // eigene Login-Pruefung (auth_require(), Nutzerentscheidung 2026-09-01),
-    // eigenes CSS, kein Chrome\Header::render() dort drin. Der Menuepunkt
-    // gilt fuer alle EINGELOGGTEN User, nicht nur Admins (sonst waere er ein
-    // adminItems-Eintrag).
-    //
-    // Chrome\Header filtert NICHT nach Rolle ("apps already role-filter these
-    // before passing them in") -- ungefiltert erschienen beide Menues auch auf
-    // den oeffentlichen Seiten (help.php, login.php) fuer Ausgeloggte
-    // (Audit 2026-09-03). Kein Rechtebruch (auth_require()/admin_require()
-    // halten), aber sichtbar sein darf es trotzdem nicht.
-    // Zusaetzlich an BOARD_FEATURE_AVAILABLE gebunden: auf jardyx.com gibt es
-    // weder Broker noch Display (s. initialize.php).
-    $appMenu = ($loggedIn && BOARD_FEATURE_AVAILABLE)
-        ? [['href' => 'mqtt/', 'label' => 'eInk Display']]
-        : [];
-
-    // Board-Einstellungen betreffen ein einzelnes geteiltes physisches Geraet,
-    // keine Pro-User-Vorliebe -- gehoeren deshalb neben "Verwaltung" in die
-    // Administration-Dropdown, nicht ins Usermenue (Suite-Policy §1.2).
-    $adminItems = ($loggedIn && $isAdmin && BOARD_FEATURE_AVAILABLE)
-        ? [['href' => 'board_settings.php', 'label' => 'Board-Einstellungen']]
-        : [];
+    // App-eigene Navigation (Suite-Policy §1.1). wlmonitor hat keine: die
+    // Abfahrten sind die Startseite. Die frueheren Eintraege "eInk Display"
+    // und "Board-Einstellungen" sind mit dem Umzug nach ~/Git/Display
+    // (2026-09-05) entfallen -- sie zeigten auf Seiten, die es hier nicht
+    // mehr gibt.
+    $appMenu = [];
+    $adminItems = [];
 
     $themeAttr = $theme !== 'auto'
         ? ' data-theme="' . htmlspecialchars($theme, ENT_QUOTES) . '"'
